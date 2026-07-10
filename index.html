@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Guitar Tab Writer</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Guitar Tab Writer</h1>
+    <div class="header-actions">
+      <button id="new-btn" title="Start a new blank song">+ New</button>
+      <button id="import-btn" title="Open a .txt / .cho file">Import</button>
+      <button id="export-btn" title="Download this song as a file">Export</button>
+      <button id="print-btn" title="Print / save as PDF">Print</button>
+      <input type="file" id="import-input" accept=".txt,.cho,.chordpro,.crd,text/plain" hidden />
+    </div>
+  </header>
+
+  <main>
+    <aside id="sidebar">
+      <div class="sidebar-head">
+        <span>Songs</span>
+        <span id="song-count" class="muted"></span>
+      </div>
+      <ul id="song-list"></ul>
+    </aside>
+
+    <section id="workspace">
+      <div class="meta-row">
+        <input id="title-input" class="title-input" type="text" placeholder="Song title" />
+        <input id="artist-input" class="artist-input" type="text" placeholder="Artist (optional)" />
+        <div class="stepper">
+          <label>Transpose</label>
+          <button id="tr-down" title="Down a semitone">&minus;</button>
+          <span id="tr-amount">0</span>
+          <button id="tr-up" title="Up a semitone">+</button>
+        </div>
+        <div class="stepper">
+          <label>Capo</label>
+          <button id="capo-down" title="Move capo down a fret">&minus;</button>
+          <span id="capo-amount">0</span>
+          <button id="capo-up" title="Move capo up a fret">+</button>
+        </div>
+      </div>
+
+      <div class="panes">
+        <div class="pane editor-pane">
+          <div class="pane-head">
+            <span>Editor</span>
+            <span class="hint">
+              Chords in brackets: <code>[G]When the night has [C]come</code>
+              &nbsp;&middot;&nbsp;
+              <button id="pagebreak-btn" class="inline-btn" title="Insert a page break at the cursor">Insert page break</button>
+            </span>
+          </div>
+          <textarea id="editor" spellcheck="false" placeholder="[G]Type your lyrics here and drop [C]chords in [D]brackets...
+
+Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
+        </div>
+
+        <div class="pane preview-pane">
+          <div class="pane-head">
+            <span>Preview</span>
+            <span class="view-toggles">
+              <label><input type="checkbox" id="toggle-diagrams" checked /> Chord diagrams</label>
+              <label><input type="checkbox" id="toggle-harmonica" checked /> Harmonica</label>
+              <span id="save-status" class="muted"></span>
+            </span>
+          </div>
+          <div id="preview" class="preview">
+            <div id="print-header"></div>
+            <div id="capo-banner"></div>
+            <div id="chord-diagrams" class="chord-diagrams"></div>
+            <div id="harmonica-panel" class="harmonica-panel"></div>
+            <div id="preview-body"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="chords.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
