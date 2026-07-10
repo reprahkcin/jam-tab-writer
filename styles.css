@@ -301,8 +301,10 @@ main { display: flex; flex: 1; min-height: 0; }
 /* Chord-tone highlight overlay */
 .scale-svg .sc-hi { stroke: #ffe08a; stroke-width: 2.2; }
 .scale-svg .sc-chordonly { fill: none; stroke: #ffe08a; stroke-width: 1.6; }
-.scale-svg.has-hi .sc-note:not(.sc-hi) { opacity: 0.25; }
-.scale-svg.has-hi .sc-root:not(.sc-hi) { opacity: 0.5; }
+.scale-svg.has-hi .sc-note:not(.sc-hi) { opacity: 0.22; }
+.scale-svg.has-hi .sc-root:not(.sc-hi) { opacity: 0.45; }
+.scale-svg .sc-label { fill: #1c1e26; font-size: 7px; font-weight: 700; font-family: system-ui, sans-serif; pointer-events: none; }
+.scale-svg .sc-label-open { fill: #ffe08a; font-size: 7px; font-weight: 700; font-family: system-ui, sans-serif; pointer-events: none; }
 
 /* Harmonica panel */
 .harmonica-panel:not(:empty) {
@@ -387,6 +389,8 @@ main { display: flex; flex: 1; min-height: 0; }
   .scale-svg .sc-hi { stroke: #000; stroke-width: 2.2; }
   .scale-svg .sc-chordonly { fill: none; stroke: #000; stroke-width: 1.6; }
   .scale-svg.has-hi .sc-note:not(.sc-hi) { opacity: 0.35; }
+  .scale-svg .sc-label { fill: #fff; }
+  .scale-svg .sc-label-open { fill: #000; }
   .cd-name.focused { background: none; color: #000; text-decoration: underline; }
   .harmonica-panel:not(:empty) { background: #fff; border: 1px solid #999; }
   .harmonica-panel .hp-title { color: #000; }

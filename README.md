@@ -112,10 +112,12 @@ major, natural minor, Dorian, or Mixolydian.
 
 **Chord-tone highlight**: click any chord's name (in the Rhythm or Lead row), or
 use the **Chord** dropdown in the scale panel, to overlay that chord's notes on
-the scale map. Chord tones that are in the scale get a gold ring; chord tones
-that fall *outside* the scale are drawn as hollow gold markers, so you can see
-the whole chord across the neck and pick target notes for a line. Click the same
-chord again to clear it. Everything prints with the sheet.
+the scale map. Each chord tone is labelled with its **interval degree**
+(R, 3, 5, b7, …): tones that are in the scale get a gold ring with the label;
+tones that fall *outside* the scale are drawn as hollow gold markers with the
+label, so you can see the whole chord across the neck and aim for specific
+targets (e.g. land on the 3 or the R). Click the same chord again to clear it.
+Everything prints with the sheet.
 - **Harmonica** suggests diatonic harp keys for the sounding key: 2nd position
   (cross harp — blues/folk), 1st (straight — melody), and 3rd (slant — minor).
   The song key is auto-detected from the first chord; override it with the

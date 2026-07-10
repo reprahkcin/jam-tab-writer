@@ -284,8 +284,14 @@ const QUALITY_IV = {
   'sus2': [0, 2, 7], 'sus4': [0, 5, 7],
 };
 
-// Pitch classes sounded by a chord name (root, third, fifth, …), or null.
-function chordTonePcs(name) {
+// Interval degree labels by semitone distance from the chord root.
+const INTERVAL_LABELS = {
+  0: 'R', 1: 'b2', 2: '2', 3: 'b3', 4: '3', 5: '4',
+  6: 'b5', 7: '5', 8: '#5', 9: '6', 10: 'b7', 11: '7',
+};
+
+// Map of pitch class -> interval label for a chord name (R/3/5/7 …), or null.
+function chordToneLabels(name) {
   const m = name.match(CHORD_RE);
   if (!m) return null;
   const [, root, acc, suffix] = m;
@@ -296,14 +302,16 @@ function chordTonePcs(name) {
     else if (/aug|\+/.test(suffix)) iv = [0, 4, 8];
     else iv = [0, 4, 7]; // reasonable default
   }
-  return iv.map((i) => (pc + i) % 12);
+  const map = new Map();
+  for (const i of iv) map.set((pc + i) % 12, INTERVAL_LABELS[i] || '');
+  return map;
 }
 
 // A full-neck scale map: 6 strings x `FR` frets, scale tones dotted, root
 // filled. Low E is the bottom row; the nut is at the left. When `highlight`
-// (a Set of pitch classes) is given, those chord tones get a ring; chord tones
-// that fall outside the scale are drawn as hollow markers so the whole chord
-// is visible across the neck.
+// (a Map of pitch class -> interval label) is given, those chord tones get a
+// ring with the interval label (R/3/5/7 …); chord tones that fall outside the
+// scale are drawn as hollow labelled markers so the whole chord is visible.
 function scaleDiagramSVG(rootPc, intervals, highlight) {
   const set = new Set(intervals.map((i) => (rootPc + i) % 12));
   const hi = highlight && highlight.size ? highlight : null;
@@ -326,14 +334,17 @@ function scaleDiagramSVG(rootPc, intervals, highlight) {
     for (let f = 0; f <= FR; f++) {
       const pc = (STRING_ABS[i] + f) % 12;
       const cx = f === 0 ? left - 12 : x(f) - colW / 2;
+      const cy = y(i);
       const inScale = set.has(pc);
       const isChordTone = hi && hi.has(pc);
-      if (inScale) {
-        let cls = pc === rootPc ? 'sc-root' : 'sc-note';
-        if (isChordTone) cls += ' sc-hi';
-        p += `<circle class="${cls}" cx="${cx}" cy="${y(i)}" r="${pc === rootPc ? 6 : 5}"/>`;
+      if (inScale && isChordTone) {
+        p += `<circle class="${pc === rootPc ? 'sc-root' : 'sc-note'} sc-hi" cx="${cx}" cy="${cy}" r="7"/>`;
+        p += `<text class="sc-label" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central">${hi.get(pc)}</text>`;
+      } else if (inScale) {
+        p += `<circle class="${pc === rootPc ? 'sc-root' : 'sc-note'}" cx="${cx}" cy="${cy}" r="${pc === rootPc ? 6 : 5}"/>`;
       } else if (isChordTone) {
-        p += `<circle class="sc-chordonly" cx="${cx}" cy="${y(i)}" r="5"/>`;
+        p += `<circle class="sc-chordonly" cx="${cx}" cy="${cy}" r="7"/>`;
+        p += `<text class="sc-label-open" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central">${hi.get(pc)}</text>`;
       }
     }
   }

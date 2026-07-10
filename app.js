@@ -356,12 +356,11 @@ function renderScale(s) {
   const scaleOpts = SCALES.map((sc) =>
     `<option value="${sc.id}"${sc.id === scale.id ? ' selected' : ''}>${sc.name}</option>`).join('');
 
-  // Chord-tone highlight: the focused chord's sounding pitch classes.
+  // Chord-tone highlight: the focused chord's sounding tones, labelled R/3/5/7.
   let highlight = null;
   if (s.focusChord) {
     const soundingName = s.capo ? transposeChord(s.focusChord, s.capo) : s.focusChord;
-    const pcs = chordTonePcs(soundingName);
-    if (pcs) highlight = new Set(pcs);
+    highlight = chordToneLabels(soundingName);
   }
 
   const chordNames = uniqueShapes(s);
