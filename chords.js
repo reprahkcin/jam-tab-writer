@@ -68,7 +68,109 @@ const MOVABLE = {
     '6':     [-1, 0, 2, 2, 2, 2],
     'm6':    [-1, 0, 2, 2, 1, 2],
   } },
+  // D-shape forms (root on the 4th string) — handy mid-neck voicings.
+  D: { ref: 2, label: 'D', q: {
+    'major': [-1, -1, 0, 2, 3, 2],
+    'm':     [-1, -1, 0, 2, 3, 1],
+    '7':     [-1, -1, 0, 2, 1, 2],
+    'm7':    [-1, -1, 0, 2, 1, 1],
+    'maj7':  [-1, -1, 0, 2, 2, 2],
+  } },
 };
+
+// ---- Triads & voicings -----------------------------------------------------
+
+// Absolute semitones of the open strings [6th..1st], used to order triad notes.
+const STRING_ABS = [40, 45, 50, 55, 59, 64];
+
+// Interval sets (from the root) for the qualities that reduce to a clean triad.
+const TRIAD_TONES = {
+  'major': [0, 4, 7],
+  'm':     [0, 3, 7],
+  'sus2':  [0, 2, 7],
+  'sus4':  [0, 5, 7],
+};
+
+// Adjacent 3-string sets (indices into the [6th..1st] array), low → high.
+const TRIAD_SETS = [
+  { name: 'Top', strings: [3, 4, 5] },   // G B e
+  { name: 'Mid', strings: [2, 3, 4] },   // D G B
+];
+const INV_NAMES = ['root', '1st inv', '2nd inv'];
+
+// Close-voiced triad on a string set, for a given inversion (which chord tone
+// sits on the lowest string). Returns a 6-string fret array, or null if it
+// can't be voiced compactly. Each string's note is fixed mod 12, so the only
+// freedom is which octave (fret vs fret+12) — we pick the combination that
+// keeps the three notes in the tightest, lowest fret window.
+function triadShape(rootPc, tones, set, inversion) {
+  const pcs = tones.map((t) => (rootPc + t) % 12);
+  const order = pcs.slice(inversion).concat(pcs.slice(0, inversion)); // rotate bass
+  const base = set.strings.map((s, i) => (((order[i] - STRING_ABS[s]) % 12) + 12) % 12);
+
+  let best = null;
+  for (let mask = 0; mask < 8; mask++) {
+    const f = base.map((b, i) => b + ((mask >> i) & 1 ? 12 : 0));
+    const span = Math.max(...f) - Math.min(...f);
+    const maxf = Math.max(...f);
+    if (!best || span < best.span || (span === best.span && maxf < best.maxf)) best = { f, span, maxf };
+  }
+  let f = best.f;
+  while (Math.min(...f) >= 12) f = f.map((x) => x - 12); // drop to the lowest octave
+  if (best.span > 4 || Math.max(...f) > 15) return null; // not compactly playable
+
+  const frets = [-1, -1, -1, -1, -1, -1];
+  set.strings.forEach((s, i) => { frets[s] = f[i]; });
+  return frets;
+}
+
+function movableAt(form, rootPc) {
+  const f = ((rootPc - form.ref) % 12 + 12) % 12;
+  return { fret: f, frets: form.pat.map((v) => (v < 0 ? -1 : v + f)) };
+}
+
+// All voicings offered for a chord: default shape, barre forms, then triads.
+// Each entry is { label, frets }. The first is the default.
+function chordVoicings(name) {
+  const m = name.match(CHORD_RE);
+  if (!m) return [{ label: 'shape n/a', frets: null }];
+  const [, root, acc, suffix] = m;
+  const pc = chordRootPc(root, acc);
+  const quality = parseQuality(suffix);
+  const out = [{ label: 'Default', frets: resolveChord(name) }];
+
+  const barreForms = [
+    { name: 'E-shape', form: MOVABLE.E },
+    { name: 'A-shape', form: MOVABLE.A },
+    { name: 'D-shape', form: MOVABLE.D },
+  ];
+  if (quality) {
+    for (const { name: fname, form } of barreForms) {
+      if (!form.q[quality]) continue;
+      const { fret, frets } = movableAt({ ref: form.ref, pat: form.q[quality] }, pc);
+      out.push({ label: `${fname} barre (${fret}fr)`, frets });
+    }
+    const tones = TRIAD_TONES[quality];
+    if (tones) {
+      for (const set of TRIAD_SETS) {
+        for (let inv = 0; inv < 3; inv++) {
+          const frets = triadShape(pc, tones, set, inv);
+          if (frets) out.push({ label: `${set.name} triad · ${INV_NAMES[inv]}`, frets });
+        }
+      }
+    }
+  }
+
+  // Drop entries with no shape and any duplicates (same fret array).
+  const seen = new Set();
+  return out.filter((v) => {
+    if (!v.frets) return out.length === 1; // keep a lone "n/a" so something shows
+    const key = v.frets.join(',');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 function chordRootPc(root, acc) {
   let pc = NOTE_INDEX[root];
@@ -119,12 +221,14 @@ function resolveChord(name) {
 
 // Build a small SVG fretboard diagram for a chord. `soundingName`, when given,
 // is shown beneath as what the shape sounds as with a capo (e.g. "sounds A").
-function chordDiagramSVG(displayName, frets, soundingName) {
+// `extra` is appended inside the block (used for the voicing dropdown).
+function chordDiagramSVG(displayName, frets, soundingName, extra) {
   const sub = soundingName && soundingName !== displayName
     ? `<div class="cd-sound">sounds ${escapeHtml(soundingName)}</div>` : '';
+  const tail = sub + (extra || '');
   if (!frets) {
     return `<div class="chord-diagram"><div class="cd-name">${escapeHtml(displayName)}</div>` +
-      `<div class="cd-na">shape n/a</div>${sub}</div>`;
+      `<div class="cd-na">shape n/a</div>${tail}</div>`;
   }
   const S = 6, rows = 4, cellW = 9, cellH = 12, left = 10, top = 18;
   const fretted = frets.filter((f) => f > 0);
@@ -157,7 +261,7 @@ function chordDiagramSVG(displayName, frets, soundingName) {
   }
 
   return `<div class="chord-diagram"><div class="cd-name">${escapeHtml(displayName)}</div>` +
-    `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${p}</svg>${sub}</div>`;
+    `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${p}</svg>${tail}</div>`;
 }
 
 // Harmonica keys the common players' spelling.

@@ -55,7 +55,10 @@ toolbar are hidden. Chord lines stay glued to the lyric line below them, and
 - **Transpose** up/down by semitone (chords shift, e.g. G → A)
 - **Capo** — set a capo fret; a "Capo N" banner shows the resulting sounding
   key, and the harmonica suggestions rise with the capo (see below)
-- **Chord diagrams** — an auto-generated fretboard diagram for every chord used
+- **Chord diagrams** — an auto-generated fretboard diagram for every chord used,
+  each with a **voicing dropdown**: alternate barre positions (E/A/D shapes up
+  the neck) and triad inversions on the top and middle string sets — handy for
+  writing alternate parts
 - **Harmonica suggestions** — recommended harp keys for the song's sounding key
 - Auto-save per song + a song list in the sidebar
 - **Export** a song to a `.cho` text file, **Import** one back
@@ -82,6 +85,12 @@ toolbar are hidden. Chord lines stay glued to the lyric line below them, and
 - **Chord diagrams** render above the sheet (toggle with the **Chord diagrams**
   checkbox). Common open chords use their standard shapes; others fall back to
   movable barre shapes. Unusual chords show "shape n/a".
+- **Voicing dropdown**: under each diagram, pick a different way to play the
+  chord — the default shape, movable **E / A / D barre** forms further up the
+  neck, or **triad inversions** (root / 1st / 2nd) on the top (G-B-e) and middle
+  (D-G-B) string sets. Triads are compact three-note shapes, great for coming up
+  with alternate parts and voice leading. Your pick per chord is remembered and
+  prints with the sheet.
 - **Harmonica** suggests diatonic harp keys for the sounding key: 2nd position
   (cross harp — blues/folk), 1st (straight — melody), and 3rd (slant — minor).
   The song key is auto-detected from the first chord; override it with the

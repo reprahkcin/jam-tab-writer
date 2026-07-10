@@ -148,7 +148,7 @@ let songs = loadSongs();
 let currentId = null;
 
 function loadPrefs() {
-  const defaults = { diagrams: true, harmonica: true, chordMode: 'shapes' };
+  const defaults = { diagrams: true, harmonica: true, chordMode: 'shapes', voicings: {} };
   try {
     return Object.assign(defaults, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'));
   } catch {
@@ -259,10 +259,30 @@ function renderDiagrams(s) {
     const shape = transposeChord(name, shapeSh);
     if (seen.has(shape)) continue;
     seen.add(shape);
+
+    const voicings = chordVoicings(shape);
+    let idx = prefs.voicings[shape] || 0;
+    if (idx >= voicings.length) idx = 0;
+    const chosen = voicings[idx];
+
+    let select = '';
+    if (voicings.length > 1) {
+      const opts = voicings.map((v, i) =>
+        `<option value="${i}"${i === idx ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('');
+      select = `<select class="cd-voicing" data-chord="${escapeHtml(shape)}">${opts}</select>`;
+    }
     const sounding = s.capo ? transposeChord(name, soundSh) : null;
-    html += chordDiagramSVG(shape, resolveChord(shape), sounding);
+    html += chordDiagramSVG(shape, chosen.frets, sounding, select);
   }
   el.diagrams.innerHTML = html;
+
+  el.diagrams.querySelectorAll('.cd-voicing').forEach((sel) => {
+    sel.addEventListener('change', () => {
+      prefs.voicings[sel.dataset.chord] = parseInt(sel.value, 10);
+      savePrefs();
+      renderDiagrams(currentSong());
+    });
+  });
 }
 
 function renderHarmonica(s) {

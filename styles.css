@@ -234,6 +234,20 @@ main { display: flex; flex: 1; min-height: 0; }
 .cd-name { font-family: system-ui, sans-serif; font-size: 12px; font-weight: 700; color: var(--chord); margin-bottom: 2px; }
 .cd-na { font-family: system-ui, sans-serif; font-size: 10px; color: var(--muted); padding: 14px 0; }
 .cd-sound { font-family: system-ui, sans-serif; font-size: 10px; color: var(--section); margin-top: 2px; }
+.chord-diagram { min-width: 76px; }
+.cd-voicing {
+  margin-top: 4px;
+  max-width: 84px;
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 2px 4px;
+  font-size: 10px;
+  font-family: system-ui, sans-serif;
+  cursor: pointer;
+}
+.cd-voicing:hover { color: var(--text); border-color: #4a516b; }
 .chord-diagram svg line { stroke: var(--muted); stroke-width: 1; }
 .chord-diagram svg .cd-nut { fill: var(--text); }
 .chord-diagram svg .cd-dot { fill: var(--text); }
@@ -305,6 +319,7 @@ main { display: flex; flex: 1; min-height: 0; }
   .cb-toggle { display: none; }
   .chord-diagram, .cd-name { color: #000; }
   .cd-sound { color: #333; }
+  .cd-voicing { border: none; color: #333; padding: 0; margin-top: 2px; -webkit-appearance: none; appearance: none; }
   .chord-diagram svg line { stroke: #333; }
   .chord-diagram svg .cd-nut, .chord-diagram svg .cd-dot { fill: #000; }
   .chord-diagram svg .cd-mark, .chord-diagram svg .cd-fretnum { fill: #333; }
