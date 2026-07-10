@@ -11,6 +11,9 @@
     <h1>Guitar Tab Writer</h1>
     <div class="header-actions">
       <button id="new-btn" title="Start a new blank song">+ New</button>
+      <button id="folder-btn" title="Open a folder of .cho charts and edit them in place">Open folder</button>
+      <button id="reopen-btn" title="Reopen the last folder" hidden>Reopen folder</button>
+      <button id="save-btn" title="Save this chart to its file (Cmd/Ctrl+S)" hidden>Save</button>
       <button id="import-btn" title="Open a .txt / .cho file">Import</button>
       <button id="export-btn" title="Download this song as a file">Export</button>
       <button id="print-btn" title="Print / save as PDF">Print</button>
@@ -24,6 +27,7 @@
         <span>Songs</span>
         <span id="song-count" class="muted"></span>
       </div>
+      <div id="folder-bar" class="folder-bar" hidden></div>
       <ul id="song-list"></ul>
     </aside>
 

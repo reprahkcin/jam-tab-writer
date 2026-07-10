@@ -11,6 +11,33 @@ Just open `index.html` in any browser (double-click it, or drag it into a tab).
 Everything runs locally in the page. Your songs are saved automatically in the
 browser (localStorage), and you can also export/import them as files.
 
+For **folder mode** (editing `.cho` files on disk, below) run it over localhost
+instead, since the browser only allows file access from `http://`/`https://`:
+
+```
+./serve.sh            # serves on http://localhost:8137
+```
+
+then open that URL in Chrome or Edge.
+
+## Folder mode — edit a folder of charts on disk
+
+Instead of localStorage, you can point the tool at a folder of `.cho` files and
+edit them **in place** — good for a repo of songs you track in git.
+
+- Click **Open folder** and pick a directory (Chrome/Edge only). The tool scans
+  it recursively for `.cho` files and lists them in the sidebar.
+- Edits **save straight back to the file** (auto-saved, debounced; or press
+  **Cmd/Ctrl+S**, or the **Save** button). Then commit in that repo as usual.
+- The folder is remembered — next session, **Reopen folder** restores it with a
+  single permission grant. **Close** returns to local (localStorage) songs.
+- **+ New** in folder mode creates a new `.cho` file in the folder. Deleting is
+  disabled in folder mode (manage files in your repo / file manager).
+
+The on-disk format is the same `.cho` used by Import/Export: a `{title}` /
+`{artist}` / `{key}` / `{capo}` / `{transpose}` directive block, then the body
+with inline `[chord]` tags. Round-trips losslessly.
+
 ## Writing syntax
 
 - **Chords** go in square brackets, placed right before the syllable they land on:

@@ -123,6 +123,139 @@ function newId() {
   return 's' + (idCounter++).toString(36);
 }
 
+// ---- Folder mode (File System Access API) ----------------------------------
+// In 'folder' mode, songs are read from and saved directly to .cho files on
+// disk instead of localStorage. The directory handle is remembered in
+// IndexedDB so the folder can be reopened with one click (and one permission
+// grant) next session.
+
+let mode = 'local';           // 'local' | 'folder'
+let dirHandle = null;         // FileSystemDirectoryHandle for the open folder
+const fileHandles = {};       // song id -> FileSystemFileHandle
+
+const IDB = { name: 'gtw', store: 'kv' };
+function idbReq(fn) {
+  return new Promise((resolve) => {
+    const open = indexedDB.open(IDB.name, 1);
+    open.onupgradeneeded = () => open.result.createObjectStore(IDB.store);
+    open.onerror = () => resolve(null);
+    open.onsuccess = () => {
+      try { fn(open.result, resolve); } catch { resolve(null); }
+    };
+  });
+}
+function idbGet(key) {
+  return idbReq((db, resolve) => {
+    const r = db.transaction(IDB.store).objectStore(IDB.store).get(key);
+    r.onsuccess = () => resolve(r.result || null);
+    r.onerror = () => resolve(null);
+  });
+}
+function idbSet(key, val) {
+  return idbReq((db, resolve) => {
+    const tx = db.transaction(IDB.store, 'readwrite');
+    tx.objectStore(IDB.store).put(val, key);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => resolve(false);
+  });
+}
+
+async function scanDir(dir, prefix, out) {
+  for await (const entry of dir.values()) {
+    if (entry.kind === 'file' && entry.name.endsWith('.cho')) {
+      out.push({ name: entry.name, path: prefix + entry.name, handle: entry });
+    } else if (entry.kind === 'directory') {
+      await scanDir(entry, prefix + entry.name + '/', out);
+    }
+  }
+}
+
+async function enterFolder(handle) {
+  const found = [];
+  await scanDir(handle, '', found);
+  if (!found.length) {
+    alert('No .cho files found in that folder (looked recursively).');
+    return;
+  }
+  found.sort((a, b) => a.path.localeCompare(b.path));
+  dirHandle = handle;
+  mode = 'folder';
+  songs = [];
+  for (const k of Object.keys(fileHandles)) delete fileHandles[k];
+  for (const f of found) {
+    const text = await (await f.handle.getFile()).text();
+    const s = parseCho(text, f.name.replace(/\.cho$/, ''));
+    s.id = newId();
+    s.path = f.path;
+    fileHandles[s.id] = f.handle;
+    songs.push(s);
+  }
+  await idbSet('dirHandle', handle);
+  updateModeUI();
+  selectSong(songs[0].id);
+}
+
+async function openFolder() {
+  if (!window.showDirectoryPicker) {
+    alert('Folder mode needs Chrome or Edge, served over http://localhost (not file://).');
+    return;
+  }
+  let handle;
+  try {
+    handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+  } catch { return; } // user cancelled
+  await enterFolder(handle);
+}
+
+async function reopenFolder() {
+  const handle = await idbGet('dirHandle');
+  if (!handle) return;
+  try {
+    let perm = await handle.queryPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') perm = await handle.requestPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') return;
+    await enterFolder(handle);
+  } catch {
+    alert('Could not reopen the folder — please pick it again.');
+  }
+}
+
+function closeFolder() {
+  mode = 'local';
+  dirHandle = null;
+  songs = loadSongs();
+  updateModeUI();
+  if (!songs.length) createSong();
+  else selectSong([...songs].sort((a, b) => b.updated - a.updated)[0].id);
+}
+
+async function writeSong(s) {
+  const h = fileHandles[s.id];
+  if (!h) return;
+  const w = await h.createWritable();
+  await w.write(songToCho(s));
+  await w.close();
+}
+
+// Persist the current song: to its file in folder mode, else to localStorage.
+let persistTimer = null;
+function schedulePersist() {
+  const s = currentSong();
+  if (!s) return;
+  el.status.textContent = 'Saving…';
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(async () => {
+    if (mode === 'folder') {
+      try { await writeSong(s); el.status.textContent = 'Saved · ' + (s.path || 'file'); }
+      catch { el.status.textContent = 'Save failed'; }
+    } else {
+      saveSongs(songs);
+      el.status.textContent = 'Saved';
+    }
+    renderList();
+  }, mode === 'folder' ? 600 : 400);
+}
+
 // ---- App state -------------------------------------------------------------
 
 const el = {
@@ -177,8 +310,15 @@ function blankSong() {
 function selectSong(id) {
   const s = songs.find((x) => x.id === id);
   if (!s) return;
+  // Flush any pending debounced write for the outgoing song before switching,
+  // so a quick switch never drops unsaved edits to its file.
+  if (mode === 'folder' && currentId && currentId !== id) {
+    const prev = currentSong();
+    clearTimeout(persistTimer);
+    if (prev) writeSong(prev).catch(() => {});
+  }
   currentId = id;
-  localStorage.setItem(LAST_KEY, id);
+  if (mode === 'local') localStorage.setItem(LAST_KEY, id);
   el.title.value = s.title;
   el.artist.value = s.artist;
   el.editor.value = s.body;
@@ -336,7 +476,7 @@ function renderChordSet(s, container, setName) {
       const cur = currentSong();
       cur.focusChord = cur.focusChord === shape ? null : shape;
       cur.updated = Date.now();
-      saveSongs(songs);
+      schedulePersist();
       renderPreview();
     });
   });
@@ -381,14 +521,14 @@ function renderScale(s) {
     const cur = currentSong();
     cur.focusChord = e.target.value || null;
     cur.updated = Date.now();
-    saveSongs(songs);
+    schedulePersist();
     renderPreview();
   });
   document.getElementById('scale-root').addEventListener('change', (e) => {
     const cur = currentSong();
     cur.scaleRoot = e.target.value === 'auto' ? null : parseInt(e.target.value, 10);
     cur.updated = Date.now();
-    saveSongs(songs);
+    schedulePersist();
     renderScale(cur);
   });
   document.getElementById('scale-type').addEventListener('change', (e) => {
@@ -422,7 +562,7 @@ function renderHarmonica(s) {
     const cur = currentSong();
     cur.key = e.target.value === 'auto' ? null : parseInt(e.target.value, 10);
     cur.updated = Date.now();
-    saveSongs(songs);
+    schedulePersist();
     renderPreview();
   });
 }
@@ -436,25 +576,28 @@ function updatePrintHeader(s) {
 
 function renderList() {
   el.count.textContent = songs.length ? songs.length + '' : '';
-  const ordered = [...songs].sort((a, b) => b.updated - a.updated);
+  // Folder mode keeps file order (stable); local mode floats recent to the top.
+  const ordered = mode === 'folder'
+    ? [...songs].sort((a, b) => (a.path || '').localeCompare(b.path || ''))
+    : [...songs].sort((a, b) => b.updated - a.updated);
   el.list.innerHTML = '';
   for (const s of ordered) {
     const li = document.createElement('li');
     li.className = 'song-item' + (s.id === currentId ? ' active' : '');
+    const sub = mode === 'folder' ? (s.path || '') : (s.artist || '');
+    const del = mode === 'folder' ? '' : `<button class="del" title="Delete">&times;</button>`;
     li.innerHTML =
       `<span class="st"><b>${escapeHtml(s.title || 'Untitled')}</b>` +
-      `<small>${escapeHtml(s.artist || '')}</small></span>` +
-      `<button class="del" title="Delete">&times;</button>`;
+      `<small>${escapeHtml(sub)}</small></span>${del}`;
     li.querySelector('.st').addEventListener('click', () => selectSong(s.id));
-    li.querySelector('.del').addEventListener('click', (e) => {
-      e.stopPropagation();
-      deleteSong(s.id);
-    });
+    const delBtn = li.querySelector('.del');
+    if (delBtn) delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteSong(s.id); });
     el.list.appendChild(li);
   }
 }
 
 function deleteSong(id) {
+  if (mode === 'folder') return; // never delete files from the tool
   const s = songs.find((x) => x.id === id);
   if (!s) return;
   if (!confirm(`Delete "${s.title || 'Untitled'}"? This can't be undone.`)) return;
@@ -468,7 +611,23 @@ function deleteSong(id) {
   }
 }
 
-function createSong() {
+async function createSong() {
+  if (mode === 'folder') {
+    const name = prompt('New chart file name:', 'new-song.cho');
+    if (!name) return;
+    const fname = name.endsWith('.cho') ? name : name + '.cho';
+    let handle;
+    try { handle = await dirHandle.getFileHandle(fname, { create: true }); }
+    catch { alert('Could not create the file.'); return; }
+    const s = blankSong();
+    s.path = fname;
+    fileHandles[s.id] = handle;
+    songs.push(s);
+    await writeSong(s);
+    selectSong(s.id);
+    el.title.focus();
+    return;
+  }
   const s = blankSong();
   songs.push(s);
   saveSongs(songs);
@@ -476,7 +635,6 @@ function createSong() {
   el.title.focus();
 }
 
-let saveTimer = null;
 function commit() {
   const s = currentSong();
   if (!s) return;
@@ -484,13 +642,7 @@ function commit() {
   s.artist = el.artist.value;
   s.body = el.editor.value;
   s.updated = Date.now();
-  el.status.textContent = 'Saving…';
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    saveSongs(songs);
-    el.status.textContent = 'Saved';
-    renderList();
-  }, 400);
+  schedulePersist();
 }
 
 function setTranspose(delta) {
@@ -499,7 +651,7 @@ function setTranspose(delta) {
   s.transpose = Math.max(-11, Math.min(11, s.transpose + delta));
   el.trAmount.textContent = (s.transpose > 0 ? '+' : '') + s.transpose;
   s.updated = Date.now();
-  saveSongs(songs);
+  schedulePersist();
   renderPreview();
 }
 
@@ -509,23 +661,63 @@ function setCapo(delta) {
   s.capo = Math.max(0, Math.min(11, (s.capo || 0) + delta));
   el.capoAmount.textContent = s.capo;
   s.updated = Date.now();
-  saveSongs(songs);
+  schedulePersist();
   renderPreview();
 }
 
 // ---- Import / Export -------------------------------------------------------
 
-function exportSong() {
-  const s = currentSong();
-  if (!s) return;
+// Note name <-> pitch class, for the {key: G} directive.
+function noteToPc(str) {
+  const m = str.trim().match(/^([A-G])([#b]?)/);
+  if (!m) return null;
+  let pc = NOTE_INDEX[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0);
+  return ((pc % 12) + 12) % 12;
+}
+
+// Serialize a song to .cho text (directive block + body).
+function songToCho(s) {
   let out = '';
   if (s.title) out += `{title: ${s.title}}\n`;
   if (s.artist) out += `{artist: ${s.artist}}\n`;
+  if (s.key !== null && s.key !== undefined) out += `{key: ${HARP_NAMES[s.key]}}\n`;
   if (s.transpose) out += `{transpose: ${s.transpose}}\n`;
   if (s.capo) out += `{capo: ${s.capo}}\n`;
   if (out) out += '\n';
   out += s.body;
-  const blob = new Blob([out], { type: 'text/plain' });
+  return out;
+}
+
+// Parse .cho text into a fresh (unattached) song object.
+function parseCho(text, fallbackTitle) {
+  const s = blankSong();
+  const lines = text.split('\n');
+  const body = [];
+  let sawDirective = false;
+  for (const line of lines) {
+    const t = line.match(/^\{(title|artist|transpose|capo|key)\s*:\s*(.*)\}\s*$/i);
+    if (t) {
+      sawDirective = true;
+      const key = t[1].toLowerCase();
+      if (key === 'title') s.title = t[2].trim();
+      else if (key === 'artist') s.artist = t[2].trim();
+      else if (key === 'transpose') s.transpose = parseInt(t[2], 10) || 0;
+      else if (key === 'capo') s.capo = Math.max(0, Math.min(11, parseInt(t[2], 10) || 0));
+      else if (key === 'key') s.key = noteToPc(t[2]);
+    } else {
+      body.push(line);
+    }
+  }
+  if (sawDirective && body[0] === '') body.shift(); // drop blank after directives
+  s.body = body.join('\n');
+  if (!s.title) s.title = fallbackTitle || '';
+  return s;
+}
+
+function exportSong() {
+  const s = currentSong();
+  if (!s) return;
+  const blob = new Blob([songToCho(s)], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -535,27 +727,7 @@ function exportSong() {
 }
 
 function importText(text, fallbackTitle) {
-  const s = blankSong();
-  const lines = text.split('\n');
-  const body = [];
-  let sawDirective = false;
-  for (const line of lines) {
-    const t = line.match(/^\{(title|artist|transpose|capo)\s*:\s*(.*)\}\s*$/i);
-    if (t) {
-      sawDirective = true;
-      const key = t[1].toLowerCase();
-      if (key === 'title') s.title = t[2].trim();
-      else if (key === 'artist') s.artist = t[2].trim();
-      else if (key === 'transpose') s.transpose = parseInt(t[2], 10) || 0;
-      else if (key === 'capo') s.capo = Math.max(0, Math.min(11, parseInt(t[2], 10) || 0));
-    } else {
-      body.push(line);
-    }
-  }
-  // Drop one leading blank line left after the directive block.
-  if (sawDirective && body[0] === '') body.shift();
-  s.body = body.join('\n');
-  if (!s.title) s.title = fallbackTitle;
+  const s = parseCho(text, fallbackTitle);
   songs.push(s);
   saveSongs(songs);
   selectSong(s.id);
@@ -565,7 +737,7 @@ function importText(text, fallbackTitle) {
 
 el.editor.addEventListener('input', () => {
   const s = currentSong();
-  if (s) el.previewBody.innerHTML = render(el.editor.value, s.transpose);
+  if (s) el.previewBody.innerHTML = render(el.editor.value, inlineShift(s));
   commit();
 });
 el.title.addEventListener('input', () => updatePrintHeader({ title: el.title.value, artist: el.artist.value }));
@@ -597,6 +769,50 @@ el.toggleHarmonica.addEventListener('change', () => {
 });
 document.getElementById('export-btn').addEventListener('click', exportSong);
 document.getElementById('print-btn').addEventListener('click', () => window.print());
+
+// Folder mode controls.
+const reopenBtn = document.getElementById('reopen-btn');
+document.getElementById('folder-btn').addEventListener('click', openFolder);
+reopenBtn.addEventListener('click', reopenFolder);
+document.getElementById('save-btn').addEventListener('click', saveCurrentNow);
+
+async function saveCurrentNow() {
+  const s = currentSong();
+  if (!s) return;
+  if (mode === 'folder') {
+    try { await writeSong(s); el.status.textContent = 'Saved · ' + (s.path || 'file'); }
+    catch { el.status.textContent = 'Save failed'; }
+  } else {
+    saveSongs(songs);
+    el.status.textContent = 'Saved';
+  }
+}
+
+function updateModeUI() {
+  const folder = mode === 'folder';
+  document.getElementById('save-btn').hidden = !folder;
+  document.getElementById('import-btn').hidden = folder;
+  const bar = document.getElementById('folder-bar');
+  if (folder) {
+    bar.hidden = false;
+    bar.innerHTML = `<span class="fb-name" title="${escapeHtml(dirHandle && dirHandle.name || '')}">` +
+      `${escapeHtml(dirHandle && dirHandle.name || 'folder')}</span>` +
+      `<button id="close-folder" class="inline-btn">Close</button>`;
+    document.getElementById('close-folder').addEventListener('click', closeFolder);
+  } else {
+    bar.hidden = true;
+    bar.innerHTML = '';
+  }
+  renderList();
+}
+
+// Cmd/Ctrl+S saves the current chart immediately.
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+    e.preventDefault();
+    saveCurrentNow();
+  }
+});
 
 document.getElementById('pagebreak-btn').addEventListener('click', () => {
   const start = el.editor.selectionStart;
@@ -663,6 +879,9 @@ function boot() {
     ? last
     : [...songs].sort((a, b) => b.updated - a.updated)[0].id;
   selectSong(startId);
+
+  // Offer to reopen the last folder (needs a click to re-grant permission).
+  idbGet('dirHandle').then((h) => { if (h) reopenBtn.hidden = false; });
 }
 
 boot();
