@@ -63,6 +63,9 @@ with inline `[chord]` tags. Round-trips losslessly.
 
 - **Blank lines** are preserved as spacing.
 - A line with only chords and no lyrics renders as an instrumental/chord line.
+- **Chord palette**: every chord already used in the chart appears as a chip
+  above the editor — click one to insert that `[chord]` at the cursor. New
+  chords join the palette as you introduce them.
 - **Page breaks** use `{page}` on its own line (or click **Insert page break**).
   On screen it shows as a labelled dashed divider; when you print, the page
   breaks there. `{pagebreak}` and `{newpage}` also work.

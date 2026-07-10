@@ -158,6 +158,28 @@ main { display: flex; flex: 1; min-height: 0; }
 .pane-head .hint { text-transform: none; letter-spacing: 0; font-size: 12px; }
 .pane-head code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; color: var(--chord); font-family: var(--mono); }
 
+.chord-palette {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.chord-palette .chip {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--chord);
+  border-radius: 5px;
+  padding: 2px 9px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.chord-palette .chip:hover { background: #343a4e; border-color: #4a516b; }
+.chord-palette .palette-empty { color: var(--muted); font-size: 12px; }
+
 #editor {
   flex: 1;
   resize: none;

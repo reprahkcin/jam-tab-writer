@@ -268,6 +268,7 @@ const el = {
   title: document.getElementById('title-input'),
   artist: document.getElementById('artist-input'),
   editor: document.getElementById('editor'),
+  palette: document.getElementById('chord-palette'),
   preview: document.getElementById('preview'),
   previewBody: document.getElementById('preview-body'),
   printHeader: document.getElementById('print-header'),
@@ -329,6 +330,7 @@ function selectSong(id) {
   el.trAmount.textContent = (s.transpose > 0 ? '+' : '') + s.transpose;
   el.capoAmount.textContent = s.capo || 0;
   renderPreview();
+  renderPalette();
   renderList();
 }
 
@@ -578,6 +580,37 @@ function updatePrintHeader(s) {
   el.printHeader.innerHTML = parts.join('');
 }
 
+// Palette of the chords already used in the current chart. Clicking a chip
+// inserts that bracketed chord at the editor cursor. Reads the raw text so the
+// chips match exactly what's typed (independent of transpose).
+function renderPalette() {
+  const re = /\[([^\]]*)\]/g;
+  const seen = new Set();
+  const list = [];
+  let m;
+  while ((m = re.exec(el.editor.value)) !== null) {
+    if (isChord(m[1]) && !seen.has(m[1])) { seen.add(m[1]); list.push(m[1]); }
+  }
+  if (!list.length) {
+    el.palette.innerHTML = '<span class="palette-empty">Chords you use appear here to insert at the cursor.</span>';
+    return;
+  }
+  el.palette.innerHTML = list.map((c) =>
+    `<button class="chip" data-chord="${escapeHtml(c)}" title="Insert [${escapeHtml(c)}] at the cursor">${escapeHtml(c)}</button>`
+  ).join('');
+  el.palette.querySelectorAll('.chip').forEach((b) =>
+    b.addEventListener('click', () => insertAtCursor('[' + b.dataset.chord + ']')));
+}
+
+function insertAtCursor(text) {
+  const ta = el.editor;
+  const start = ta.selectionStart, end = ta.selectionEnd;
+  ta.value = ta.value.slice(0, start) + text + ta.value.slice(end);
+  ta.selectionStart = ta.selectionEnd = start + text.length;
+  ta.focus();
+  ta.dispatchEvent(new Event('input'));
+}
+
 function renderList() {
   el.count.textContent = songs.length ? songs.length + '' : '';
   // Folder mode keeps file order (stable); local mode floats recent to the top.
@@ -742,6 +775,7 @@ function importText(text, fallbackTitle) {
 el.editor.addEventListener('input', () => {
   const s = currentSong();
   if (s) el.previewBody.innerHTML = render(el.editor.value, inlineShift(s));
+  renderPalette();
   commit();
 });
 el.title.addEventListener('input', () => updatePrintHeader({ title: el.title.value, artist: el.artist.value }));
