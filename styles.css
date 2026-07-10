@@ -244,7 +244,9 @@ main { display: flex; flex: 1; min-height: 0; }
   align-items: center;
   color: var(--text);
 }
-.cd-name { font-family: system-ui, sans-serif; font-size: 12px; font-weight: 700; color: var(--chord); margin-bottom: 2px; }
+.cd-name { font-family: system-ui, sans-serif; font-size: 12px; font-weight: 700; color: var(--chord); margin-bottom: 2px; cursor: pointer; border-radius: 4px; padding: 0 4px; }
+.cd-name:hover { background: var(--panel-2); }
+.cd-name.focused { background: var(--accent); color: #1c1e26; }
 .cd-na { font-family: system-ui, sans-serif; font-size: 10px; color: var(--muted); padding: 14px 0; }
 .cd-sound { font-family: system-ui, sans-serif; font-size: 10px; color: var(--section); margin-top: 2px; }
 .chord-diagram { min-width: 76px; }
@@ -289,12 +291,18 @@ main { display: flex; flex: 1; min-height: 0; }
 .sp-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
 .sp-dot.root { background: var(--accent); }
 .sp-dot.note { background: var(--section); }
+.sp-dot.hi { background: transparent; border: 2px solid #ffe08a; width: 8px; height: 8px; }
 .scale-svg { width: 100%; max-width: 560px; height: auto; display: block; }
 .scale-svg .sc-string, .scale-svg .sc-fret { stroke: var(--line); stroke-width: 1; }
 .scale-svg .sc-nut { stroke: var(--muted); stroke-width: 3; }
 .scale-svg .sc-fretnum { fill: var(--muted); font-size: 9px; font-family: system-ui, sans-serif; }
 .scale-svg .sc-note { fill: var(--section); }
 .scale-svg .sc-root { fill: var(--accent); stroke: var(--text); stroke-width: 1; }
+/* Chord-tone highlight overlay */
+.scale-svg .sc-hi { stroke: #ffe08a; stroke-width: 2.2; }
+.scale-svg .sc-chordonly { fill: none; stroke: #ffe08a; stroke-width: 1.6; }
+.scale-svg.has-hi .sc-note:not(.sc-hi) { opacity: 0.25; }
+.scale-svg.has-hi .sc-root:not(.sc-hi) { opacity: 0.5; }
 
 /* Harmonica panel */
 .harmonica-panel:not(:empty) {
@@ -376,6 +384,10 @@ main { display: flex; flex: 1; min-height: 0; }
   .scale-svg .sc-note { fill: #666; }
   .scale-svg .sc-root { fill: #000; stroke: #000; }
   .scale-svg .sc-fretnum { fill: #333; }
+  .scale-svg .sc-hi { stroke: #000; stroke-width: 2.2; }
+  .scale-svg .sc-chordonly { fill: none; stroke: #000; stroke-width: 1.6; }
+  .scale-svg.has-hi .sc-note:not(.sc-hi) { opacity: 0.35; }
+  .cd-name.focused { background: none; color: #000; text-decoration: underline; }
   .harmonica-panel:not(:empty) { background: #fff; border: 1px solid #999; }
   .harmonica-panel .hp-title { color: #000; }
   .harmonica-panel .hp-item b { color: #000; }

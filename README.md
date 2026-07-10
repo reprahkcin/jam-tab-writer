@@ -108,7 +108,14 @@ The chord area has two independent rows (toggle the **Lead set** checkbox):
 The **scale map** is a full-neck (15-fret) fretboard: the **root** is filled
 orange, other **scale tones** teal. Pick the **root** (defaults to the song's
 sounding key, or override it) and the **scale** — major/minor pentatonic, blues,
-major, natural minor, Dorian, or Mixolydian. Everything prints with the sheet.
+major, natural minor, Dorian, or Mixolydian.
+
+**Chord-tone highlight**: click any chord's name (in the Rhythm or Lead row), or
+use the **Chord** dropdown in the scale panel, to overlay that chord's notes on
+the scale map. Chord tones that are in the scale get a gold ring; chord tones
+that fall *outside* the scale are drawn as hollow gold markers, so you can see
+the whole chord across the neck and pick target notes for a line. Click the same
+chord again to clear it. Everything prints with the sheet.
 - **Harmonica** suggests diatonic harp keys for the sounding key: 2nd position
   (cross harp — blues/folk), 1st (straight — melody), and 3rd (slant — minor).
   The song key is auto-detected from the first chord; override it with the

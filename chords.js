@@ -227,7 +227,7 @@ function chordDiagramSVG(displayName, frets, soundingName, extra) {
     ? `<div class="cd-sound">sounds ${escapeHtml(soundingName)}</div>` : '';
   const tail = sub + (extra || '');
   if (!frets) {
-    return `<div class="chord-diagram"><div class="cd-name">${escapeHtml(displayName)}</div>` +
+    return `<div class="chord-diagram"><div class="cd-name" data-chord="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>` +
       `<div class="cd-na">shape n/a</div>${tail}</div>`;
   }
   const S = 6, rows = 4, cellW = 9, cellH = 12, left = 10, top = 18;
@@ -260,7 +260,7 @@ function chordDiagramSVG(displayName, frets, soundingName, extra) {
     }
   }
 
-  return `<div class="chord-diagram"><div class="cd-name">${escapeHtml(displayName)}</div>` +
+  return `<div class="chord-diagram"><div class="cd-name" data-chord="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>` +
     `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${p}</svg>${tail}</div>`;
 }
 
@@ -277,10 +277,36 @@ const SCALES = [
 ];
 function scaleById(id) { return SCALES.find((s) => s.id === id) || SCALES[0]; }
 
+// Intervals that make up each chord quality, for highlighting chord tones.
+const QUALITY_IV = {
+  'major': [0, 4, 7], 'm': [0, 3, 7], '7': [0, 4, 7, 10], 'm7': [0, 3, 7, 10],
+  'maj7': [0, 4, 7, 11], '6': [0, 4, 7, 9], 'm6': [0, 3, 7, 9],
+  'sus2': [0, 2, 7], 'sus4': [0, 5, 7],
+};
+
+// Pitch classes sounded by a chord name (root, third, fifth, …), or null.
+function chordTonePcs(name) {
+  const m = name.match(CHORD_RE);
+  if (!m) return null;
+  const [, root, acc, suffix] = m;
+  const pc = chordRootPc(root, acc);
+  let iv = QUALITY_IV[parseQuality(suffix)];
+  if (!iv) {
+    if (/dim|°/.test(suffix)) iv = [0, 3, 6];
+    else if (/aug|\+/.test(suffix)) iv = [0, 4, 8];
+    else iv = [0, 4, 7]; // reasonable default
+  }
+  return iv.map((i) => (pc + i) % 12);
+}
+
 // A full-neck scale map: 6 strings x `FR` frets, scale tones dotted, root
-// filled. Low E is the bottom row; the nut is at the left.
-function scaleDiagramSVG(rootPc, intervals) {
+// filled. Low E is the bottom row; the nut is at the left. When `highlight`
+// (a Set of pitch classes) is given, those chord tones get a ring; chord tones
+// that fall outside the scale are drawn as hollow markers so the whole chord
+// is visible across the neck.
+function scaleDiagramSVG(rootPc, intervals, highlight) {
   const set = new Set(intervals.map((i) => (rootPc + i) % 12));
+  const hi = highlight && highlight.size ? highlight : null;
   const FR = 15, left = 26, top = 14, rowH = 18, colW = 30;
   const width = left + FR * colW + 12;
   const height = top + 5 * rowH + 24;
@@ -299,13 +325,20 @@ function scaleDiagramSVG(rootPc, intervals) {
   for (let i = 0; i < 6; i++) {
     for (let f = 0; f <= FR; f++) {
       const pc = (STRING_ABS[i] + f) % 12;
-      if (!set.has(pc)) continue;
-      const isRoot = pc === rootPc;
       const cx = f === 0 ? left - 12 : x(f) - colW / 2;
-      p += `<circle class="${isRoot ? 'sc-root' : 'sc-note'}" cx="${cx}" cy="${y(i)}" r="${isRoot ? 6 : 5}"/>`;
+      const inScale = set.has(pc);
+      const isChordTone = hi && hi.has(pc);
+      if (inScale) {
+        let cls = pc === rootPc ? 'sc-root' : 'sc-note';
+        if (isChordTone) cls += ' sc-hi';
+        p += `<circle class="${cls}" cx="${cx}" cy="${y(i)}" r="${pc === rootPc ? 6 : 5}"/>`;
+      } else if (isChordTone) {
+        p += `<circle class="sc-chordonly" cx="${cx}" cy="${y(i)}" r="5"/>`;
+      }
     }
   }
-  return `<svg class="scale-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMinYMin meet">${p}</svg>`;
+  const cls = 'scale-svg' + (hi ? ' has-hi' : '');
+  return `<svg class="${cls}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMinYMin meet">${p}</svg>`;
 }
 
 // Harmonica keys the common players' spelling.

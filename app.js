@@ -171,7 +171,7 @@ function currentSong() {
 }
 
 function blankSong() {
-  return { id: newId(), title: '', artist: '', body: '', transpose: 0, capo: 0, key: null, scaleRoot: null, updated: Date.now() };
+  return { id: newId(), title: '', artist: '', body: '', transpose: 0, capo: 0, key: null, scaleRoot: null, focusChord: null, updated: Date.now() };
 }
 
 function selectSong(id) {
@@ -263,6 +263,23 @@ function renderCapoBanner(s) {
   }));
 }
 
+// Unique chord shapes used in the song, in order of first appearance.
+function uniqueShapes(s) {
+  const shift = shapeShift(s);
+  const matches = s.body.match(/\[([^\]]*)\]/g) || [];
+  const seen = new Set();
+  const out = [];
+  for (const tok of matches) {
+    const name = tok.slice(1, -1);
+    if (!isChord(name)) continue;
+    const shape = transposeChord(name, shift);
+    if (seen.has(shape)) continue;
+    seen.add(shape);
+    out.push(shape);
+  }
+  return out;
+}
+
 // Lead set defaults to a triad up the neck (falling back to a barre form).
 function defaultLeadIndex(voicings) {
   let i = voicings.findIndex((v) => /triad/.test(v.label));
@@ -309,6 +326,20 @@ function renderChordSet(s, container, setName) {
       renderChordSet(currentSong(), container, sel.dataset.set);
     });
   });
+
+  // Click a chord's name to focus it — its tones highlight on the scale map.
+  container.querySelectorAll('.cd-name').forEach((nm) => {
+    const shape = nm.dataset.chord;
+    if (s.focusChord === shape) nm.classList.add('focused');
+    nm.title = 'Click to highlight this chord’s notes on the scale map';
+    nm.addEventListener('click', () => {
+      const cur = currentSong();
+      cur.focusChord = cur.focusChord === shape ? null : shape;
+      cur.updated = Date.now();
+      saveSongs(songs);
+      renderPreview();
+    });
+  });
 }
 
 // Scale map for the lead set: root defaults to the song's sounding key.
@@ -325,14 +356,35 @@ function renderScale(s) {
   const scaleOpts = SCALES.map((sc) =>
     `<option value="${sc.id}"${sc.id === scale.id ? ' selected' : ''}>${sc.name}</option>`).join('');
 
+  // Chord-tone highlight: the focused chord's sounding pitch classes.
+  let highlight = null;
+  if (s.focusChord) {
+    const soundingName = s.capo ? transposeChord(s.focusChord, s.capo) : s.focusChord;
+    const pcs = chordTonePcs(soundingName);
+    if (pcs) highlight = new Set(pcs);
+  }
+
+  const chordNames = uniqueShapes(s);
+  const focusOpts = `<option value="">none</option>` + chordNames.map((c) =>
+    `<option value="${escapeHtml(c)}"${s.focusChord === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
+  const legendHi = highlight ? ` <span class="sp-dot hi"></span>chord tone` : '';
+
   el.scalePanel.innerHTML =
     `<div class="sp-head"><span class="sp-title">${HARP_NAMES[pc]} ${escapeHtml(scale.name)}</span>` +
     `<span class="muted">Root</span><select id="scale-root">${rootOpts}</select>` +
     `<select id="scale-type">${scaleOpts}</select>` +
-    `<span class="sp-legend"><span class="sp-dot root"></span>root <span class="sp-dot note"></span>scale tone</span>` +
+    `<span class="muted">Chord</span><select id="scale-focus">${focusOpts}</select>` +
+    `<span class="sp-legend"><span class="sp-dot root"></span>root <span class="sp-dot note"></span>scale tone${legendHi}</span>` +
     `</div>` +
-    scaleDiagramSVG(pc, scale.iv);
+    scaleDiagramSVG(pc, scale.iv, highlight);
 
+  document.getElementById('scale-focus').addEventListener('change', (e) => {
+    const cur = currentSong();
+    cur.focusChord = e.target.value || null;
+    cur.updated = Date.now();
+    saveSongs(songs);
+    renderPreview();
+  });
   document.getElementById('scale-root').addEventListener('change', (e) => {
     const cur = currentSong();
     cur.scaleRoot = e.target.value === 'auto' ? null : parseInt(e.target.value, 10);
