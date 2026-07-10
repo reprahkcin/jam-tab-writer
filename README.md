@@ -63,12 +63,22 @@ toolbar are hidden. Chord lines stay glued to the lyric line below them, and
 
 ## Capo, chord diagrams & harmonica
 
-- **Capo**: type the chord *shapes* you finger, then set a capo fret. The capo
-  raises the pitch those shapes sound at, so the sheet keeps showing the same
-  shapes while a banner reads e.g. *"Capo 2 — these shapes sound in A"*. Because
-  the capo raises the sounding pitch, the harmonica suggestion rises with it
-  (Capo 2 on G shapes sounds in A → cross harp goes from C to D). Transpose, by
-  contrast, moves the shapes on the sheet themselves.
+- **Capo**: type the chord *shapes* you finger, then set a capo fret. Two views
+  of every chord matter, and the app shows both:
+  - **Shape** (what you fret) = your chords + **transpose**. A capo does *not*
+    change the shape — a G shape stays a G shape.
+  - **Sounding** (what it actually sounds as) = shape + **capo**. This is what a
+    capo-less bandmate plays, and what the harmonica must match.
+
+  Example: song in G, Capo 2 → you fret a **G** shape, it sounds as **A**, use
+  an **A** harp. Transpose +2 first and you fret an **A** shape that (with the
+  same capo) sounds as **B**.
+
+  A banner shows the capo, the offset, and the sounding key. Each chord diagram
+  is labelled with what its shape *sounds as*. The **Chords above lyrics** toggle
+  in that banner switches the sheet between **Shapes to fret** (for you) and
+  **Sounding (for others)** — flip to Sounding to hand a bandmate the real
+  chords. The harmonica always follows the sounding key.
 - **Chord diagrams** render above the sheet (toggle with the **Chord diagrams**
   checkbox). Common open chords use their standard shapes; others fall back to
   movable barre shapes. Unusual chords show "shape n/a".

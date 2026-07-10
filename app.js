@@ -148,10 +148,11 @@ let songs = loadSongs();
 let currentId = null;
 
 function loadPrefs() {
+  const defaults = { diagrams: true, harmonica: true, chordMode: 'shapes' };
   try {
-    return Object.assign({ diagrams: true, harmonica: true }, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'));
+    return Object.assign(defaults, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'));
   } catch {
-    return { diagrams: true, harmonica: true };
+    return defaults;
   }
 }
 let prefs = loadPrefs();
@@ -178,16 +179,26 @@ function selectSong(id) {
   renderList();
 }
 
-// The chords on the sheet are the shapes you finger; only transpose moves them.
-// A capo doesn't change the shapes — it raises the pitch they sound at.
+// Two views of every chord:
+//  - shape:    what your fingers fret. Moves with transpose; a capo does NOT
+//              change the shape ("still a G").
+//  - sounding: what it actually sounds as = shape + capo. This is what a
+//              capo-less bandmate plays and what the harmonica must match.
 function shapeShift(s) {
   return s.transpose;
+}
+function soundShift(s) {
+  return s.transpose + (s.capo || 0);
+}
+// Which one the chords above the lyrics display (toggled from the capo banner).
+function inlineShift(s) {
+  return prefs.chordMode === 'sounding' ? soundShift(s) : shapeShift(s);
 }
 
 function renderPreview() {
   const s = currentSong();
   if (!s) return;
-  el.previewBody.innerHTML = render(s.body, shapeShift(s));
+  el.previewBody.innerHTML = render(s.body, inlineShift(s));
   updatePrintHeader(s);
   renderCapoBanner(s);
   renderDiagrams(s);
@@ -217,23 +228,39 @@ function soundingKeyPc(s) {
 function renderCapoBanner(s) {
   if (!s.capo) { el.capoBanner.innerHTML = ''; return; }
   const pc = soundingKeyPc(s);
-  const sounds = pc === null ? '' : ` &middot; these shapes sound in <b>${HARP_NAMES[pc]}</b>`;
-  el.capoBanner.innerHTML = `<b>Capo ${s.capo}</b> &mdash; finger the shapes shown below${sounds}`;
+  const sounds = pc === null ? '' : ` &middot; the song sounds in <b>${HARP_NAMES[pc]}</b>`;
+  const semis = s.capo === 1 ? '1 semitone' : `${s.capo} semitones`;
+  const mode = prefs.chordMode === 'sounding' ? 'sounding' : 'shapes';
+  el.capoBanner.innerHTML =
+    `<div class="cb-main"><b>Capo ${s.capo}</b> &mdash; you fret the shapes below; ` +
+    `they sound ${semis} higher${sounds}</div>` +
+    `<div class="cb-toggle">Chords above lyrics: ` +
+    `<button class="seg${mode === 'shapes' ? ' on' : ''}" data-mode="shapes">Shapes to fret</button>` +
+    `<button class="seg${mode === 'sounding' ? ' on' : ''}" data-mode="sounding">Sounding (for others)</button>` +
+    `</div>`;
+  el.capoBanner.querySelectorAll('.seg').forEach((b) => b.addEventListener('click', () => {
+    prefs.chordMode = b.dataset.mode;
+    savePrefs();
+    renderPreview();
+  }));
 }
 
 function renderDiagrams(s) {
   if (!prefs.diagrams) { el.diagrams.innerHTML = ''; return; }
-  const shift = shapeShift(s);
+  // Diagrams are always the shape you fret (transpose only); a capo just tells
+  // you what that shape sounds as, shown as a sub-label.
+  const shapeSh = shapeShift(s), soundSh = soundShift(s);
   const matches = s.body.match(/\[([^\]]*)\]/g) || [];
   const seen = new Set();
   let html = '';
   for (const tok of matches) {
     const name = tok.slice(1, -1);
     if (!isChord(name)) continue;
-    const shown = transposeChord(name, shift);
-    if (seen.has(shown)) continue;
-    seen.add(shown);
-    html += chordDiagramSVG(shown, resolveChord(shown));
+    const shape = transposeChord(name, shapeSh);
+    if (seen.has(shape)) continue;
+    seen.add(shape);
+    const sounding = s.capo ? transposeChord(name, soundSh) : null;
+    html += chordDiagramSVG(shape, resolveChord(shape), sounding);
   }
   el.diagrams.innerHTML = html;
 }

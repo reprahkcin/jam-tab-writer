@@ -117,11 +117,14 @@ function resolveChord(name) {
   return movableShape(pc, quality);
 }
 
-// Build a small SVG fretboard diagram for a chord.
-function chordDiagramSVG(displayName, frets) {
+// Build a small SVG fretboard diagram for a chord. `soundingName`, when given,
+// is shown beneath as what the shape sounds as with a capo (e.g. "sounds A").
+function chordDiagramSVG(displayName, frets, soundingName) {
+  const sub = soundingName && soundingName !== displayName
+    ? `<div class="cd-sound">sounds ${escapeHtml(soundingName)}</div>` : '';
   if (!frets) {
     return `<div class="chord-diagram"><div class="cd-name">${escapeHtml(displayName)}</div>` +
-      `<div class="cd-na">shape n/a</div></div>`;
+      `<div class="cd-na">shape n/a</div>${sub}</div>`;
   }
   const S = 6, rows = 4, cellW = 9, cellH = 12, left = 10, top = 18;
   const fretted = frets.filter((f) => f > 0);
@@ -154,7 +157,7 @@ function chordDiagramSVG(displayName, frets) {
   }
 
   return `<div class="chord-diagram"><div class="cd-name">${escapeHtml(displayName)}</div>` +
-    `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${p}</svg></div>`;
+    `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${p}</svg>${sub}</div>`;
 }
 
 // Harmonica keys the common players' spelling.
