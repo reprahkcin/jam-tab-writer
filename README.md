@@ -66,6 +66,9 @@ with inline `[chord]` tags. Round-trips losslessly.
 - **Chord palette**: every chord already used in the chart appears as a chip
   above the editor — click one to insert that `[chord]` at the cursor. New
   chords join the palette as you introduce them.
+- **Section buttons**: a toolbar (Intro, Verse, Pre-Chorus, Chorus, Bridge,
+  Solo, Outro) inserts a `{Section}` label at the cursor on its own line.
+  **Verse** auto-increments to the next number already in the chart.
 - **Page breaks** use `{page}` on its own line (or click **Insert page break**).
   On screen it shows as a labelled dashed divider; when you print, the page
   breaks there. `{pagebreak}` and `{newpage}` also work.

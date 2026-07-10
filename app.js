@@ -268,6 +268,7 @@ const el = {
   title: document.getElementById('title-input'),
   artist: document.getElementById('artist-input'),
   editor: document.getElementById('editor'),
+  sectionBar: document.getElementById('section-bar'),
   palette: document.getElementById('chord-palette'),
   preview: document.getElementById('preview'),
   previewBody: document.getElementById('preview-body'),
@@ -611,6 +612,30 @@ function insertAtCursor(text) {
   ta.dispatchEvent(new Event('input'));
 }
 
+// Section-label buttons. Each inserts a {Section} on its own line; "Verse"
+// auto-increments to the next number already present in the chart.
+const SECTION_BUTTONS = ['Intro', 'Verse', 'Pre-Chorus', 'Chorus', 'Bridge', 'Solo', 'Outro'];
+
+function insertSection(label) {
+  const ta = el.editor;
+  const before = ta.value.slice(0, ta.selectionStart);
+  const pre = before && !before.endsWith('\n') ? '\n' : '';
+  insertAtCursor(pre + '{' + label + '}\n');
+}
+
+function nextVerseLabel() {
+  const nums = [...el.editor.value.matchAll(/\{\s*verse\s*(\d+)\s*\}/gi)].map((m) => +m[1]);
+  return 'Verse ' + ((nums.length ? Math.max(...nums) : 0) + 1);
+}
+
+function initSectionBar() {
+  el.sectionBar.innerHTML = SECTION_BUTTONS.map((s) =>
+    `<button class="sbtn" data-section="${s}" title="Insert {${s}} section label">${s}</button>`).join('');
+  el.sectionBar.querySelectorAll('.sbtn').forEach((b) => b.addEventListener('click', () => {
+    insertSection(b.dataset.section === 'Verse' ? nextVerseLabel() : b.dataset.section);
+  }));
+}
+
 function renderList() {
   el.count.textContent = songs.length ? songs.length + '' : '';
   // Folder mode keeps file order (stable); local mode floats recent to the top.
@@ -895,6 +920,7 @@ el.editor.addEventListener('keydown', (e) => {
 // ---- Boot ------------------------------------------------------------------
 
 function boot() {
+  initSectionBar();
   el.toggleDiagrams.checked = prefs.diagrams;
   el.toggleLead.checked = prefs.lead;
   el.toggleHarmonica.checked = prefs.harmonica;
