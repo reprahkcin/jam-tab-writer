@@ -14,8 +14,10 @@ const SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const FLAT  = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 const NOTE_INDEX = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 
-// One chord piece: root (+accidental) + suffix, optional /bass.
-const CHORD_RE = /^([A-G])([#b]?)([^/\s]*)(?:\/([A-G])([#b]?))?$/;
+// One chord piece: root (+accidental) + a quality suffix built only from real
+// chord tokens, optional /bass. The strict suffix stops ordinary words like
+// "Chorus" or "Bridge" (which start with A–G) from being read as chords.
+const CHORD_RE = /^([A-G])([#b]?)((?:maj|min|sus|add|aug|dim|m|M|Δ|ø|°|\+|-|[0-9]|#|b|\(|\))*)(?:\/([A-G])([#b]?))?$/;
 
 function isChord(token) {
   return CHORD_RE.test(token);
@@ -57,9 +59,11 @@ function renderLine(raw, semitones) {
     return '<div class="page-break"></div>';
   }
 
-  // Section labels: {Verse 1}  or a lone bracket token that isn't a chord: [Chorus]
+  // Section labels: {Verse 1}  or a single lone bracket token that isn't a
+  // chord: [Chorus]. The bracket must hold no inner brackets, so a chords-only
+  // line like "[Dm]  [Am]  [F]" is NOT mistaken for a section.
   let sectionMatch = trimmed.match(/^\{(.+)\}$/);
-  const loneBracket = trimmed.match(/^\[(.+)\]$/);
+  const loneBracket = trimmed.match(/^\[([^\[\]]+)\]$/);
   if (!sectionMatch && loneBracket && !isChord(loneBracket[1])) sectionMatch = loneBracket;
   if (sectionMatch) {
     return `<div class="section">${escapeHtml(sectionMatch[1])}</div>`;
