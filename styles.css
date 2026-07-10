@@ -222,6 +222,19 @@ main { display: flex; flex: 1; min-height: 0; }
 }
 .cb-toggle .seg.on { background: var(--accent); border-color: var(--accent); color: #1c1e26; font-weight: 600; }
 
+/* Rhythm / Lead sections */
+.chord-section { margin-bottom: 8px; }
+.section-label {
+  font-family: system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--section);
+  margin: 4px 0 6px;
+}
+#lead-section { border-top: 1px dashed var(--line); padding-top: 8px; }
+
 /* Chord diagram strip */
 .chord-diagrams { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
 .chord-diagrams:empty { display: none; }
@@ -253,6 +266,35 @@ main { display: flex; flex: 1; min-height: 0; }
 .chord-diagram svg .cd-dot { fill: var(--text); }
 .chord-diagram svg .cd-mark { fill: var(--muted); font-size: 8px; font-family: system-ui, sans-serif; }
 .chord-diagram svg .cd-fretnum { fill: var(--muted); font-size: 7px; font-family: system-ui, sans-serif; }
+
+/* Scale panel */
+.scale-panel:not(:empty) {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+.sp-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; font-family: system-ui, sans-serif; font-size: 13px; }
+.sp-title { font-weight: 700; color: var(--section); }
+.scale-panel select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+.sp-legend { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; margin-left: auto; }
+.sp-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
+.sp-dot.root { background: var(--accent); }
+.sp-dot.note { background: var(--section); }
+.scale-svg { width: 100%; max-width: 560px; height: auto; display: block; }
+.scale-svg .sc-string, .scale-svg .sc-fret { stroke: var(--line); stroke-width: 1; }
+.scale-svg .sc-nut { stroke: var(--muted); stroke-width: 3; }
+.scale-svg .sc-fretnum { fill: var(--muted); font-size: 9px; font-family: system-ui, sans-serif; }
+.scale-svg .sc-note { fill: var(--section); }
+.scale-svg .sc-root { fill: var(--accent); stroke: var(--text); stroke-width: 1; }
 
 /* Harmonica panel */
 .harmonica-panel:not(:empty) {
@@ -323,7 +365,17 @@ main { display: flex; flex: 1; min-height: 0; }
   .chord-diagram svg line { stroke: #333; }
   .chord-diagram svg .cd-nut, .chord-diagram svg .cd-dot { fill: #000; }
   .chord-diagram svg .cd-mark, .chord-diagram svg .cd-fretnum { fill: #333; }
-  .chord-diagrams, .harmonica-panel { break-inside: avoid; }
+  .chord-diagrams, .harmonica-panel, .scale-panel { break-inside: avoid; }
+  .section-label { color: #000; }
+  #lead-section { border-top: 1px dashed #999; }
+  .scale-panel:not(:empty) { background: #fff; border: 1px solid #999; }
+  .sp-title { color: #000; }
+  .scale-panel select { display: none; }
+  .scale-svg .sc-string, .scale-svg .sc-fret { stroke: #999; }
+  .scale-svg .sc-nut { stroke: #333; }
+  .scale-svg .sc-note { fill: #666; }
+  .scale-svg .sc-root { fill: #000; stroke: #000; }
+  .scale-svg .sc-fretnum { fill: #333; }
   .harmonica-panel:not(:empty) { background: #fff; border: 1px solid #999; }
   .harmonica-panel .hp-title { color: #000; }
   .harmonica-panel .hp-item b { color: #000; }

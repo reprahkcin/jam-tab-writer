@@ -64,7 +64,8 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
           <div class="pane-head">
             <span>Preview</span>
             <span class="view-toggles">
-              <label><input type="checkbox" id="toggle-diagrams" checked /> Chord diagrams</label>
+              <label><input type="checkbox" id="toggle-diagrams" checked /> Chords</label>
+              <label><input type="checkbox" id="toggle-lead" checked /> Lead set</label>
               <label><input type="checkbox" id="toggle-harmonica" checked /> Harmonica</label>
               <span id="save-status" class="muted"></span>
             </span>
@@ -72,7 +73,15 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
           <div id="preview" class="preview">
             <div id="print-header"></div>
             <div id="capo-banner"></div>
-            <div id="chord-diagrams" class="chord-diagrams"></div>
+            <div id="rhythm-section" class="chord-section">
+              <div class="section-label" id="rhythm-label">Rhythm</div>
+              <div id="chord-diagrams" class="chord-diagrams"></div>
+            </div>
+            <div id="lead-section" class="chord-section">
+              <div class="section-label">Lead</div>
+              <div id="lead-diagrams" class="chord-diagrams"></div>
+              <div id="scale-panel" class="scale-panel"></div>
+            </div>
             <div id="harmonica-panel" class="harmonica-panel"></div>
             <div id="preview-body"></div>
           </div>

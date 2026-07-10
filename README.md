@@ -59,6 +59,8 @@ toolbar are hidden. Chord lines stay glued to the lyric line below them, and
   each with a **voicing dropdown**: alternate barre positions (E/A/D shapes up
   the neck) and triad inversions on the top and middle string sets — handy for
   writing alternate parts
+- **Rhythm & Lead sets** — two independent diagram rows plus a full-neck **scale
+  map**, for sketching lead parts and solos against your rhythm voicings
 - **Harmonica suggestions** — recommended harp keys for the song's sounding key
 - Auto-save per song + a song list in the sidebar
 - **Export** a song to a `.cho` text file, **Import** one back
@@ -91,6 +93,22 @@ toolbar are hidden. Chord lines stay glued to the lyric line below them, and
   (D-G-B) string sets. Triads are compact three-note shapes, great for coming up
   with alternate parts and voice leading. Your pick per chord is remembered and
   prints with the sheet.
+
+## Rhythm & Lead sets
+
+The chord area has two independent rows (toggle the **Lead set** checkbox):
+
+- **Rhythm** — your main parts; each chord defaults to the standard shape, with
+  the voicing dropdown for swapping individual chords.
+- **Lead** — the same chords defaulting to **triads up the neck** (each with its
+  own voicing dropdown, kept separate from the rhythm choices), plus a **scale
+  map**. The two sets remember different picks, so you can hold an open-chord
+  rhythm voicing while the lead row shows a triad inversion to build a line from.
+
+The **scale map** is a full-neck (15-fret) fretboard: the **root** is filled
+orange, other **scale tones** teal. Pick the **root** (defaults to the song's
+sounding key, or override it) and the **scale** — major/minor pentatonic, blues,
+major, natural minor, Dorian, or Mixolydian. Everything prints with the sheet.
 - **Harmonica** suggests diatonic harp keys for the sounding key: 2nd position
   (cross harp — blues/folk), 1st (straight — melody), and 3rd (slant — minor).
   The song key is auto-detected from the first chord; override it with the

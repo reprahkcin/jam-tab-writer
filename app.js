@@ -139,8 +139,13 @@ const el = {
   status: document.getElementById('save-status'),
   capoBanner: document.getElementById('capo-banner'),
   diagrams: document.getElementById('chord-diagrams'),
+  leadDiagrams: document.getElementById('lead-diagrams'),
+  scalePanel: document.getElementById('scale-panel'),
+  rhythmLabel: document.getElementById('rhythm-label'),
+  leadSection: document.getElementById('lead-section'),
   harmonica: document.getElementById('harmonica-panel'),
   toggleDiagrams: document.getElementById('toggle-diagrams'),
+  toggleLead: document.getElementById('toggle-lead'),
   toggleHarmonica: document.getElementById('toggle-harmonica'),
 };
 
@@ -148,12 +153,16 @@ let songs = loadSongs();
 let currentId = null;
 
 function loadPrefs() {
-  const defaults = { diagrams: true, harmonica: true, chordMode: 'shapes', voicings: {} };
-  try {
-    return Object.assign(defaults, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'));
-  } catch {
-    return defaults;
-  }
+  const defaults = {
+    diagrams: true, harmonica: true, lead: true, chordMode: 'shapes',
+    scaleType: 'majPent', voicings: { rhythm: {}, lead: {} },
+  };
+  let p = defaults;
+  try { p = Object.assign(defaults, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch { /* keep defaults */ }
+  if (!p.voicings || Array.isArray(p.voicings)) p.voicings = { rhythm: {}, lead: {} };
+  p.voicings.rhythm = p.voicings.rhythm || {};
+  p.voicings.lead = p.voicings.lead || {};
+  return p;
 }
 let prefs = loadPrefs();
 
@@ -162,7 +171,7 @@ function currentSong() {
 }
 
 function blankSong() {
-  return { id: newId(), title: '', artist: '', body: '', transpose: 0, capo: 0, key: null, updated: Date.now() };
+  return { id: newId(), title: '', artist: '', body: '', transpose: 0, capo: 0, key: null, scaleRoot: null, updated: Date.now() };
 }
 
 function selectSong(id) {
@@ -201,7 +210,16 @@ function renderPreview() {
   el.previewBody.innerHTML = render(s.body, inlineShift(s));
   updatePrintHeader(s);
   renderCapoBanner(s);
-  renderDiagrams(s);
+  if (prefs.diagrams) renderChordSet(s, el.diagrams, 'rhythm');
+  else el.diagrams.innerHTML = '';
+  el.rhythmLabel.style.display = prefs.lead ? '' : 'none';
+  if (prefs.lead) {
+    el.leadSection.style.display = '';
+    renderChordSet(s, el.leadDiagrams, 'lead');
+    renderScale(s);
+  } else {
+    el.leadSection.style.display = 'none';
+  }
   renderHarmonica(s);
 }
 
@@ -245,11 +263,18 @@ function renderCapoBanner(s) {
   }));
 }
 
-function renderDiagrams(s) {
-  if (!prefs.diagrams) { el.diagrams.innerHTML = ''; return; }
-  // Diagrams are always the shape you fret (transpose only); a capo just tells
-  // you what that shape sounds as, shown as a sub-label.
+// Lead set defaults to a triad up the neck (falling back to a barre form).
+function defaultLeadIndex(voicings) {
+  let i = voicings.findIndex((v) => /triad/.test(v.label));
+  if (i < 0) i = voicings.findIndex((v) => /barre/.test(v.label));
+  return i < 0 ? 0 : i;
+}
+
+// Render one diagram row (setName is 'rhythm' or 'lead') into `container`.
+// Each set keeps its own voicing selection so rhythm and lead differ.
+function renderChordSet(s, container, setName) {
   const shapeSh = shapeShift(s), soundSh = soundShift(s);
+  const store = prefs.voicings[setName];
   const matches = s.body.match(/\[([^\]]*)\]/g) || [];
   const seen = new Set();
   let html = '';
@@ -261,7 +286,8 @@ function renderDiagrams(s) {
     seen.add(shape);
 
     const voicings = chordVoicings(shape);
-    let idx = prefs.voicings[shape] || 0;
+    let idx = store[shape];
+    if (idx === undefined) idx = setName === 'lead' ? defaultLeadIndex(voicings) : 0;
     if (idx >= voicings.length) idx = 0;
     const chosen = voicings[idx];
 
@@ -269,19 +295,55 @@ function renderDiagrams(s) {
     if (voicings.length > 1) {
       const opts = voicings.map((v, i) =>
         `<option value="${i}"${i === idx ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('');
-      select = `<select class="cd-voicing" data-chord="${escapeHtml(shape)}">${opts}</select>`;
+      select = `<select class="cd-voicing" data-set="${setName}" data-chord="${escapeHtml(shape)}">${opts}</select>`;
     }
     const sounding = s.capo ? transposeChord(name, soundSh) : null;
     html += chordDiagramSVG(shape, chosen.frets, sounding, select);
   }
-  el.diagrams.innerHTML = html;
+  container.innerHTML = html;
 
-  el.diagrams.querySelectorAll('.cd-voicing').forEach((sel) => {
+  container.querySelectorAll('.cd-voicing').forEach((sel) => {
     sel.addEventListener('change', () => {
-      prefs.voicings[sel.dataset.chord] = parseInt(sel.value, 10);
+      prefs.voicings[sel.dataset.set][sel.dataset.chord] = parseInt(sel.value, 10);
       savePrefs();
-      renderDiagrams(currentSong());
+      renderChordSet(currentSong(), container, sel.dataset.set);
     });
+  });
+}
+
+// Scale map for the lead set: root defaults to the song's sounding key.
+function renderScale(s) {
+  const auto = s.scaleRoot === null || s.scaleRoot === undefined;
+  const pc = auto ? soundingKeyPc(s) : s.scaleRoot;
+  if (pc === null) { el.scalePanel.innerHTML = ''; return; }
+  const scale = scaleById(prefs.scaleType);
+
+  let rootOpts = `<option value="auto"${auto ? ' selected' : ''}>Auto (${HARP_NAMES[pc]})</option>`;
+  for (let i = 0; i < 12; i++) {
+    rootOpts += `<option value="${i}"${!auto && s.scaleRoot === i ? ' selected' : ''}>${HARP_NAMES[i]}</option>`;
+  }
+  const scaleOpts = SCALES.map((sc) =>
+    `<option value="${sc.id}"${sc.id === scale.id ? ' selected' : ''}>${sc.name}</option>`).join('');
+
+  el.scalePanel.innerHTML =
+    `<div class="sp-head"><span class="sp-title">${HARP_NAMES[pc]} ${escapeHtml(scale.name)}</span>` +
+    `<span class="muted">Root</span><select id="scale-root">${rootOpts}</select>` +
+    `<select id="scale-type">${scaleOpts}</select>` +
+    `<span class="sp-legend"><span class="sp-dot root"></span>root <span class="sp-dot note"></span>scale tone</span>` +
+    `</div>` +
+    scaleDiagramSVG(pc, scale.iv);
+
+  document.getElementById('scale-root').addEventListener('change', (e) => {
+    const cur = currentSong();
+    cur.scaleRoot = e.target.value === 'auto' ? null : parseInt(e.target.value, 10);
+    cur.updated = Date.now();
+    saveSongs(songs);
+    renderScale(cur);
+  });
+  document.getElementById('scale-type').addEventListener('change', (e) => {
+    prefs.scaleType = e.target.value;
+    savePrefs();
+    renderScale(currentSong());
   });
 }
 
@@ -472,6 +534,11 @@ el.toggleDiagrams.addEventListener('change', () => {
   savePrefs();
   renderPreview();
 });
+el.toggleLead.addEventListener('change', () => {
+  prefs.lead = el.toggleLead.checked;
+  savePrefs();
+  renderPreview();
+});
 el.toggleHarmonica.addEventListener('change', () => {
   prefs.harmonica = el.toggleHarmonica.checked;
   savePrefs();
@@ -524,6 +591,7 @@ el.editor.addEventListener('keydown', (e) => {
 
 function boot() {
   el.toggleDiagrams.checked = prefs.diagrams;
+  el.toggleLead.checked = prefs.lead;
   el.toggleHarmonica.checked = prefs.harmonica;
   if (!songs.length) {
     // Seed with a short example so the app isn't blank on first run.

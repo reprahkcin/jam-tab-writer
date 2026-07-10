@@ -264,6 +264,50 @@ function chordDiagramSVG(displayName, frets, soundingName, extra) {
     `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${p}</svg>${tail}</div>`;
 }
 
+// ---- Scales ----------------------------------------------------------------
+
+const SCALES = [
+  { id: 'majPent', name: 'Major pentatonic', iv: [0, 2, 4, 7, 9] },
+  { id: 'minPent', name: 'Minor pentatonic', iv: [0, 3, 5, 7, 10] },
+  { id: 'blues', name: 'Blues (minor)', iv: [0, 3, 5, 6, 7, 10] },
+  { id: 'major', name: 'Major (Ionian)', iv: [0, 2, 4, 5, 7, 9, 11] },
+  { id: 'minor', name: 'Minor (Aeolian)', iv: [0, 2, 3, 5, 7, 8, 10] },
+  { id: 'dorian', name: 'Dorian', iv: [0, 2, 3, 5, 7, 9, 10] },
+  { id: 'mixo', name: 'Mixolydian', iv: [0, 2, 4, 5, 7, 9, 10] },
+];
+function scaleById(id) { return SCALES.find((s) => s.id === id) || SCALES[0]; }
+
+// A full-neck scale map: 6 strings x `FR` frets, scale tones dotted, root
+// filled. Low E is the bottom row; the nut is at the left.
+function scaleDiagramSVG(rootPc, intervals) {
+  const set = new Set(intervals.map((i) => (rootPc + i) % 12));
+  const FR = 15, left = 26, top = 14, rowH = 18, colW = 30;
+  const width = left + FR * colW + 12;
+  const height = top + 5 * rowH + 24;
+  const x = (f) => left + f * colW;
+  const y = (i) => top + (5 - i) * rowH; // string 0 (low E) at the bottom
+  const markers = [3, 5, 7, 9, 12, 15];
+
+  let p = '';
+  for (let i = 0; i < 6; i++) p += `<line class="sc-string" x1="${x(0)}" y1="${y(i)}" x2="${x(FR)}" y2="${y(i)}"/>`;
+  for (let f = 0; f <= FR; f++) {
+    const cls = f === 0 ? 'sc-nut' : 'sc-fret';
+    p += `<line class="${cls}" x1="${x(f)}" y1="${y(5)}" x2="${x(f)}" y2="${y(0)}"/>`;
+  }
+  for (const f of markers) p += `<text class="sc-fretnum" x="${x(f) - colW / 2}" y="${height - 8}" text-anchor="middle">${f}</text>`;
+
+  for (let i = 0; i < 6; i++) {
+    for (let f = 0; f <= FR; f++) {
+      const pc = (STRING_ABS[i] + f) % 12;
+      if (!set.has(pc)) continue;
+      const isRoot = pc === rootPc;
+      const cx = f === 0 ? left - 12 : x(f) - colW / 2;
+      p += `<circle class="${isRoot ? 'sc-root' : 'sc-note'}" cx="${cx}" cy="${y(i)}" r="${isRoot ? 6 : 5}"/>`;
+    }
+  }
+  return `<svg class="scale-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMinYMin meet">${p}</svg>`;
+}
+
 // Harmonica keys the common players' spelling.
 const HARP_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 
