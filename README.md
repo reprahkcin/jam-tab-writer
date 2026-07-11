@@ -95,6 +95,28 @@ with inline `[chord]` tags. Round-trips losslessly.
   On screen it shows as a labelled dashed divider; when you print, the page
   breaks there. `{pagebreak}` and `{newpage}` also work.
 
+## Performance mode
+
+Click **Perform** (top bar) for a full-screen stage view of the current song:
+
+- **Newspaper columns** — the song flows across a configurable number of columns
+  (**Columns** ±). The font **auto-sizes** so the chosen number of columns fits
+  without the chord/lyric lines overlapping; on a wide monitor you can fit the
+  whole song across several columns with no scrolling. **Size** ± overrides the
+  font (bigger text may reduce the columns that fit and add pages); **Fit**
+  shrinks the font until everything fits one screen.
+- **Page turning** — <kbd>→</kbd>/<kbd>PageDown</kbd>/<kbd>Space</kbd> go
+  forward, <kbd>←</kbd>/<kbd>PageUp</kbd> back. Long songs page sideways one
+  screenful at a time; pedalling past the end flows into the **next song in the
+  folder** (and back past the start into the previous one). Set an **AirTurn**
+  (or any Bluetooth page turner) to send Left/Right Arrow.
+- **`{page}`** markers force a hard column break, so you control where breaks
+  land.
+- **Toggleable panels** — **Chords**, **Lead**, **Scale**, and **Harp** each
+  show/hide independently (all off by default) so lyrics and chord changes get
+  the whole screen when you want.
+- **Esc** exits. Column count, size, and panel choices are remembered.
+
 ## Printing
 
 Click **Print** (top right) to open your browser's print dialog — from there you

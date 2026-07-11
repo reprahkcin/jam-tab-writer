@@ -387,12 +387,15 @@ function loadPrefs() {
   const defaults = {
     diagrams: true, harmonica: true, lead: true, chordMode: 'shapes',
     scaleType: 'majPent', voicings: { rhythm: {}, lead: {} },
+    perform: { cols: 4, font: 22, panels: { chords: false, lead: false, scale: false, harp: false } },
   };
   let p = defaults;
   try { p = Object.assign(defaults, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch { /* keep defaults */ }
   if (!p.voicings || Array.isArray(p.voicings)) p.voicings = { rhythm: {}, lead: {} };
   p.voicings.rhythm = p.voicings.rhythm || {};
   p.voicings.lead = p.voicings.lead || {};
+  p.perform = Object.assign({ cols: 4, font: 22, panels: {} }, p.perform);
+  p.perform.panels = Object.assign({ chords: false, lead: false, scale: false, harp: false }, p.perform.panels);
   return p;
 }
 let prefs = loadPrefs();
@@ -460,7 +463,11 @@ function renderPreview() {
   } else {
     el.leadSection.style.display = 'none';
   }
-  renderHarmonica(s);
+  if (prefs.harmonica) renderHarmonica(s);
+  else el.harmonica.innerHTML = '';
+  // In performance mode the panels are relocated into the overlay and shown
+  // independently of the app's own toggles, so keep them all populated.
+  if (typeof perf !== 'undefined' && perf.open) perfRenderPanels(s);
 }
 
 // First chord's root is our best guess at the tonic.
@@ -639,7 +646,6 @@ function renderScale(s) {
 }
 
 function renderHarmonica(s) {
-  if (!prefs.harmonica) { el.harmonica.innerHTML = ''; return; }
   const pc = soundingKeyPc(s);
   if (pc === null) { el.harmonica.innerHTML = ''; return; }
   const r = harmonicaRecs(pc);
@@ -1074,6 +1080,278 @@ el.editor.addEventListener('keydown', (e) => {
     el.editor.dispatchEvent(new Event('input'));
   }
 });
+
+// ---- Performance mode ------------------------------------------------------
+// A full-screen overlay that lays the current song's chords-over-lyrics out in
+// N newspaper columns (whole song visible when it fits), with horizontal paging
+// for longer songs, toggleable diagram/scale/harmonica panels, and page-turner
+// (arrow / PageUp-Down / Space) navigation that flows into the next song.
+
+const PERF_PANELS = { chords: 'chord-diagrams', lead: 'lead-diagrams', scale: 'scale-panel', harp: 'harmonica-panel' };
+const PERF_LABELS = { chords: 'Chords', lead: 'Lead', scale: 'Scale', harp: 'Harmonica' };
+const PERF_PADX = 28; // must match .perform-cols left/right padding in CSS
+const PERF_GAP = 36;  // gap between columns, in px
+
+const perf = { open: false, page: 0, pages: 1, orig: {}, idleTimer: null };
+const pf = {
+  overlay: document.getElementById('perform-overlay'),
+  bar: document.getElementById('perform-bar'),
+  song: document.getElementById('pf-song'),
+  cols: document.getElementById('perform-cols'),
+  viewport: document.getElementById('perform-viewport'),
+  panels: document.getElementById('perform-panels'),
+  colNum: document.getElementById('pf-cols'),
+  fontNum: document.getElementById('pf-font'),
+  pageLabel: document.getElementById('pf-page'),
+};
+
+// The ordered list the page-turner flows through: the current folder's charts
+// (by path) in folder mode, else the local songs (recent first).
+function perfSetlist() {
+  if (mode === 'folder') {
+    const cur = currentSong();
+    const libId = cur && cur.libId;
+    return songs.filter((s) => s.libId === libId).sort((a, b) => (a.path || '').localeCompare(b.path || ''));
+  }
+  return [...songs].sort((a, b) => b.updated - a.updated);
+}
+
+// Force every panel to render regardless of the app's own view toggles, so the
+// performance toggles control them independently.
+function perfRenderPanels(s) {
+  renderChordSet(s, el.diagrams, 'rhythm');
+  renderChordSet(s, el.leadDiagrams, 'lead');
+  renderScale(s);
+  renderHarmonica(s);
+}
+
+function openPerform() {
+  const s = currentSong();
+  if (!s || perf.open) return;
+  renderPreview();
+  perfRenderPanels(s);
+  // Relocate the live panel nodes into the overlay (keeps them interactive).
+  for (const [key, id] of Object.entries(PERF_PANELS)) {
+    const node = document.getElementById(id);
+    if (!node) continue;
+    if (!perf.orig[id]) perf.orig[id] = { parent: node.parentNode, next: node.nextSibling };
+    const wrap = document.createElement('div');
+    wrap.className = 'pf-panel';
+    wrap.dataset.panel = key;
+    wrap.innerHTML = `<div class="pf-panel-h">${PERF_LABELS[key]}</div>`;
+    wrap.appendChild(node);
+    pf.panels.appendChild(wrap);
+  }
+  perf.open = true;
+  pf.overlay.hidden = false;
+  document.body.classList.add('performing');
+  pf.colNum.textContent = prefs.perform.cols;
+  pf.fontNum.textContent = prefs.perform.font;
+  syncPerfToggles();
+  renderPerformBody();
+  perfAutoFont();     // size text to the saved column count for this song/screen
+  applyPerfPanels();
+  document.addEventListener('keydown', perfKeydown, true);
+  pf.overlay.addEventListener('mousemove', perfActivity);
+  perfActivity();
+  try { if (pf.overlay.requestFullscreen) pf.overlay.requestFullscreen(); } catch { /* ignore */ }
+}
+
+function closePerform() {
+  if (!perf.open) return;
+  perf.open = false;
+  document.removeEventListener('keydown', perfKeydown, true);
+  pf.overlay.removeEventListener('mousemove', perfActivity);
+  clearTimeout(perf.idleTimer);
+  // Return the panel nodes to their original places in the preview.
+  for (const id of Object.values(PERF_PANELS)) {
+    const node = document.getElementById(id);
+    const o = perf.orig[id];
+    if (o && node) o.parent.insertBefore(node, o.next);
+  }
+  pf.panels.innerHTML = '';
+  pf.overlay.classList.remove('immersive');
+  pf.overlay.hidden = true;
+  document.body.classList.remove('performing');
+  try { if (document.fullscreenElement) document.exitFullscreen(); } catch { /* ignore */ }
+  renderPreview();
+}
+
+function renderPerformBody() {
+  const s = currentSong();
+  if (!s) return;
+  pf.song.textContent = (s.title || 'Untitled') + (s.artist ? ' · ' + s.artist : '');
+  pf.cols.innerHTML = render(s.body, inlineShift(s));
+  perf.page = 0;
+  applyPerfLayout();
+}
+
+// The width one column needs to hold the target number of columns across.
+function targetColW(cols, vw) {
+  return (vw - PERF_PADX * 2 - (cols - 1) * PERF_GAP) / cols;
+}
+
+// The widest chord/lyric line at a given font. Chart lines are white-space:pre
+// (never wrap — wrapping would misalign chords over syllables), so a column can
+// be no narrower than this without lines overlapping the next column. Measured
+// in an offscreen shrink-to-fit clone so multicol/{page} don't skew the result.
+let pfMeasure = null;
+function widestLinePx(font) {
+  if (!pfMeasure) {
+    pfMeasure = document.createElement('div');
+    pfMeasure.className = 'preview';
+    pfMeasure.style.cssText =
+      'position:absolute; left:-99999px; top:0; visibility:hidden; display:inline-block; white-space:pre; padding:0; overflow:visible;';
+    document.body.appendChild(pfMeasure);
+  }
+  pfMeasure.style.fontSize = font + 'px';
+  pfMeasure.innerHTML = pf.cols.innerHTML;
+  return pfMeasure.scrollWidth;
+}
+
+// Largest font at which `cols` columns of the widest line still fit the screen.
+function fontForCols(cols) {
+  const vw = pf.viewport.clientWidth;
+  const ref = 40;
+  const wref = widestLinePx(ref);
+  if (wref <= 0) return prefs.perform.font;
+  const f = Math.floor(targetColW(cols, vw) * ref / wref);
+  return Math.max(10, Math.min(60, f));
+}
+
+// Lay out columns. A column is never narrower than the widest line, so lines
+// never overlap; if the chosen font makes them too wide for `cols` per screen,
+// columns widen and the extra ones page horizontally instead. Returns metrics.
+function perfLayoutCore() {
+  const vw = pf.viewport.clientWidth;
+  const wline = widestLinePx(prefs.perform.font);
+  const colW = Math.max(80, Math.floor(Math.max(targetColW(prefs.perform.cols, vw), wline)));
+  pf.cols.style.setProperty('--pf-font', prefs.perform.font + 'px');
+  pf.cols.style.columnGap = PERF_GAP + 'px';
+  pf.cols.style.columnWidth = colW + 'px';
+  return { vw, total: pf.cols.scrollWidth }; // reading scrollWidth forces reflow
+}
+
+// Auto-size the font so the current column count fits without overlap.
+function perfAutoFont() {
+  prefs.perform.font = fontForCols(prefs.perform.cols);
+  pf.fontNum.textContent = prefs.perform.font;
+  savePrefs();
+  applyPerfLayout();
+}
+
+function applyPerfLayout() {
+  if (!perf.open) return;
+  const { vw, total } = perfLayoutCore();
+  perf.pages = Math.max(1, Math.round(total / vw));
+  if (perf.page > perf.pages - 1) perf.page = perf.pages - 1;
+  goPerfPage(perf.page);
+}
+
+function goPerfPage(p) {
+  perf.page = Math.max(0, Math.min(perf.pages - 1, p));
+  const vw = pf.viewport.clientWidth;
+  pf.cols.style.transform = `translateX(${-perf.page * vw}px)`;
+  pf.pageLabel.textContent = perf.pages > 1 ? `Page ${perf.page + 1}/${perf.pages}` : '';
+}
+
+function perfForward() {
+  if (perf.page < perf.pages - 1) goPerfPage(perf.page + 1);
+  else perfChangeSong(1);
+}
+function perfBack() {
+  if (perf.page > 0) goPerfPage(perf.page - 1);
+  else perfChangeSong(-1);
+}
+
+function perfChangeSong(dir) {
+  const list = perfSetlist();
+  const i = list.findIndex((x) => x.id === currentId);
+  const j = i + dir;
+  if (j < 0 || j >= list.length) return; // at the ends of the set
+  selectSong(list[j].id);
+  perfRenderPanels(currentSong());
+  renderPerformBody();
+}
+
+function perfKeydown(e) {
+  if (!perf.open) return;
+  switch (e.key) {
+    case 'Escape': e.preventDefault(); closePerform(); break;
+    case 'ArrowRight': case 'ArrowDown': case 'PageDown': case ' ': case 'Spacebar':
+      e.preventDefault(); perfForward(); break;
+    case 'ArrowLeft': case 'ArrowUp': case 'PageUp':
+      e.preventDefault(); perfBack(); break;
+    default: break;
+  }
+}
+
+function perfActivity() {
+  pf.overlay.classList.remove('immersive');
+  clearTimeout(perf.idleTimer);
+  perf.idleTimer = setTimeout(() => { if (perf.open) pf.overlay.classList.add('immersive'); }, 3500);
+}
+
+function syncPerfToggles() {
+  pf.bar.querySelectorAll('.pf-toggle').forEach((b) => {
+    b.classList.toggle('on', !!prefs.perform.panels[b.dataset.panel]);
+  });
+}
+
+function applyPerfPanels() {
+  let any = false;
+  pf.panels.querySelectorAll('.pf-panel').forEach((w) => {
+    const on = !!prefs.perform.panels[w.dataset.panel];
+    w.hidden = !on;
+    if (on) any = true;
+  });
+  pf.panels.classList.toggle('hidden', !any);
+  applyPerfLayout(); // panels change the body height → re-measure pages
+}
+
+function setPerfCols(d) {
+  prefs.perform.cols = Math.max(1, Math.min(10, prefs.perform.cols + d));
+  pf.colNum.textContent = prefs.perform.cols;
+  perfAutoFont(); // size the text to the new column count (also saves + re-lays)
+}
+function setPerfFont(d) {
+  prefs.perform.font = Math.max(10, Math.min(80, prefs.perform.font + d));
+  pf.fontNum.textContent = prefs.perform.font;
+  savePrefs();
+  applyPerfLayout();
+}
+// Shrink the font until the whole song fits one screen (no horizontal paging).
+function perfFit() {
+  const vw = pf.viewport.clientWidth;
+  let f = prefs.perform.font;
+  while (f > 10) {
+    prefs.perform.font = f;
+    if (perfLayoutCore().total <= vw + 2) break;
+    f -= 1;
+  }
+  prefs.perform.font = f;
+  pf.fontNum.textContent = f;
+  savePrefs();
+  applyPerfLayout();
+}
+
+document.getElementById('perform-btn').addEventListener('click', openPerform);
+document.getElementById('pf-exit').addEventListener('click', closePerform);
+document.getElementById('pf-col-up').addEventListener('click', () => setPerfCols(1));
+document.getElementById('pf-col-down').addEventListener('click', () => setPerfCols(-1));
+document.getElementById('pf-font-up').addEventListener('click', () => setPerfFont(1));
+document.getElementById('pf-font-down').addEventListener('click', () => setPerfFont(-1));
+document.getElementById('pf-fit').addEventListener('click', perfFit);
+document.getElementById('pf-prev-song').addEventListener('click', () => perfChangeSong(-1));
+document.getElementById('pf-next-song').addEventListener('click', () => perfChangeSong(1));
+pf.bar.querySelectorAll('.pf-toggle').forEach((b) => b.addEventListener('click', () => {
+  const k = b.dataset.panel;
+  prefs.perform.panels[k] = !prefs.perform.panels[k];
+  savePrefs();
+  syncPerfToggles();
+  applyPerfPanels();
+}));
+window.addEventListener('resize', () => { if (perf.open) applyPerfLayout(); });
 
 // ---- Boot ------------------------------------------------------------------
 

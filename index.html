@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guitar Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=2" />
+  <link rel="stylesheet" href="styles.css?v=3" />
 </head>
 <body>
   <header>
@@ -16,6 +16,7 @@
       <button id="save-btn" title="Save this chart to its file (Cmd/Ctrl+S)" hidden>Save</button>
       <button id="import-btn" title="Open a .txt / .cho file">Import</button>
       <button id="export-btn" title="Download this song as a file">Export</button>
+      <button id="perform-btn" title="Full-screen performance view">Perform</button>
       <button id="print-btn" title="Print / save as PDF">Print</button>
       <input type="file" id="import-input" accept=".txt,.cho,.chordpro,.crd,text/plain" hidden />
     </div>
@@ -96,9 +97,46 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
     </section>
   </main>
 
+  <!-- Full-screen performance view. Hidden until "Perform" is clicked. -->
+  <div id="perform-overlay" class="perform-overlay" hidden>
+    <div id="perform-bar" class="perform-bar">
+      <span class="pf-song" id="pf-song"></span>
+      <div class="pf-group">
+        <label>Columns</label>
+        <button id="pf-col-down" title="Fewer columns">&minus;</button>
+        <span id="pf-cols" class="pf-num">4</span>
+        <button id="pf-col-up" title="More columns">+</button>
+      </div>
+      <div class="pf-group">
+        <label>Size</label>
+        <button id="pf-font-down" title="Smaller text">&minus;</button>
+        <span id="pf-font" class="pf-num">22</span>
+        <button id="pf-font-up" title="Larger text">+</button>
+        <button id="pf-fit" title="Shrink text to fit one screen">Fit</button>
+      </div>
+      <div class="pf-group pf-toggles">
+        <label>Show</label>
+        <button class="pf-toggle" data-panel="chords">Chords</button>
+        <button class="pf-toggle" data-panel="lead">Lead</button>
+        <button class="pf-toggle" data-panel="scale">Scale</button>
+        <button class="pf-toggle" data-panel="harp">Harp</button>
+      </div>
+      <div class="pf-group">
+        <button id="pf-prev-song" title="Previous song (&larr; at start)">&#9664; Song</button>
+        <button id="pf-next-song" title="Next song (&rarr; at end)">Song &#9654;</button>
+      </div>
+      <span class="pf-page" id="pf-page"></span>
+      <button id="pf-exit" class="pf-exit" title="Exit performance mode (Esc)">&#10005;</button>
+    </div>
+    <div id="perform-panels" class="perform-panels"></div>
+    <div id="perform-viewport" class="perform-viewport">
+      <div id="perform-cols" class="perform-cols preview"></div>
+    </div>
+  </div>
+
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=2"></script>
-  <script src="app.js?v=2"></script>
+  <script src="chords.js?v=3"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

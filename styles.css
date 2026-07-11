@@ -527,3 +527,116 @@ main { display: flex; flex: 1; min-height: 0; }
   .panes { flex-direction: column; }
   #sidebar { width: 180px; }
 }
+
+/* ---- Performance mode ----------------------------------------------------- */
+body.performing { overflow: hidden; }
+
+.perform-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+}
+.perform-overlay[hidden] { display: none; }
+
+.perform-bar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 8px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  flex-wrap: wrap;
+  transition: opacity 0.35s ease;
+}
+/* Fade the bar after a few idle seconds; any mouse move brings it back. */
+.perform-overlay.immersive .perform-bar { opacity: 0; }
+.perform-overlay.immersive .perform-bar:hover { opacity: 1; }
+.perform-overlay.immersive { cursor: none; }
+.perform-overlay.immersive:hover { cursor: default; }
+
+.pf-song {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--accent);
+  margin-right: auto;
+  max-width: 34vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pf-group { display: flex; align-items: center; gap: 6px; }
+.pf-group label { color: var(--muted); text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+.pf-num { min-width: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+.perform-bar button {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: system-ui, sans-serif;
+}
+.perform-bar button:hover { background: #343a4e; }
+.pf-toggle.on { background: var(--accent); border-color: var(--accent); color: #1c1e26; font-weight: 700; }
+.pf-page { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 74px; text-align: right; }
+.pf-exit { font-size: 15px !important; line-height: 1; }
+
+.perform-panels {
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+  padding: 10px 16px;
+  overflow-x: auto;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+}
+.perform-panels.hidden { display: none; }
+.pf-panel[hidden] { display: none; }
+.pf-panel-h {
+  font: 700 11px system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+/* Diagrams sit in a row inside each panel. */
+.pf-panel .chord-diagrams { display: flex; gap: 12px; flex-wrap: nowrap; }
+
+.perform-viewport {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+.perform-cols.preview {
+  position: absolute;
+  inset: 0;
+  flex: none;
+  overflow: visible;
+  padding: 26px 28px;
+  column-gap: 40px;
+  column-fill: auto;
+  font-size: var(--pf-font, 22px);
+  transition: transform 0.28s ease;
+  will-change: transform;
+}
+.perform-cols .chordline,
+.perform-cols .lyricline,
+.perform-cols .plainline { font-size: var(--pf-font, 22px); line-height: 1.12; }
+.perform-cols .chordline { break-after: avoid; min-height: 1.2em; }
+.perform-cols .lyricline { break-before: avoid; margin-bottom: 0.28em; }
+.perform-cols .plainline { break-inside: avoid; }
+.perform-cols .section { break-after: avoid; break-inside: avoid; margin: 0.5em 0 0.2em; }
+.perform-cols .blank { height: 0.5em; }
+/* A {page} marker becomes a hard column break, with no visible divider. */
+.perform-cols .page-break { break-before: column; height: 0; margin: 0; border: none; background: none; }
+.perform-cols .page-break::after { display: none; }
+
+@media print { .perform-overlay { display: none !important; } }
