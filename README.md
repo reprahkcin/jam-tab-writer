@@ -4,9 +4,16 @@ A no-frills, single-page web app for writing **chords-over-lyrics** song sheets.
 Paste in your verses, drop chords into brackets, and see them positioned above
 the lyrics in real time. No accounts, no server, no build step.
 
+**Live:** https://reprahkcin.github.io/guitar-tab-writer/
+
 ## Running it
 
-Just open `index.html` in any browser (double-click it, or drag it into a tab).
+Open the hosted version above, or open `index.html` locally in any browser
+(double-click it, or drag it into a tab).
+
+The hosted site is served over HTTPS, so **folder mode also works there** — no
+local server needed. (Editing `file://` locally still can't use folder mode; run
+`./serve.sh` for that.)
 
 Everything runs locally in the page. Your songs are saved automatically in the
 browser (localStorage), and you can also export/import them as files.
