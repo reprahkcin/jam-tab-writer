@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guitar Tab Writer</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=2" />
 </head>
 <body>
   <header>
@@ -96,7 +96,9 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
     </section>
   </main>
 
-  <script src="chords.js"></script>
-  <script src="app.js"></script>
+  <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
+       these for 10 min otherwise). -->
+  <script src="chords.js?v=2"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>
