@@ -128,15 +128,18 @@ function newId() {
   return 's' + (idCounter++).toString(36);
 }
 
-// ---- Folder mode (File System Access API) ----------------------------------
-// In 'folder' mode, songs are read from and saved directly to .cho files on
-// disk instead of localStorage. The directory handle is remembered in
-// IndexedDB so the folder can be reopened with one click (and one permission
-// grant) next session.
+// ---- File-backed libraries (File System Access API) ------------------------
+// The app starts in localStorage ('local') mode. When you "establish a
+// collection" — open your first folder — your browser songs are copied into it
+// as .cho files and the app switches to 'folder' mode, editing files on disk.
+// From then on you can open additional folders; each open folder is a
+// "library". Handles are remembered in IndexedDB so folders reconnect (with one
+// permission click) next session.
 
 let mode = 'local';           // 'local' | 'folder'
-let dirHandle = null;         // FileSystemDirectoryHandle for the open folder
+let libraries = [];           // [{ id, name, handle }] — open folders
 const fileHandles = {};       // song id -> FileSystemFileHandle
+const collapsed = new Set();  // library ids collapsed in the sidebar
 
 const IDB = { name: 'gtw', store: 'kv' };
 function idbReq(fn) {
@@ -165,6 +168,9 @@ function idbSet(key, val) {
   });
 }
 
+let libCounter = 1;
+function newLibId() { return 'lib' + (libCounter++).toString(36) + newId(); }
+
 async function scanDir(dir, prefix, out) {
   for await (const entry of dir.values()) {
     if (entry.kind === 'file' && entry.name.endsWith('.cho')) {
@@ -175,59 +181,134 @@ async function scanDir(dir, prefix, out) {
   }
 }
 
-async function enterFolder(handle) {
+// Read every .cho in a library's folder into song objects tagged with libId.
+async function loadLibrarySongs(lib) {
   const found = [];
-  await scanDir(handle, '', found);
-  if (!found.length) {
-    alert('No .cho files found in that folder (looked recursively).');
-    return;
-  }
+  await scanDir(lib.handle, '', found);
   found.sort((a, b) => a.path.localeCompare(b.path));
-  dirHandle = handle;
-  mode = 'folder';
-  songs = [];
-  for (const k of Object.keys(fileHandles)) delete fileHandles[k];
+  const loaded = [];
   for (const f of found) {
     const text = await (await f.handle.getFile()).text();
     const s = parseCho(text, f.name.replace(/\.cho$/, ''));
     s.id = newId();
     s.path = f.path;
+    s.libId = lib.id;
     fileHandles[s.id] = f.handle;
+    loaded.push(s);
+  }
+  return loaded;
+}
+
+function persistLibraries() {
+  return idbSet('libraries', libraries.map((l) => ({ id: l.id, name: l.name, handle: l.handle })));
+}
+
+// Turn a title into a safe, unique .cho filename within a folder.
+function slugFilename(title, used) {
+  const base = (title || 'untitled').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
+  let name = base + '.cho', i = 2;
+  while (used.has(name.toLowerCase())) name = base + '-' + (i++) + '.cho';
+  used.add(name.toLowerCase());
+  return name;
+}
+
+// Where new / imported songs land: the current song's folder, else the first.
+function activeLib() {
+  const s = currentSong();
+  if (s && s.libId) { const l = libraries.find((x) => x.id === s.libId); if (l) return l; }
+  return libraries[0] || null;
+}
+
+// "Open folder" in local mode: copy browser songs into the chosen folder and
+// switch to editing files on disk.
+async function establishCollection(handle) {
+  const localSongs = songs.slice();
+  if (localSongs.length &&
+      !confirm(`Copy your ${localSongs.length} browser song${localSongs.length === 1 ? '' : 's'} into "${handle.name}" as .cho files and switch to editing files on disk?\n\n(Your browser copy is kept as a backup.)`)) {
+    return;
+  }
+  const lib = { id: newLibId(), name: handle.name, handle };
+  const onDisk = await loadLibrarySongs(lib);   // .cho already sitting in the folder
+  mode = 'folder';
+  libraries = [lib];
+  songs = onDisk;
+  const used = new Set(onDisk.map((s) => (s.path || '').toLowerCase()));
+  for (const ls of localSongs) {
+    const fname = slugFilename(ls.title, used);
+    let fh;
+    try { fh = await handle.getFileHandle(fname, { create: true }); }
+    catch { continue; }
+    const s = Object.assign({}, ls, { id: newId(), path: fname, libId: lib.id });
+    fileHandles[s.id] = fh;
+    await writeSong(s);
     songs.push(s);
   }
-  await idbSet('dirHandle', handle);
+  await persistLibraries();
   updateModeUI();
-  selectSong(songs[0].id);
+  if (songs.length) selectSong(songs[0].id);
+}
+
+// "Open folder" in folder mode: add another library, leaving the rest open.
+async function addLibrary(handle) {
+  for (const l of libraries) {
+    let same = l.handle === handle;
+    try { same = same || await handle.isSameEntry(l.handle); } catch { /* ignore */ }
+    if (same) { alert(`"${handle.name}" is already open.`); return; }
+  }
+  const lib = { id: newLibId(), name: handle.name, handle };
+  const loaded = await loadLibrarySongs(lib);
+  libraries.push(lib);
+  songs.push(...loaded);
+  await persistLibraries();
+  updateModeUI();
+  if (loaded.length) selectSong(loaded[0].id); else renderList();
 }
 
 async function openFolder() {
   if (!window.showDirectoryPicker) {
-    alert('Folder mode needs Chrome or Edge, served over http://localhost (not file://).');
+    alert('Folder mode needs Chrome or Edge, served over http://localhost or https:// (not file://).');
     return;
   }
   let handle;
   try {
     handle = await window.showDirectoryPicker({ mode: 'readwrite' });
   } catch { return; } // user cancelled
-  await enterFolder(handle);
+  if (mode === 'folder') await addLibrary(handle);
+  else await establishCollection(handle);
 }
 
-async function reopenFolder() {
-  const handle = await idbGet('dirHandle');
-  if (!handle) return;
-  try {
-    let perm = await handle.queryPermission({ mode: 'readwrite' });
-    if (perm !== 'granted') perm = await handle.requestPermission({ mode: 'readwrite' });
-    if (perm !== 'granted') return;
-    await enterFolder(handle);
-  } catch {
-    alert('Could not reopen the folder — please pick it again.');
-  }
+// Re-scan one library from disk (picks up edits / new / removed files made
+// outside the app). Song ids are regenerated, so we re-select by path.
+async function reloadLibrary(libId) {
+  const lib = libraries.find((l) => l.id === libId);
+  if (!lib) return;
+  const cur = currentSong();
+  const keepPath = cur && cur.libId === libId ? cur.path : null;
+  songs.filter((s) => s.libId === libId).forEach((s) => delete fileHandles[s.id]);
+  songs = songs.filter((s) => s.libId !== libId);
+  const loaded = await loadLibrarySongs(lib);
+  songs.push(...loaded);
+  const again = keepPath ? loaded.find((s) => s.path === keepPath) : currentSong();
+  if (again) selectSong(again.id);
+  else if (songs.length && !songs.some((s) => s.id === currentId)) selectSong(songs[0].id);
+  else renderList();
 }
 
-function closeFolder() {
+// Close (forget) one library. Closing the last one returns to browser songs.
+async function closeLibrary(libId) {
+  libraries = libraries.filter((l) => l.id !== libId);
+  songs.filter((s) => s.libId === libId).forEach((s) => delete fileHandles[s.id]);
+  songs = songs.filter((s) => s.libId !== libId);
+  collapsed.delete(libId);
+  await persistLibraries();
+  if (!libraries.length) { returnToLocal(); return; }
+  updateModeUI();
+  if (!songs.some((s) => s.id === currentId)) { if (songs.length) selectSong(songs[0].id); else renderList(); }
+  else renderList();
+}
+
+function returnToLocal() {
   mode = 'local';
-  dirHandle = null;
   songs = loadSongs();
   updateModeUI();
   if (!songs.length) createSong();
@@ -326,6 +407,7 @@ function selectSong(id) {
   }
   currentId = id;
   if (mode === 'local') localStorage.setItem(LAST_KEY, id);
+  else if (s.path) idbSet('lastPath', s.path);
   el.title.value = s.title;
   el.artist.value = s.artist;
   el.editor.value = s.body;
@@ -637,25 +719,62 @@ function initSectionBar() {
   }));
 }
 
+function songItem(s, deletable) {
+  const li = document.createElement('li');
+  li.className = 'song-item' + (deletable ? '' : ' in-lib') + (s.id === currentId ? ' active' : '');
+  const sub = mode === 'folder' ? (s.path || '') : (s.artist || '');
+  li.innerHTML =
+    `<span class="st"><b>${escapeHtml(s.title || 'Untitled')}</b>` +
+    `<small>${escapeHtml(sub)}</small></span>` +
+    (deletable ? `<button class="del" title="Delete">&times;</button>` : '');
+  li.querySelector('.st').addEventListener('click', () => selectSong(s.id));
+  const delBtn = li.querySelector('.del');
+  if (delBtn) delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteSong(s.id); });
+  return li;
+}
+
+function toggleCollapse(libId) {
+  if (collapsed.has(libId)) collapsed.delete(libId); else collapsed.add(libId);
+  renderList();
+}
+
 function renderList() {
   el.count.textContent = songs.length ? songs.length + '' : '';
-  // Folder mode keeps file order (stable); local mode floats recent to the top.
-  const ordered = mode === 'folder'
-    ? [...songs].sort((a, b) => (a.path || '').localeCompare(b.path || ''))
-    : [...songs].sort((a, b) => b.updated - a.updated);
   el.list.innerHTML = '';
-  for (const s of ordered) {
-    const li = document.createElement('li');
-    li.className = 'song-item' + (s.id === currentId ? ' active' : '');
-    const sub = mode === 'folder' ? (s.path || '') : (s.artist || '');
-    const del = mode === 'folder' ? '' : `<button class="del" title="Delete">&times;</button>`;
-    li.innerHTML =
-      `<span class="st"><b>${escapeHtml(s.title || 'Untitled')}</b>` +
-      `<small>${escapeHtml(sub)}</small></span>${del}`;
-    li.querySelector('.st').addEventListener('click', () => selectSong(s.id));
-    const delBtn = li.querySelector('.del');
-    if (delBtn) delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteSong(s.id); });
-    el.list.appendChild(li);
+
+  // Local mode: one flat list, most-recently-edited first.
+  if (mode !== 'folder') {
+    const ordered = [...songs].sort((a, b) => b.updated - a.updated);
+    for (const s of ordered) el.list.appendChild(songItem(s, true));
+    return;
+  }
+
+  // Folder mode: group by library, each with a collapsible header. Files can't
+  // be deleted from the tool, so folder songs carry no delete button.
+  for (const lib of libraries) {
+    const libSongs = songs
+      .filter((s) => s.libId === lib.id)
+      .sort((a, b) => (a.path || '').localeCompare(b.path || ''));
+    const isCollapsed = collapsed.has(lib.id);
+    const header = document.createElement('li');
+    header.className = 'lib-header' + (isCollapsed ? ' collapsed' : '');
+    header.innerHTML =
+      `<span class="lib-caret">${isCollapsed ? '▸' : '▾'}</span>` +
+      `<span class="lib-name" title="${escapeHtml(lib.name)}">${escapeHtml(lib.name)}</span>` +
+      `<span class="lib-count">${libSongs.length}</span>` +
+      `<button class="lib-btn lib-reload" title="Reload this folder from disk">↻</button>` +
+      `<button class="lib-btn lib-close" title="Close this folder">×</button>`;
+    header.querySelector('.lib-caret').addEventListener('click', () => toggleCollapse(lib.id));
+    header.querySelector('.lib-name').addEventListener('click', () => toggleCollapse(lib.id));
+    header.querySelector('.lib-reload').addEventListener('click', (e) => {
+      e.stopPropagation(); reloadLibrary(lib.id);
+    });
+    header.querySelector('.lib-close').addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (confirm(`Close "${lib.name}"? The files stay on disk; the folder is just removed from the sidebar.`)) closeLibrary(lib.id);
+    });
+    el.list.appendChild(header);
+    if (!isCollapsed) for (const s of libSongs) el.list.appendChild(songItem(s, false));
   }
 }
 
@@ -676,14 +795,17 @@ function deleteSong(id) {
 
 async function createSong() {
   if (mode === 'folder') {
-    const name = prompt('New chart file name:', 'new-song.cho');
+    const lib = activeLib();
+    if (!lib) { alert('Open a folder first.'); return; }
+    const name = prompt(`New chart file name in "${lib.name}":`, 'new-song.cho');
     if (!name) return;
     const fname = name.endsWith('.cho') ? name : name + '.cho';
     let handle;
-    try { handle = await dirHandle.getFileHandle(fname, { create: true }); }
+    try { handle = await lib.handle.getFileHandle(fname, { create: true }); }
     catch { alert('Could not create the file.'); return; }
     const s = blankSong();
     s.path = fname;
+    s.libId = lib.id;
     fileHandles[s.id] = handle;
     songs.push(s);
     await writeSong(s);
@@ -789,8 +911,24 @@ function exportSong() {
   URL.revokeObjectURL(url);
 }
 
-function importText(text, fallbackTitle) {
+async function importText(text, fallbackTitle) {
   const s = parseCho(text, fallbackTitle);
+  if (mode === 'folder') {
+    const lib = activeLib();
+    if (!lib) { alert('Open a folder first.'); return; }
+    const used = new Set(songs.filter((x) => x.libId === lib.id).map((x) => (x.path || '').toLowerCase()));
+    const fname = slugFilename(s.title || fallbackTitle, used);
+    let handle;
+    try { handle = await lib.handle.getFileHandle(fname, { create: true }); }
+    catch { alert('Could not create the file.'); return; }
+    s.path = fname;
+    s.libId = lib.id;
+    fileHandles[s.id] = handle;
+    songs.push(s);
+    await writeSong(s);
+    selectSong(s.id);
+    return;
+  }
   songs.push(s);
   saveSongs(songs);
   selectSong(s.id);
@@ -842,7 +980,6 @@ document.getElementById('print-btn').addEventListener('click', () => window.prin
 // Folder mode controls.
 const reopenBtn = document.getElementById('reopen-btn');
 document.getElementById('folder-btn').addEventListener('click', openFolder);
-reopenBtn.addEventListener('click', reopenFolder);
 document.getElementById('save-btn').addEventListener('click', saveCurrentNow);
 
 async function saveCurrentNow() {
@@ -860,14 +997,17 @@ async function saveCurrentNow() {
 function updateModeUI() {
   const folder = mode === 'folder';
   document.getElementById('save-btn').hidden = !folder;
-  document.getElementById('import-btn').hidden = folder;
+  document.getElementById('import-btn').hidden = false; // import works in both modes
+  const folderBtn = document.getElementById('folder-btn');
+  folderBtn.textContent = folder ? '+ Folder' : 'Open folder';
+  folderBtn.title = folder
+    ? 'Open another folder of .cho charts'
+    : 'Set up a file-backed collection: copy your songs into a folder and edit on disk';
   const bar = document.getElementById('folder-bar');
   if (folder) {
     bar.hidden = false;
-    bar.innerHTML = `<span class="fb-name" title="${escapeHtml(dirHandle && dirHandle.name || '')}">` +
-      `${escapeHtml(dirHandle && dirHandle.name || 'folder')}</span>` +
-      `<button id="close-folder" class="inline-btn">Close</button>`;
-    document.getElementById('close-folder').addEventListener('click', closeFolder);
+    const n = libraries.length;
+    bar.innerHTML = `<span class="fb-name">Editing files on disk · ${n} folder${n === 1 ? '' : 's'}</span>`;
   } else {
     bar.hidden = true;
     bar.innerHTML = '';
@@ -950,8 +1090,71 @@ function boot() {
     : [...songs].sort((a, b) => b.updated - a.updated)[0].id;
   selectSong(startId);
 
-  // Offer to reopen the last folder (needs a click to re-grant permission).
-  idbGet('dirHandle').then((h) => { if (h) reopenBtn.hidden = false; });
+  // Reconnect any remembered folders (some may need a permission click).
+  bootFolders();
+}
+
+// Restore remembered libraries: load the ones already permitted, and surface a
+// one-click "Reconnect" button for any that need a fresh permission grant
+// (browsers can't silently re-grant folder access on a cold start).
+async function bootFolders() {
+  let saved = await idbGet('libraries');
+  if (!saved) {
+    const legacy = await idbGet('dirHandle'); // migrate the old single-folder key
+    if (legacy) saved = [{ id: newLibId(), name: legacy.name, handle: legacy }];
+  }
+  if (!saved || !saved.length) return;
+  const ready = [], need = [];
+  for (const entry of saved) {
+    let perm;
+    try { perm = await entry.handle.queryPermission({ mode: 'readwrite' }); }
+    catch { perm = 'denied'; }
+    (perm === 'granted' ? ready : need).push(entry);
+  }
+  if (ready.length) await reconnectLibraries(ready);
+  if (need.length) showReconnect(need);
+}
+
+async function reconnectLibraries(entries) {
+  for (const entry of entries) {
+    if (libraries.some((l) => l.id === entry.id)) continue;
+    if (mode === 'local') { mode = 'folder'; songs = []; currentId = null; }
+    const lib = { id: entry.id || newLibId(), name: entry.name, handle: entry.handle };
+    const loaded = await loadLibrarySongs(lib);
+    libraries.push(lib);
+    songs.push(...loaded);
+  }
+  await persistLibraries();
+  updateModeUI();
+  if (!songs.some((s) => s.id === currentId)) {
+    const want = await idbGet('lastPath');
+    const match = want && songs.find((s) => s.path === want);
+    if (match) selectSong(match.id);
+    else if (songs.length) selectSong(songs[0].id);
+    else renderList();
+  } else {
+    renderList();
+  }
+}
+
+function showReconnect(need) {
+  reopenBtn.hidden = false;
+  reopenBtn.textContent = need.length > 1 ? `Reconnect folders (${need.length})` : 'Reconnect folder';
+  reopenBtn.onclick = async () => {
+    const granted = [];
+    for (const entry of need) {
+      let perm;
+      try {
+        perm = await entry.handle.queryPermission({ mode: 'readwrite' });
+        if (perm !== 'granted') perm = await entry.handle.requestPermission({ mode: 'readwrite' });
+      } catch { perm = 'denied'; }
+      if (perm === 'granted') granted.push(entry);
+    }
+    if (granted.length) await reconnectLibraries(granted);
+    const stillNeed = need.filter((e) => !granted.includes(e));
+    if (stillNeed.length) showReconnect(stillNeed);
+    else reopenBtn.hidden = true;
+  };
 }
 
 boot();

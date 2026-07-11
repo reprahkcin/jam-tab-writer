@@ -27,19 +27,30 @@ instead, since the browser only allows file access from `http://`/`https://`:
 
 then open that URL in Chrome or Edge.
 
-## Folder mode — edit a folder of charts on disk
+## Folder mode — edit folders of charts on disk
 
-Instead of localStorage, you can point the tool at a folder of `.cho` files and
-edit them **in place** — good for a repo of songs you track in git.
+The app starts in **browser mode** (songs in localStorage), so you can jot
+something down instantly. When you're ready to keep charts as real files, you
+**establish a collection** and the app switches to editing files on disk — good
+for repos of songs you track in git. You can keep **several folders open at
+once**; each open folder is a *library*.
 
-- Click **Open folder** and pick a directory (Chrome/Edge only). The tool scans
-  it recursively for `.cho` files and lists them in the sidebar.
+- Click **Open folder** and pick a directory (Chrome/Edge only). The first time,
+  your existing browser songs are **copied into that folder** as `.cho` files
+  and the app switches to file-backed mode (your browser copy is kept as a
+  backup). The folder is scanned recursively for `.cho` files.
+- Click **+ Folder** to open **additional** folders. The sidebar groups songs
+  under a collapsible header per folder, each with **↻ reload from disk** and
+  **× close** controls.
 - Edits **save straight back to the file** (auto-saved, debounced; or press
   **Cmd/Ctrl+S**, or the **Save** button). Then commit in that repo as usual.
-- The folder is remembered — next session, **Reopen folder** restores it with a
-  single permission grant. **Close** returns to local (localStorage) songs.
-- **+ New** in folder mode creates a new `.cho` file in the folder. Deleting is
-  disabled in folder mode (manage files in your repo / file manager).
+- Folders are remembered. Next session the app reconnects the ones it still has
+  permission for; any that need a fresh grant appear behind a single
+  **Reconnect folders** button (browsers can't silently re-grant folder access
+  on a cold start). Closing the **last** folder returns you to browser songs.
+- **+ New** and **Import** land in the **active** folder (the one holding the
+  selected song). Deleting is disabled in folder mode — manage files in your
+  repo / file manager.
 
 The on-disk format is the same `.cho` used by Import/Export: a `{title}` /
 `{artist}` / `{key}` / `{capo}` / `{transpose}` directive block, then the body
