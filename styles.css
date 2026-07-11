@@ -539,6 +539,10 @@ body.performing { overflow: hidden; }
   color: var(--text);
   display: flex;
   flex-direction: column;
+  /* A read-only stage view: never let clicks (esp. on the ± steppers) drag out
+     a text selection. Form controls (selects) still work. */
+  -webkit-user-select: none;
+  user-select: none;
 }
 .perform-overlay[hidden] { display: none; }
 
