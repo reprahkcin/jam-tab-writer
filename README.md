@@ -48,9 +48,13 @@ once**; each open folder is a *library*.
   permission for; any that need a fresh grant appear behind a single
   **Reconnect folders** button (browsers can't silently re-grant folder access
   on a cold start). Closing the **last** folder returns you to browser songs.
-- **+ New** and **Import** land in the **active** folder (the one holding the
-  selected song). Deleting is disabled in folder mode — manage files in your
-  repo / file manager.
+- **+ New** and **Import** land in the **active** folder, shown as
+  `+ New → <folder>` at the top of the sidebar and marked with a dot on its
+  header. Selecting a song makes its folder active; to target a different
+  folder (including an **empty** one you just made in Finder), **click that
+  folder's name** in the sidebar. The caret (▸/▾) collapses the group.
+- Deleting is disabled in folder mode — manage files in your repo / file
+  manager, then hit **↻** on the folder to resync.
 
 The on-disk format is the same `.cho` used by Import/Export: a `{title}` /
 `{artist}` / `{key}` / `{capo}` / `{transpose}` directive block, then the body

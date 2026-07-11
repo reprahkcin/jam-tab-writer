@@ -126,6 +126,11 @@ main { display: flex; flex: 1; min-height: 0; }
   border-top: 1px solid var(--line);
 }
 .lib-header:first-child { border-top: none; margin-top: 0; }
+.lib-header.active-lib {
+  background: var(--panel-2);
+  border-radius: 6px;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
 .lib-caret { cursor: pointer; width: 12px; flex-shrink: 0; text-align: center; }
 .lib-name {
   cursor: pointer;
@@ -135,6 +140,12 @@ main { display: flex; flex: 1; min-height: 0; }
   white-space: nowrap;
   color: var(--accent);
   font-weight: 600;
+}
+.lib-header.active-lib .lib-name::after {
+  content: ' ●';
+  font-size: 9px;
+  vertical-align: middle;
+  opacity: 0.8;
 }
 .lib-count {
   flex-shrink: 0;

@@ -138,6 +138,7 @@ function newId() {
 
 let mode = 'local';           // 'local' | 'folder'
 let libraries = [];           // [{ id, name, handle }] — open folders
+let activeLibId = null;       // folder that + New / Import target
 const fileHandles = {};       // song id -> FileSystemFileHandle
 const collapsed = new Set();  // library ids collapsed in the sidebar
 
@@ -212,11 +213,17 @@ function slugFilename(title, used) {
   return name;
 }
 
-// Where new / imported songs land: the current song's folder, else the first.
+// Where new / imported songs land. Tracked explicitly so an EMPTY folder can be
+// the target (you can't select a song in it to imply it). Set by opening a
+// folder or clicking its header; selecting a song points it at that folder too.
 function activeLib() {
-  const s = currentSong();
-  if (s && s.libId) { const l = libraries.find((x) => x.id === s.libId); if (l) return l; }
-  return libraries[0] || null;
+  return libraries.find((l) => l.id === activeLibId) || libraries[0] || null;
+}
+
+function setActiveLib(libId) {
+  activeLibId = libId;
+  collapsed.delete(libId); // expand so you can see / fill it
+  updateModeUI();          // refreshes the "new →" bar and re-renders the list
 }
 
 // "Open folder" in local mode: copy browser songs into the chosen folder and
@@ -231,6 +238,7 @@ async function establishCollection(handle) {
   const onDisk = await loadLibrarySongs(lib);   // .cho already sitting in the folder
   mode = 'folder';
   libraries = [lib];
+  activeLibId = lib.id;
   songs = onDisk;
   const used = new Set(onDisk.map((s) => (s.path || '').toLowerCase()));
   for (const ls of localSongs) {
@@ -259,6 +267,7 @@ async function addLibrary(handle) {
   const loaded = await loadLibrarySongs(lib);
   libraries.push(lib);
   songs.push(...loaded);
+  activeLibId = lib.id; // the folder you just opened becomes the new-file target
   await persistLibraries();
   updateModeUI();
   if (loaded.length) selectSong(loaded[0].id); else renderList();
@@ -300,6 +309,7 @@ async function closeLibrary(libId) {
   songs.filter((s) => s.libId === libId).forEach((s) => delete fileHandles[s.id]);
   songs = songs.filter((s) => s.libId !== libId);
   collapsed.delete(libId);
+  if (activeLibId === libId) activeLibId = (libraries[0] || {}).id || null;
   await persistLibraries();
   if (!libraries.length) { returnToLocal(); return; }
   updateModeUI();
@@ -407,7 +417,7 @@ function selectSong(id) {
   }
   currentId = id;
   if (mode === 'local') localStorage.setItem(LAST_KEY, id);
-  else if (s.path) idbSet('lastPath', s.path);
+  else { if (s.libId) activeLibId = s.libId; if (s.path) idbSet('lastPath', s.path); }
   el.title.value = s.title;
   el.artist.value = s.artist;
   el.editor.value = s.body;
@@ -756,16 +766,17 @@ function renderList() {
       .filter((s) => s.libId === lib.id)
       .sort((a, b) => (a.path || '').localeCompare(b.path || ''));
     const isCollapsed = collapsed.has(lib.id);
+    const isActive = lib.id === activeLibId;
     const header = document.createElement('li');
-    header.className = 'lib-header' + (isCollapsed ? ' collapsed' : '');
+    header.className = 'lib-header' + (isCollapsed ? ' collapsed' : '') + (isActive ? ' active-lib' : '');
     header.innerHTML =
-      `<span class="lib-caret">${isCollapsed ? '▸' : '▾'}</span>` +
-      `<span class="lib-name" title="${escapeHtml(lib.name)}">${escapeHtml(lib.name)}</span>` +
+      `<span class="lib-caret" title="${isCollapsed ? 'Expand' : 'Collapse'}">${isCollapsed ? '▸' : '▾'}</span>` +
+      `<span class="lib-name" title="Make this the target folder for + New / Import">${escapeHtml(lib.name)}</span>` +
       `<span class="lib-count">${libSongs.length}</span>` +
       `<button class="lib-btn lib-reload" title="Reload this folder from disk">↻</button>` +
       `<button class="lib-btn lib-close" title="Close this folder">×</button>`;
     header.querySelector('.lib-caret').addEventListener('click', () => toggleCollapse(lib.id));
-    header.querySelector('.lib-name').addEventListener('click', () => toggleCollapse(lib.id));
+    header.querySelector('.lib-name').addEventListener('click', () => setActiveLib(lib.id));
     header.querySelector('.lib-reload').addEventListener('click', (e) => {
       e.stopPropagation(); reloadLibrary(lib.id);
     });
@@ -1006,8 +1017,9 @@ function updateModeUI() {
   const bar = document.getElementById('folder-bar');
   if (folder) {
     bar.hidden = false;
-    const n = libraries.length;
-    bar.innerHTML = `<span class="fb-name">Editing files on disk · ${n} folder${n === 1 ? '' : 's'}</span>`;
+    const active = activeLib();
+    bar.innerHTML = `<span class="fb-name" title="+ New and Import create files here — click a folder name to change">` +
+      `+ New → ${escapeHtml(active ? active.name : '—')}</span>`;
   } else {
     bar.hidden = true;
     bar.innerHTML = '';
