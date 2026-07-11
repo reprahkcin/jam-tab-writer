@@ -96,7 +96,7 @@ const TRIAD_SETS = [
   { name: 'Top', strings: [3, 4, 5] },   // G B e
   { name: 'Mid', strings: [2, 3, 4] },   // D G B
 ];
-const INV_NAMES = ['root', '1st inv', '2nd inv'];
+const INV_NAMES = ['root', '1st', '2nd'];
 
 // Close-voiced triad on a string set, for a given inversion (which chord tone
 // sits on the lowest string). Returns a 6-string fret array, or null if it
@@ -140,22 +140,22 @@ function chordVoicings(name) {
   const out = [{ label: 'Default', frets: resolveChord(name) }];
 
   const barreForms = [
-    { name: 'E-shape', form: MOVABLE.E },
-    { name: 'A-shape', form: MOVABLE.A },
-    { name: 'D-shape', form: MOVABLE.D },
+    { name: 'E', form: MOVABLE.E },
+    { name: 'A', form: MOVABLE.A },
+    { name: 'D', form: MOVABLE.D },
   ];
   if (quality) {
     for (const { name: fname, form } of barreForms) {
       if (!form.q[quality]) continue;
       const { fret, frets } = movableAt({ ref: form.ref, pat: form.q[quality] }, pc);
-      out.push({ label: `${fname} barre (${fret}fr)`, frets });
+      out.push({ label: `${fname}-barre ${fret}fr`, frets });
     }
     const tones = TRIAD_TONES[quality];
     if (tones) {
       for (const set of TRIAD_SETS) {
         for (let inv = 0; inv < 3; inv++) {
           const frets = triadShape(pc, tones, set, inv);
-          if (frets) out.push({ label: `${set.name} triad · ${INV_NAMES[inv]}`, frets });
+          if (frets) out.push({ label: `${set.name} triad ${INV_NAMES[inv]}`, frets });
         }
       }
     }
@@ -230,7 +230,7 @@ function chordDiagramSVG(displayName, frets, soundingName, extra) {
     return `<div class="chord-diagram"><div class="cd-name" data-chord="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>` +
       `<div class="cd-na">shape n/a</div>${tail}</div>`;
   }
-  const S = 6, rows = 4, cellW = 9, cellH = 12, left = 10, top = 18;
+  const S = 6, rows = 4, cellW = 9, cellH = 12, left = 17, top = 18;
   const fretted = frets.filter((f) => f > 0);
   const maxF = fretted.length ? Math.max(...fretted) : 0;
   const minF = fretted.length ? Math.min(...fretted) : 0;
@@ -247,7 +247,7 @@ function chordDiagramSVG(displayName, frets, soundingName, extra) {
   if (base === 1) {
     p += `<rect class="cd-nut" x="${x(0) - 1}" y="${top - 3}" width="${(S - 1) * cellW + 2}" height="3"/>`;
   } else {
-    p += `<text class="cd-fretnum" x="${x(0) - 4}" y="${y(0) + cellH - 1}" text-anchor="end">${base}fr</text>`;
+    p += `<text class="cd-fretnum" x="0" y="${y(0) + cellH - 1}" text-anchor="start">${base}fr</text>`;
   }
 
   for (let i = 0; i < S; i++) {

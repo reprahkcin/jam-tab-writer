@@ -304,15 +304,16 @@ main { display: flex; flex: 1; min-height: 0; }
 .cd-name.focused { background: var(--accent); color: #1c1e26; }
 .cd-na { font-family: system-ui, sans-serif; font-size: 10px; color: var(--muted); padding: 14px 0; }
 .cd-sound { font-family: system-ui, sans-serif; font-size: 10px; color: var(--section); margin-top: 2px; }
-.chord-diagram { min-width: 76px; }
+.chord-diagram { min-width: 106px; }
 .cd-voicing {
   margin-top: 4px;
-  max-width: 84px;
+  width: 106px;
+  box-sizing: border-box;
   background: var(--panel);
   color: var(--muted);
   border: 1px solid var(--line);
   border-radius: 5px;
-  padding: 2px 4px;
+  padding: 3px 18px 3px 6px; /* right room so the chevron never overlaps text */
   font-size: 10px;
   font-family: system-ui, sans-serif;
   cursor: pointer;
