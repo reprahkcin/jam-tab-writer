@@ -86,11 +86,12 @@ function renderLine(raw, semitones) {
     return `<div class="line plainline">${escapeHtml(raw)}</div>`;
   }
 
-  // Lay chords onto their own line, nudging right so they never collide.
+  // Lay chords onto their own line, nudging right so they always keep at least
+  // one space between them (<= so chords that land exactly adjacent still gap).
   let chordLine = '';
   for (const c of chords) {
     let pos = c.pos;
-    if (pos < chordLine.length) pos = chordLine.length + 1;
+    if (pos <= chordLine.length && chordLine.length > 0) pos = chordLine.length + 1;
     chordLine += ' '.repeat(pos - chordLine.length) + c.text;
   }
 
@@ -797,11 +798,16 @@ function importText(text, fallbackTitle) {
 
 // ---- Wire up ---------------------------------------------------------------
 
+let auxTimer = null;
 el.editor.addEventListener('input', () => {
   const s = currentSong();
-  if (s) el.previewBody.innerHTML = render(el.editor.value, inlineShift(s));
+  if (s) el.previewBody.innerHTML = render(el.editor.value, inlineShift(s)); // instant lyric preview
   renderPalette();
   commit();
+  // Refresh diagrams / harmonica / scale shortly after typing stops so newly
+  // added (or removed) chords show up there too.
+  clearTimeout(auxTimer);
+  auxTimer = setTimeout(() => { if (currentSong()) renderPreview(); }, 250);
 });
 el.title.addEventListener('input', () => updatePrintHeader({ title: el.title.value, artist: el.artist.value }));
 el.artist.addEventListener('input', () => updatePrintHeader({ title: el.title.value, artist: el.artist.value }));

@@ -162,8 +162,9 @@ main { display: flex; flex: 1; min-height: 0; }
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
+  justify-content: space-evenly;
+  gap: 8px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--line);
 }
 .section-bar .sbtn {
@@ -171,7 +172,7 @@ main { display: flex; flex: 1; min-height: 0; }
   border: 1px solid var(--line);
   color: var(--section);
   border-radius: 5px;
-  padding: 2px 9px;
+  padding: 5px 14px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
