@@ -83,7 +83,9 @@ function renderLine(raw, semitones) {
   lyric += raw.slice(last);
 
   if (chords.length === 0) {
-    return `<div class="line plainline">${escapeHtml(raw)}</div>`;
+    // Reserve an empty chord row above every lyric line so all lines are the
+    // same height and align on a uniform grid.
+    return `<div class="line chordline"> </div><div class="line lyricline">${escapeHtml(raw)}</div>`;
   }
 
   // Lay chords onto their own line, nudging right so they always keep at least
@@ -388,6 +390,7 @@ function loadPrefs() {
     diagrams: true, harmonica: true, lead: true, chordMode: 'shapes',
     scaleType: 'majPent', voicings: { rhythm: {}, lead: {} },
     perform: { cols: 4, font: 22, panels: { chords: false, lead: false, scale: false, harp: false } },
+    printCols: 1,
   };
   let p = defaults;
   try { p = Object.assign(defaults, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch { /* keep defaults */ }
@@ -994,6 +997,18 @@ el.toggleHarmonica.addEventListener('change', () => {
 document.getElementById('export-btn').addEventListener('click', exportSong);
 document.getElementById('print-btn').addEventListener('click', () => window.print());
 
+// Print column count (applied only in @media print via the --print-cols var).
+const printColsSel = document.getElementById('print-cols');
+function applyPrintCols() {
+  document.documentElement.style.setProperty('--print-cols', prefs.printCols);
+  printColsSel.value = String(prefs.printCols);
+}
+printColsSel.addEventListener('change', () => {
+  prefs.printCols = parseInt(printColsSel.value, 10) || 1;
+  savePrefs();
+  applyPrintCols();
+});
+
 // Folder mode controls.
 const reopenBtn = document.getElementById('reopen-btn');
 document.getElementById('folder-btn').addEventListener('click', openFolder);
@@ -1390,6 +1405,7 @@ function boot() {
   el.toggleDiagrams.checked = prefs.diagrams;
   el.toggleLead.checked = prefs.lead;
   el.toggleHarmonica.checked = prefs.harmonica;
+  applyPrintCols();
   if (!songs.length) {
     // Seed with a short example so the app isn't blank on first run.
     songs.push({

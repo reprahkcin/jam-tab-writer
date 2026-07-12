@@ -129,6 +129,14 @@ chord sheet with the song title and artist at the top; the editor, sidebar, and
 toolbar are hidden. Chord lines stay glued to the lyric line below them, and
 `{page}` markers force a new page.
 
+Use the **Print** control in the preview header to lay the chart out in **1 or
+2 columns** (2 is handy for fitting a long song on one page). Chord + lyric
+pairs never split across a column, and the chord diagrams stay full-width above
+the columns.
+
+Every lyric line reserves a chord row above it, so lines with and without chords
+share a uniform grid and even spacing (on screen and in print).
+
 ## Features
 
 - Live preview as you type

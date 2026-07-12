@@ -306,6 +306,14 @@ main { display: flex; flex: 1; min-height: 0; }
 .view-toggles { display: flex; align-items: center; gap: 12px; text-transform: none; letter-spacing: 0; }
 .view-toggles label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .view-toggles input { accent-color: var(--accent); }
+.print-cols-ctl select {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 2px 4px;
+  font-size: 12px;
+}
 
 /* Capo banner */
 #capo-banner:not(:empty) {
@@ -515,6 +523,17 @@ main { display: flex; flex: 1; min-height: 0; }
   #print-header { display: block; margin-bottom: 14px; font-family: system-ui, sans-serif; }
   #print-header h2 { margin: 0; font-size: 18pt; }
   #print-header .artist { color: #333; font-size: 12pt; }
+
+  /* Chord chart body in 1 or 2 columns (set via the Print control in the
+     preview header). Diagrams/scale/harmonica stay full-width above it. */
+  #preview-body {
+    column-count: var(--print-cols, 1);
+    column-gap: 30px;
+    column-rule: 1px solid #ccc;
+  }
+  #preview-body .line { break-inside: avoid; }
+  #preview-body .lyricline { break-before: avoid; }
+  #preview-body .section { break-inside: avoid; }
 
   /* Real page breaks. Keep chord+lyric pairs together. */
   .preview .page-break { break-before: page; border: none; height: 0; margin: 0; }
