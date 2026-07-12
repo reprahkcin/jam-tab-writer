@@ -537,6 +537,10 @@ main { display: flex; flex: 1; min-height: 0; }
   #preview-body .lyricline { break-before: avoid; }
   #preview-body .section { break-inside: avoid; }
 
+  /* Reference panels (diagrams/scale/harmonica) get page 1; the chart starts on
+     a fresh page. Only when there's meta content (class set before printing). */
+  .preview.meta-first #preview-body { break-before: page; }
+
   /* Real page breaks. Keep chord+lyric pairs together. */
   .preview .page-break { break-before: page; border: none; height: 0; margin: 0; }
   .preview .page-break::after { display: none; }
