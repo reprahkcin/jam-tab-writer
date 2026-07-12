@@ -366,8 +366,9 @@ function pkCls(fill) {
 }
 
 // A piano keyboard of `octaves` octaves. `style(pc)` returns { fill, label }
-// for each pitch class: fill is 'plain' | 'hi' | 'root' | 'scale'.
-function pianoKeyboardSVG(octaves, style) {
+// for each pitch class: fill is 'plain' | 'hi' | 'root' | 'scale'. `extraCls`
+// adds an SVG class (e.g. 'piano-scale' to stretch it to full width).
+function pianoKeyboardSVG(octaves, style, extraCls) {
   const width = octaves * 7 * PK.ww + 2;
   const height = PK.wh + 2;
   let p = '';
@@ -388,7 +389,7 @@ function pianoKeyboardSVG(octaves, style) {
       if (st.label) p += `<text class="pk-label pk-label-b" x="${kx + PK.bw / 2}" y="${PK.bh - 3}" text-anchor="middle">${st.label}</text>`;
     }
   }
-  return `<svg class="piano-svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${p}</svg>`;
+  return `<svg class="piano-svg${extraCls ? ' ' + extraCls : ''}" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${p}</svg>`;
 }
 
 // One-octave keyboard with a chord's tones highlighted (root emphasized),
@@ -413,11 +414,11 @@ function pianoChordSVG(displayName, soundingName, extra) {
 function pianoScaleSVG(rootPc, intervals, highlight) {
   const set = new Set(intervals.map((i) => (rootPc + i) % 12));
   const hi = highlight && highlight.size ? highlight : null;
-  return pianoKeyboardSVG(2, (pc) => {
+  return pianoKeyboardSVG(3, (pc) => {
     if (hi && hi.has(pc)) return { fill: pc === rootPc ? 'root' : 'hi', label: hi.get(pc) };
     if (set.has(pc)) return { fill: pc === rootPc ? 'root' : 'scale', label: '' };
     return { fill: 'plain', label: '' };
-  });
+  }, 'piano-scale');
 }
 
 // ---- Ukulele ---------------------------------------------------------------

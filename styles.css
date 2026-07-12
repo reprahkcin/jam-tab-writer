@@ -408,8 +408,12 @@ main { display: flex; flex: 1; min-height: 0; }
 .chord-diagram svg .cd-fretnum { fill: var(--muted); font-size: 7px; font-family: system-ui, sans-serif; }
 
 /* Piano keyboards (chord charts + scale roll) */
-.piano-diagram { min-width: 90px; }
+/* Same cell width as guitar/uke so chord columns line up vertically. */
+.piano-diagram { min-width: 106px; }
+.piano-diagram .piano-svg { width: 98px; height: auto; } /* fill the cell a bit fuller */
 .piano-svg { display: block; }
+/* Scale roll stretches to the same width as the guitar scale map. */
+.piano-svg.piano-scale { width: 100%; max-width: 560px; height: auto; }
 .pk-white { fill: #e9ecf2; stroke: #10121a; stroke-width: 0.5; }
 .pk-black { fill: #20222e; stroke: #10121a; stroke-width: 0.5; }
 .pk-white.pk-hi, .pk-black.pk-hi { fill: #ffd479; }             /* chord tone */
