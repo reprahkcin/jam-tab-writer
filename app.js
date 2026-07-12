@@ -590,7 +590,10 @@ function renderChordSet(s, container, setName) {
     }
     html += instRow('Guitar', g);
   }
-  if (inst.piano) {
+  // Piano and ukulele appear only in the Rhythm set — the Lead set is a
+  // guitar-only "second guitar" part.
+  const withPianoUke = setName === 'rhythm';
+  if (inst.piano && withPianoUke) {
     const pstore = prefs.pianoInv[setName];
     let pi = '';
     for (const c of chords) {
@@ -608,7 +611,7 @@ function renderChordSet(s, container, setName) {
     }
     html += instRow('Piano', pi);
   }
-  if (inst.ukulele) {
+  if (inst.ukulele && withPianoUke) {
     let u = '';
     for (const c of chords) u += ukeDiagramSVG(c.shape, ukeVoicing(c.shape), soundOf(c), '');
     html += instRow('Ukulele', u);
@@ -716,16 +719,15 @@ function renderHarmonica(s) {
   for (let i = 0; i < 12; i++) {
     opts += `<option value="${i}"${!auto && s.key === i ? ' selected' : ''}>${HARP_NAMES[i]}</option>`;
   }
+  // Compact single line: it sits up in the header now, not the reference stack.
   el.harmonica.innerHTML =
-    `<div class="hp-head"><span class="hp-title">Harmonica</span>` +
-    `<span class="muted">Song key</span>` +
-    `<select id="key-select">${opts}</select></div>` +
-    `<div class="hp-grid">` +
-      `<div class="hp-item"><b>${r.cross}</b><small>2nd / cross &middot; blues, folk</small></div>` +
-      `<div class="hp-item"><b>${r.straight}</b><small>1st / straight &middot; melody</small></div>` +
-      `<div class="hp-item"><b>${r.slant}</b><small>3rd / slant &middot; minor, Dorian</small></div>` +
-    `</div>` +
-    `<div class="hp-note">Diatonic harps above; any key works on a chromatic harmonica.</div>`;
+    `<span class="hp-title">Harmonica</span>` +
+    `<select id="key-select">${opts}</select>` +
+    `<span class="hp-recs">` +
+      `<span class="hp-rec"><b>${r.cross}</b> cross</span>` +
+      `<span class="hp-rec"><b>${r.straight}</b> straight</span>` +
+      `<span class="hp-rec"><b>${r.slant}</b> slant</span>` +
+    `</span>`;
   document.getElementById('key-select').addEventListener('change', (e) => {
     const cur = currentSong();
     cur.key = e.target.value === 'auto' ? null : parseInt(e.target.value, 10);

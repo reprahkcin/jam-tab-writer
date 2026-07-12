@@ -481,16 +481,20 @@ main { display: flex; flex: 1; min-height: 0; }
 .scale-svg .sc-label-open { fill: #ffe08a; font-size: 7px; font-weight: 700; font-family: system-ui, sans-serif; pointer-events: none; }
 
 /* Harmonica panel */
+/* Compact single-line harmonica bar, sitting up near the header. */
 .harmonica-panel:not(:empty) {
   background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 10px 12px;
-  margin-bottom: 14px;
+  padding: 6px 12px;
+  margin-bottom: 12px;
   font-family: system-ui, sans-serif;
   font-size: 13px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
 }
-.harmonica-panel .hp-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .harmonica-panel .hp-title { font-weight: 700; color: var(--section); }
 .harmonica-panel select {
   background: var(--panel);
@@ -500,10 +504,9 @@ main { display: flex; flex: 1; min-height: 0; }
   padding: 2px 6px;
   font-size: 12px;
 }
-.harmonica-panel .hp-grid { display: flex; flex-wrap: wrap; gap: 16px; }
-.harmonica-panel .hp-item b { color: var(--accent); font-size: 15px; }
-.harmonica-panel .hp-item small { display: block; color: var(--muted); font-size: 11px; }
-.harmonica-panel .hp-note { color: var(--muted); font-size: 11px; margin-top: 6px; }
+.harmonica-panel .hp-recs { display: flex; flex-wrap: wrap; gap: 14px; margin-left: auto; }
+.harmonica-panel .hp-rec { color: var(--muted); font-size: 12px; }
+.harmonica-panel .hp-rec b { color: var(--accent); font-size: 15px; margin-right: 3px; }
 
 /* Page break marker: a labelled dashed rule on screen. */
 .preview .page-break {
@@ -594,7 +597,8 @@ main { display: flex; flex: 1; min-height: 0; }
   .cd-name.focused { background: none; color: #000; text-decoration: underline; }
   .harmonica-panel:not(:empty) { background: #fff; border: 1px solid #999; }
   .harmonica-panel .hp-title { color: #000; }
-  .harmonica-panel .hp-item b { color: #000; }
+  .harmonica-panel .hp-rec { color: #333; }
+  .harmonica-panel .hp-rec b { color: #000; }
   .harmonica-panel select { display: none; }
 
   #print-header { display: block; margin-bottom: 14px; font-family: system-ui, sans-serif; }

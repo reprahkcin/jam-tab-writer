@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guitar Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=17" />
+  <link rel="stylesheet" href="styles.css?v=18" />
 </head>
 <body>
   <header>
@@ -93,16 +93,16 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
           <div id="preview" class="preview">
             <div id="print-header"></div>
             <div id="capo-banner"></div>
+            <div id="harmonica-panel" class="harmonica-panel"></div>
             <div id="rhythm-section" class="chord-section">
               <div class="section-label" id="rhythm-label">Rhythm</div>
               <div id="chord-diagrams" class="chord-diagrams"></div>
             </div>
             <div id="lead-section" class="chord-section">
-              <div class="section-label">Lead</div>
+              <div class="section-label">Lead Guitar</div>
               <div id="lead-diagrams" class="chord-diagrams"></div>
               <div id="scale-panel" class="scale-panel"></div>
             </div>
-            <div id="harmonica-panel" class="harmonica-panel"></div>
             <div id="preview-body"></div>
           </div>
         </div>
@@ -188,7 +188,7 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=17"></script>
-  <script src="app.js?v=17"></script>
+  <script src="chords.js?v=18"></script>
+  <script src="app.js?v=18"></script>
 </body>
 </html>
