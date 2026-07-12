@@ -386,7 +386,9 @@ main { display: flex; flex: 1; min-height: 0; }
 .cd-name.focused { background: var(--accent); color: #1c1e26; }
 .cd-na { font-family: system-ui, sans-serif; font-size: 10px; color: var(--muted); padding: 14px 0; }
 .cd-sound { font-family: system-ui, sans-serif; font-size: 10px; color: var(--section); margin-top: 2px; }
-.chord-diagram { min-width: 106px; }
+/* Cell width shared by all instruments so chord columns line up; wide enough
+   for the two-octave piano keyboard. */
+.chord-diagram { min-width: 140px; }
 .cd-voicing {
   margin-top: 4px;
   width: 106px;
@@ -409,8 +411,8 @@ main { display: flex; flex: 1; min-height: 0; }
 
 /* Piano keyboards (chord charts + scale roll) */
 /* Same cell width as guitar/uke so chord columns line up vertically. */
-.piano-diagram { min-width: 106px; }
-.piano-diagram .piano-svg { width: 98px; height: auto; } /* fill the cell a bit fuller */
+.piano-diagram { min-width: 140px; }
+.piano-diagram .piano-svg { width: 132px; height: auto; } /* two octaves, readable */
 .piano-svg { display: block; }
 /* Scale roll stretches to the same width as the guitar scale map. */
 .piano-svg.piano-scale { width: 100%; max-width: 560px; height: auto; }
@@ -558,7 +560,21 @@ main { display: flex; flex: 1; min-height: 0; }
   .pk-white.pk-scale, .pk-black.pk-scale { fill: #dcdcdc; }
   .pk-label { fill: #000; }
   .piano-svg .pk-bass { fill: #000; }
-  .pk-inv { border: none; color: #333; padding: 0; margin-top: 2px; -webkit-appearance: none; appearance: none; }
+  .pk-inv { border: none; color: #333; padding: 0; margin-top: 1px; font-size: 7pt; -webkit-appearance: none; appearance: none; }
+  /* Compact the reference so all the charts + scales fit one page. */
+  .chord-diagram { min-width: 0; }
+  .chord-diagrams { gap: 5px; margin-bottom: 8px; }
+  .inst-row, .scale-inst { gap: 6px; }
+  .inst-diagrams { gap: 7px; }
+  .inst-label { flex-basis: 46px; font-size: 8px; padding-top: 12px; }
+  .cd-name { font-size: 9px; margin-bottom: 1px; }
+  .cd-sound { font-size: 8px; }
+  .chord-diagram > svg { width: 46px; height: auto; }     /* guitar / uke fretboards */
+  .piano-diagram { min-width: 0; }
+  .piano-diagram .piano-svg { width: 88px; }              /* two-octave piano */
+  .scale-svg { max-width: 340px; }
+  .piano-svg.piano-scale { max-width: 340px; }
+  .chord-section { margin-bottom: 4px; }
   .section-label { color: #000; }
   #lead-section { border-top: 1px dashed #999; }
   .scale-panel:not(:empty) { background: #fff; border: 1px solid #999; }
@@ -584,14 +600,17 @@ main { display: flex; flex: 1; min-height: 0; }
   #print-header h2 { margin: 0; font-size: 18pt; }
   #print-header .artist { color: #333; font-size: 12pt; }
 
-  /* Chord chart body in 1 or 2 columns (set via the Print control in the
-     preview header). Diagrams/scale/harmonica stay full-width above it. */
   #preview-body {
-    column-count: var(--print-cols, 1);
-    column-gap: 30px;
-    column-rule: 1px solid #ccc;
     /* Auto-sized (see computePrintFont) so lines fit the column and don't clip. */
     font-size: var(--print-font, 12pt);
+  }
+  /* Two-column chart body, only when the Print control is set to 2 cols. Using a
+     class (not column-count:1) matters: a single-column multicol context would
+     swallow the {page} forced page breaks. */
+  .preview.print-2col #preview-body {
+    column-count: 2;
+    column-gap: 30px;
+    column-rule: 1px solid #ccc;
   }
   #preview-body .line { break-inside: avoid; }
   #preview-body .lyricline { break-before: avoid; }
@@ -599,10 +618,10 @@ main { display: flex; flex: 1; min-height: 0; }
 
   /* Reference panels (diagrams/scale/harmonica) get page 1; the chart starts on
      a fresh page. Only when there's meta content (class set before printing). */
-  .preview.meta-first #preview-body { break-before: page; }
+  .preview.meta-first #preview-body { break-before: page; page-break-before: always; }
 
   /* Real page breaks. Keep chord+lyric pairs together. */
-  .preview .page-break { break-before: page; border: none; height: 0; margin: 0; }
+  .preview .page-break { break-before: page; page-break-before: always; border: none; height: 0; margin: 0; }
   .preview .page-break::after { display: none; }
   .preview .chordline { break-after: avoid; }
   .preview .section { break-after: avoid; }

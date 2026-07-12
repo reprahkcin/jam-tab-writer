@@ -408,25 +408,31 @@ function pianoKeyboardSVG(octaves, style, extraCls) {
   return `<svg class="piano-svg${extraCls ? ' ' + extraCls : ''}" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${p}</svg>`;
 }
 
-// One-octave keyboard with a chord's tones highlighted (root emphasized),
-// labelled with interval degrees (R/3/5/7 …). `inv` is the inversion (0 = root
-// position); a marker under the lowest note of that inversion shows the bass.
+// Two-octave keyboard showing a chord voicing for the given inversion: the notes
+// are stacked from the bass up, so different inversions light up different keys.
+// Root emphasized; keys labelled with interval degrees (R/3/5/7 …).
 function pianoChordSVG(displayName, inv, soundingName, extra) {
-  const labels = chordToneLabels(displayName);
   const ci = chordIntervals(displayName);
   const sub = soundingName && soundingName !== displayName
     ? `<div class="cd-sound">sounds ${escapeHtml(soundingName)}</div>` : '';
   const tail = sub + (extra || '');
   const head = `<div class="cd-name" data-chord="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>`;
-  if (!labels || !ci) return `<div class="chord-diagram piano-diagram">${head}<div class="cd-na">notes n/a</div>${tail}</div>`;
+  if (!ci) return `<div class="chord-diagram piano-diagram">${head}<div class="cd-na">notes n/a</div>${tail}</div>`;
   const n = ci.iv.length;
   const invI = ((inv || 0) % n + n) % n;
-  const bassPc = (ci.rootPc + ci.iv[invI]) % 12;
-  const svg = pianoKeyboardSVG(1, (abs) => {
-    const pc = abs % 12;
-    return labels.has(pc)
-      ? { fill: pc === ci.rootPc ? 'root' : 'hi', label: labels.get(pc), bass: pc === bassPc }
-      : { fill: 'plain', label: '' };
+  // Rotate so the inversion's bass tone comes first, then stack ascending.
+  const order = ci.iv.slice(invI).concat(ci.iv.slice(0, invI));
+  const positions = new Map(); // absolute semitone -> { label, root }
+  let prev = -1;
+  for (const t of order) {
+    let abs = (ci.rootPc + t) % 12;
+    while (abs <= prev) abs += 12;
+    positions.set(abs, { label: INTERVAL_LABELS[t] || '', root: t === 0 });
+    prev = abs;
+  }
+  const svg = pianoKeyboardSVG(2, (abs) => {
+    const info = positions.get(abs);
+    return info ? { fill: info.root ? 'root' : 'hi', label: info.label } : { fill: 'plain', label: '' };
   });
   return `<div class="chord-diagram piano-diagram">${head}${svg}${tail}</div>`;
 }

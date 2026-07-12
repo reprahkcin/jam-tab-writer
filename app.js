@@ -1105,7 +1105,7 @@ function updateMetaBreak() {
 // Print column count (applied only in @media print via the --print-cols var).
 const printColsSel = document.getElementById('print-cols');
 function applyPrintCols() {
-  document.documentElement.style.setProperty('--print-cols', prefs.printCols);
+  el.preview.classList.toggle('print-2col', prefs.printCols === 2);
   printColsSel.value = String(prefs.printCols);
 }
 printColsSel.addEventListener('change', () => {
