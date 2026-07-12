@@ -1507,6 +1507,198 @@ pf.bar.querySelectorAll('.pf-toggle').forEach((b) => b.addEventListener('click',
 }));
 window.addEventListener('resize', () => { if (perf.open) applyPerfLayout(); });
 
+// ---- Metronome -------------------------------------------------------------
+// Clicks are scheduled a little ahead on the Web Audio clock so the tempo stays
+// steady regardless of JS timer jitter.
+const metro = { ctx: null, on: false, bpm: 100, beats: 4, next: 0, beat: 0, timer: null, taps: [] };
+
+function metroClick(t, accent) {
+  const ctx = metro.ctx;
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.frequency.value = accent ? 1600 : 1000;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(accent ? 0.6 : 0.4, t + 0.001);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+  osc.connect(g); g.connect(ctx.destination);
+  osc.start(t); osc.stop(t + 0.06);
+}
+
+function metroFlash(idx) {
+  if (!metro.on) return;
+  document.querySelectorAll('#metro-dots .mdot').forEach((d, i) => d.classList.toggle('on', i === idx));
+}
+
+function metroSchedule() {
+  const ctx = metro.ctx;
+  while (metro.next < ctx.currentTime + 0.12) {
+    metroClick(metro.next, metro.beat === 0);
+    const idx = metro.beat, when = metro.next;
+    setTimeout(() => metroFlash(idx), Math.max(0, (when - ctx.currentTime) * 1000));
+    metro.beat = (metro.beat + 1) % metro.beats;
+    metro.next += 60 / metro.bpm;
+  }
+  metro.timer = setTimeout(metroSchedule, 25);
+}
+
+function metroRenderDots() {
+  document.getElementById('metro-dots').innerHTML =
+    Array.from({ length: metro.beats }, (_, i) => `<span class="mdot${i === 0 ? ' accent' : ''}"></span>`).join('');
+}
+
+function metroStart() {
+  if (metro.on) return;
+  if (!metro.ctx) metro.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  metro.ctx.resume();
+  metro.on = true;
+  metro.beat = 0;
+  metro.next = metro.ctx.currentTime + 0.06;
+  const b = document.getElementById('metro-toggle');
+  b.textContent = 'Stop'; b.classList.add('on');
+  metroSchedule();
+}
+function metroStop() {
+  metro.on = false;
+  clearTimeout(metro.timer);
+  const b = document.getElementById('metro-toggle');
+  b.textContent = 'Start'; b.classList.remove('on');
+  document.querySelectorAll('#metro-dots .mdot').forEach((d) => d.classList.remove('on'));
+}
+function setBpm(v) {
+  metro.bpm = Math.max(40, Math.min(240, Math.round(v)));
+  document.getElementById('metro-bpm').textContent = metro.bpm;
+  document.getElementById('metro-slider').value = metro.bpm;
+}
+
+// ---- Tuner (microphone + autocorrelation) ----------------------------------
+const tuner = { ctx: null, stream: null, analyser: null, buf: null, raf: null, on: false };
+
+// Autocorrelation pitch detector. Returns frequency in Hz, or -1 if unclear.
+function detectPitch(buf, sampleRate) {
+  const SIZE = buf.length;
+  let rms = 0;
+  for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
+  if (Math.sqrt(rms / SIZE) < 0.01) return -1; // too quiet
+  let r1 = 0, r2 = SIZE - 1;
+  const thres = 0.2;
+  for (let i = 0; i < SIZE / 2; i++) if (Math.abs(buf[i]) < thres) { r1 = i; break; }
+  for (let i = 1; i < SIZE / 2; i++) if (Math.abs(buf[SIZE - i]) < thres) { r2 = SIZE - i; break; }
+  const b = buf.slice(r1, r2);
+  const n = b.length;
+  if (n < 2) return -1;
+  const c = new Array(n).fill(0);
+  for (let lag = 0; lag < n; lag++) for (let i = 0; i < n - lag; i++) c[lag] += b[i] * b[i + lag];
+  let d = 0; while (d < n - 1 && c[d] > c[d + 1]) d++;
+  let maxval = -1, maxpos = -1;
+  for (let i = d; i < n; i++) if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
+  let T0 = maxpos;
+  if (T0 <= 0) return -1;
+  const x1 = c[T0 - 1] || 0, x2 = c[T0], x3 = c[T0 + 1] || 0;
+  const a = (x1 + x3 - 2 * x2) / 2, bb = (x3 - x1) / 2;
+  if (a) T0 = T0 - bb / (2 * a);
+  return sampleRate / T0;
+}
+
+const NOTE_NAMES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+function freqToNote(freq) {
+  const midi = 69 + 12 * Math.log2(freq / 440);
+  const rounded = Math.round(midi);
+  return {
+    name: NOTE_NAMES_SHARP[((rounded % 12) + 12) % 12],
+    octave: Math.floor(rounded / 12) - 1,
+    cents: Math.round((midi - rounded) * 100),
+  };
+}
+
+async function tunerStart() {
+  const centsEl = document.getElementById('tuner-cents');
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    centsEl.textContent = 'Microphone not available in this browser.';
+    return;
+  }
+  try {
+    tuner.stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    });
+  } catch {
+    centsEl.textContent = 'Microphone access was denied.';
+    return;
+  }
+  tuner.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = tuner.ctx.createMediaStreamSource(tuner.stream);
+  tuner.analyser = tuner.ctx.createAnalyser();
+  tuner.analyser.fftSize = 2048;
+  tuner.buf = new Float32Array(tuner.analyser.fftSize);
+  src.connect(tuner.analyser);
+  tuner.on = true;
+  const b = document.getElementById('tuner-toggle');
+  b.textContent = 'Stop'; b.classList.add('on');
+  centsEl.textContent = 'Listening…';
+  tunerLoop();
+}
+function tunerLoop() {
+  if (!tuner.on) return;
+  tuner.analyser.getFloatTimeDomainData(tuner.buf);
+  updateTuner(detectPitch(tuner.buf, tuner.ctx.sampleRate));
+  tuner.raf = requestAnimationFrame(tunerLoop);
+}
+function updateTuner(freq) {
+  const noteEl = document.getElementById('tuner-note');
+  const centsEl = document.getElementById('tuner-cents');
+  const needle = document.getElementById('tuner-needle');
+  if (freq < 25 || freq > 5000) { needle.style.left = '50%'; needle.classList.remove('in-tune'); return; }
+  const { name, octave, cents } = freqToNote(freq);
+  noteEl.textContent = name + octave;
+  const inTune = Math.abs(cents) <= 5;
+  centsEl.textContent = (cents > 0 ? '+' : '') + cents + ' cents' + (inTune ? ' · in tune' : cents > 0 ? ' · sharp' : ' · flat');
+  needle.style.left = (50 + Math.max(-50, Math.min(50, cents))) + '%';
+  needle.classList.toggle('in-tune', inTune);
+  noteEl.classList.toggle('in-tune', inTune);
+}
+function tunerStop() {
+  tuner.on = false;
+  if (tuner.raf) cancelAnimationFrame(tuner.raf);
+  if (tuner.stream) tuner.stream.getTracks().forEach((t) => t.stop());
+  if (tuner.ctx) tuner.ctx.close();
+  tuner.ctx = null;
+  const b = document.getElementById('tuner-toggle');
+  b.textContent = 'Start'; b.classList.remove('on');
+  document.getElementById('tuner-note').textContent = '—';
+  document.getElementById('tuner-note').classList.remove('in-tune');
+  document.getElementById('tuner-cents').textContent = 'Start, then play a single note.';
+  document.getElementById('tuner-needle').style.left = '50%';
+  document.getElementById('tuner-needle').classList.remove('in-tune');
+}
+
+// ---- Tool panel wiring ----
+function toggleTool(name) {
+  const panel = document.getElementById(name + '-panel');
+  panel.hidden = !panel.hidden;
+  if (panel.hidden) { if (name === 'metro') metroStop(); if (name === 'tuner') tunerStop(); }
+}
+document.getElementById('metro-btn').addEventListener('click', () => toggleTool('metro'));
+document.getElementById('tuner-btn').addEventListener('click', () => toggleTool('tuner'));
+document.querySelectorAll('.tool-close').forEach((b) => b.addEventListener('click', () => toggleTool(b.dataset.tool)));
+document.getElementById('metro-up').addEventListener('click', () => setBpm(metro.bpm + 1));
+document.getElementById('metro-down').addEventListener('click', () => setBpm(metro.bpm - 1));
+document.getElementById('metro-slider').addEventListener('input', (e) => setBpm(+e.target.value));
+document.getElementById('metro-beats').addEventListener('change', (e) => {
+  metro.beats = +e.target.value; metroRenderDots(); if (metro.on) metro.beat = 0;
+});
+document.getElementById('metro-tap').addEventListener('click', () => {
+  const now = performance.now();
+  metro.taps = metro.taps.filter((t) => now - t < 2000);
+  metro.taps.push(now);
+  if (metro.taps.length >= 2) {
+    let sum = 0;
+    for (let i = 1; i < metro.taps.length; i++) sum += metro.taps[i] - metro.taps[i - 1];
+    setBpm(60000 / (sum / (metro.taps.length - 1)));
+  }
+});
+document.getElementById('metro-toggle').addEventListener('click', () => (metro.on ? metroStop() : metroStart()));
+document.getElementById('tuner-toggle').addEventListener('click', () => (tuner.on ? tunerStop() : tunerStart()));
+metroRenderDots();
+
 // ---- Boot ------------------------------------------------------------------
 
 function boot() {

@@ -99,6 +99,18 @@ with inline `[chord]` tags. Round-trips losslessly.
   On screen it shows as a labelled dashed divider; when you print, the page
   breaks there. `{pagebreak}` and `{newpage}` also work.
 
+## Metronome & tuner
+
+Two utilities open as small floating panels from the header:
+
+- **Metronome** — set the tempo (BPM stepper + slider, or **Tap** the beat),
+  pick the beats per measure (2/3/4/6, with an accented downbeat), and **Start**.
+  A row of dots pulses on the beat. Uses the Web Audio clock for steady timing.
+- **Tuner** — click **Start** and allow microphone access, then play a single
+  note: it shows the detected note and a cents meter (needle centers and turns
+  green when you're in tune). Works for any instrument (chromatic). Needs the
+  HTTPS site or localhost for mic access.
+
 ## Performance mode
 
 Click **Perform** (top bar) for a full-screen stage view of the current song:

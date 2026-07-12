@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guitar Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=12" />
+  <link rel="stylesheet" href="styles.css?v=13" />
 </head>
 <body>
   <header>
@@ -16,6 +16,8 @@
       <button id="save-btn" title="Save this chart to its file (Cmd/Ctrl+S)" hidden>Save</button>
       <button id="import-btn" title="Open a .txt / .cho file">Import</button>
       <button id="export-btn" title="Download this song as a file">Export</button>
+      <button id="metro-btn" title="Metronome">Metronome</button>
+      <button id="tuner-btn" title="Instrument tuner (uses your microphone)">Tuner</button>
       <button id="perform-btn" title="Full-screen performance view">Perform</button>
       <button id="print-btn" title="Print / save as PDF">Print</button>
       <input type="file" id="import-input" accept=".txt,.cho,.chordpro,.crd,text/plain" hidden />
@@ -108,6 +110,45 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
     </section>
   </main>
 
+  <!-- Metronome (floating panel) -->
+  <div id="metro-panel" class="tool-panel" hidden>
+    <div class="tool-head"><span>Metronome</span><button class="tool-close" data-tool="metro" title="Close">&#10005;</button></div>
+    <div class="tool-body">
+      <div class="metro-tempo">
+        <button id="metro-down" title="Slower">&minus;</button>
+        <span id="metro-bpm" class="metro-bpm">100</span>
+        <button id="metro-up" title="Faster">+</button>
+        <span class="metro-unit">BPM</span>
+      </div>
+      <input id="metro-slider" class="metro-slider" type="range" min="40" max="240" value="100" />
+      <div class="metro-row">
+        <label>Beats
+          <select id="metro-beats">
+            <option value="2">2</option><option value="3">3</option>
+            <option value="4" selected>4</option><option value="6">6</option>
+          </select>
+        </label>
+        <button id="metro-tap" title="Tap to set the tempo">Tap</button>
+      </div>
+      <div id="metro-dots" class="metro-dots"></div>
+      <button id="metro-toggle" class="tool-start">Start</button>
+    </div>
+  </div>
+
+  <!-- Tuner (floating panel) -->
+  <div id="tuner-panel" class="tool-panel" hidden>
+    <div class="tool-head"><span>Tuner</span><button class="tool-close" data-tool="tuner" title="Close">&#10005;</button></div>
+    <div class="tool-body">
+      <div id="tuner-note" class="tuner-note">&mdash;</div>
+      <div class="tuner-meter">
+        <div class="tuner-ticks"></div>
+        <div id="tuner-needle" class="tuner-needle"></div>
+      </div>
+      <div id="tuner-cents" class="tuner-cents">Start, then play a single note.</div>
+      <button id="tuner-toggle" class="tool-start">Start</button>
+    </div>
+  </div>
+
   <!-- Full-screen performance view. Hidden until "Perform" is clicked. -->
   <div id="perform-overlay" class="perform-overlay" hidden>
     <div id="perform-bar" class="perform-bar">
@@ -147,7 +188,7 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=12"></script>
-  <script src="app.js?v=12"></script>
+  <script src="chords.js?v=13"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>
