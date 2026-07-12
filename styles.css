@@ -561,20 +561,21 @@ main { display: flex; flex: 1; min-height: 0; }
   .pk-label { fill: #000; }
   .piano-svg .pk-bass { fill: #000; }
   .pk-inv { border: none; color: #333; padding: 0; margin-top: 1px; font-size: 7pt; -webkit-appearance: none; appearance: none; }
-  /* Compact the reference so all the charts + scales fit one page. */
+  /* Charts use the full page width; size them up to fill the vertical space
+     while still fitting the reference on one page. */
   .chord-diagram { min-width: 0; }
-  .chord-diagrams { gap: 5px; margin-bottom: 8px; }
-  .inst-row, .scale-inst { gap: 6px; }
-  .inst-diagrams { gap: 7px; }
-  .inst-label { flex-basis: 46px; font-size: 8px; padding-top: 12px; }
-  .cd-name { font-size: 9px; margin-bottom: 1px; }
-  .cd-sound { font-size: 8px; }
-  .chord-diagram > svg { width: 46px; height: auto; }     /* guitar / uke fretboards */
+  .chord-diagrams { gap: 8px; margin-bottom: 10px; }
+  .inst-row, .scale-inst { gap: 8px; }
+  .inst-diagrams { gap: 11px; }
+  .inst-label { flex-basis: 54px; font-size: 9px; padding-top: 16px; }
+  .cd-name { font-size: 11px; margin-bottom: 2px; }
+  .cd-sound { font-size: 9px; }
+  .chord-diagram > svg { width: 66px; height: auto; }     /* guitar / uke fretboards */
   .piano-diagram { min-width: 0; }
-  .piano-diagram .piano-svg { width: 88px; }              /* two-octave piano */
-  .scale-svg { max-width: 340px; }
-  .piano-svg.piano-scale { max-width: 340px; }
-  .chord-section { margin-bottom: 4px; }
+  .piano-diagram .piano-svg { width: 128px; }             /* two-octave piano */
+  .scale-svg { max-width: 480px; }
+  .piano-svg.piano-scale { max-width: 480px; }
+  .chord-section { margin-bottom: 6px; }
   .section-label { color: #000; }
   #lead-section { border-top: 1px dashed #999; }
   .scale-panel:not(:empty) { background: #fff; border: 1px solid #999; }
@@ -603,6 +604,10 @@ main { display: flex; flex: 1; min-height: 0; }
   #preview-body {
     /* Auto-sized (see computePrintFont) so lines fit the column and don't clip. */
     font-size: var(--print-font, 12pt);
+    /* Side margins on the lyrics only (charts above stay full-width) — room to
+       staple / fold the sheets. computePrintFont subtracts these. */
+    padding-left: 0.5in;
+    padding-right: 0.5in;
   }
   /* Two-column chart body, only when the Print control is set to 2 cols. Using a
      class (not column-count:1) matters: a single-column multicol context would

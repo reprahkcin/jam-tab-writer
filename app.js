@@ -1133,7 +1133,9 @@ function widestBodyLinePx() {
 // portrait with ~0.5in margins; conservative so it rarely clips.
 function computePrintFont() {
   const cols = prefs.printCols || 1;
-  const usablePt = 528;          // ~7.3in of 8.5in page width, in points
+  // Lyrics get 0.5in side margins in print (see #preview-body padding), so the
+  // usable text width is the page width minus those margins.
+  const usablePt = 528 - 72;     // ~6.3in, in points
   const gapPt = 22;              // ~30px column gap
   const colPt = (usablePt - (cols - 1) * gapPt) / cols;
   const screenFontPx = parseFloat(getComputedStyle(el.previewBody).fontSize) || 14;
