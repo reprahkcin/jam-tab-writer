@@ -995,7 +995,10 @@ el.toggleHarmonica.addEventListener('change', () => {
   renderPreview();
 });
 document.getElementById('export-btn').addEventListener('click', exportSong);
-document.getElementById('print-btn').addEventListener('click', () => window.print());
+document.getElementById('print-btn').addEventListener('click', () => {
+  computePrintFont();      // size the font to the column width before printing
+  window.print();
+});
 
 // Print column count (applied only in @media print via the --print-cols var).
 const printColsSel = document.getElementById('print-cols');
@@ -1007,7 +1010,37 @@ printColsSel.addEventListener('change', () => {
   prefs.printCols = parseInt(printColsSel.value, 10) || 1;
   savePrefs();
   applyPrintCols();
+  computePrintFont();
 });
+
+// The widest rendered chart line, in px, at the current on-screen font. Chart
+// lines are white-space:pre so their scrollWidth is their true content width
+// (chord rows included — positioned with spaces).
+function widestBodyLinePx() {
+  let m = 1;
+  document.querySelectorAll('#preview-body .line').forEach((l) => {
+    if (l.scrollWidth > m) m = l.scrollWidth;
+  });
+  return m;
+}
+
+// Chart lines can't wrap without misaligning chords, so in a narrow print
+// column a long line would overflow and clip. Shrink the print font so the
+// widest line fits the column. We measure the actual line width at the current
+// font (accurate for the real monospace advance) and scale. Assumes US Letter
+// portrait with ~0.5in margins; conservative so it rarely clips.
+function computePrintFont() {
+  const cols = prefs.printCols || 1;
+  const usablePt = 528;          // ~7.3in of 8.5in page width, in points
+  const gapPt = 22;              // ~30px column gap
+  const colPt = (usablePt - (cols - 1) * gapPt) / cols;
+  const screenFontPx = parseFloat(getComputedStyle(el.previewBody).fontSize) || 14;
+  const ratio = widestBodyLinePx() / screenFontPx; // line width per unit font
+  const SAFETY = 0.94;           // leave headroom so the last char never clips
+  let fit = (colPt * SAFETY) / ratio;
+  fit = Math.min(12, Math.max(6, fit)); // 6–12pt
+  document.documentElement.style.setProperty('--print-font', fit.toFixed(1) + 'pt');
+}
 
 // Folder mode controls.
 const reopenBtn = document.getElementById('reopen-btn');

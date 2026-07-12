@@ -530,6 +530,8 @@ main { display: flex; flex: 1; min-height: 0; }
     column-count: var(--print-cols, 1);
     column-gap: 30px;
     column-rule: 1px solid #ccc;
+    /* Auto-sized (see computePrintFont) so lines fit the column and don't clip. */
+    font-size: var(--print-font, 12pt);
   }
   #preview-body .line { break-inside: avoid; }
   #preview-body .lyricline { break-before: avoid; }
