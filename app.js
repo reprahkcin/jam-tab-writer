@@ -694,24 +694,37 @@ function renderPalette() {
   while ((m = re.exec(el.editor.value)) !== null) {
     if (isChord(m[1]) && !seen.has(m[1])) { seen.add(m[1]); list.push(m[1]); }
   }
-  if (!list.length) {
-    el.palette.innerHTML = '<span class="palette-empty">Chords you use appear here to insert at the cursor.</span>';
-    return;
-  }
-  el.palette.innerHTML = list.map((c) =>
+  const emptyBtn = '<button class="chip chip-empty" id="empty-chord-btn" title="Insert empty [ ] brackets at the cursor">[ ]</button>';
+  el.palette.innerHTML = emptyBtn + list.map((c) =>
     `<button class="chip" data-chord="${escapeHtml(c)}" title="Insert [${escapeHtml(c)}] at the cursor">${escapeHtml(c)}</button>`
   ).join('');
-  el.palette.querySelectorAll('.chip').forEach((b) =>
+  el.palette.querySelectorAll('.chip[data-chord]').forEach((b) =>
     b.addEventListener('click', () => insertAtCursor('[' + b.dataset.chord + ']')));
+  document.getElementById('empty-chord-btn').addEventListener('click', insertEmptyChord);
 }
 
-function insertAtCursor(text) {
+// Insert text at the cursor. cursorOffset (optional) places the caret that many
+// chars into the inserted text (e.g. between empty brackets) instead of after it.
+function insertAtCursor(text, cursorOffset) {
   const ta = el.editor;
   const start = ta.selectionStart, end = ta.selectionEnd;
   ta.value = ta.value.slice(0, start) + text + ta.value.slice(end);
-  ta.selectionStart = ta.selectionEnd = start + text.length;
+  const caret = start + (cursorOffset == null ? text.length : cursorOffset);
+  ta.selectionStart = ta.selectionEnd = caret;
   ta.focus();
   ta.dispatchEvent(new Event('input'));
+}
+
+// Empty [] at the cursor, caret between the brackets to type a chord.
+function insertEmptyChord() {
+  insertAtCursor('[]', 1);
+}
+
+// Empty {} section on its own line, caret between the braces to name it.
+function insertEmptySection() {
+  const before = el.editor.value.slice(0, el.editor.selectionStart);
+  const pre = before && !before.endsWith('\n') ? '\n' : '';
+  insertAtCursor(pre + '{}\n', pre.length + 1);
 }
 
 // Section-label buttons. Each inserts a {Section} on its own line; "Verse"
@@ -732,10 +745,12 @@ function nextVerseLabel() {
 
 function initSectionBar() {
   el.sectionBar.innerHTML = SECTION_BUTTONS.map((s) =>
-    `<button class="sbtn" data-section="${s}" title="Insert {${s}} section label">${s}</button>`).join('');
-  el.sectionBar.querySelectorAll('.sbtn').forEach((b) => b.addEventListener('click', () => {
+    `<button class="sbtn" data-section="${s}" title="Insert {${s}} section label">${s}</button>`).join('') +
+    '<button class="sbtn sbtn-empty" id="empty-section-btn" title="Insert an empty { } section label to name yourself">{ }</button>';
+  el.sectionBar.querySelectorAll('.sbtn[data-section]').forEach((b) => b.addEventListener('click', () => {
     insertSection(b.dataset.section === 'Verse' ? nextVerseLabel() : b.dataset.section);
   }));
+  document.getElementById('empty-section-btn').addEventListener('click', insertEmptySection);
 }
 
 function songItem(s, deletable) {
@@ -1492,6 +1507,7 @@ function showEmptyState() {
   el.harmonica.innerHTML = '';
   el.capoBanner.innerHTML = '';
   updatePrintHeader({ title: '', artist: '' });
+  renderPalette(); // show the [ ] insert button even before a song exists
   renderList();
 }
 
