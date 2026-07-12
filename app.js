@@ -323,7 +323,7 @@ function returnToLocal() {
   mode = 'local';
   songs = loadSongs();
   updateModeUI();
-  if (!songs.length) createSong();
+  if (!songs.length) showEmptyState();
   else selectSong([...songs].sort((a, b) => b.updated - a.updated)[0].id);
 }
 
@@ -807,7 +807,7 @@ function deleteSong(id) {
   saveSongs(songs);
   if (currentId === id) {
     if (songs.length) selectSong([...songs].sort((a, b) => b.updated - a.updated)[0].id);
-    else createSong();
+    else showEmptyState();
   } else {
     renderList();
   }
@@ -956,8 +956,19 @@ async function importText(text, fallbackTitle) {
 
 // ---- Wire up ---------------------------------------------------------------
 
+// If the user starts typing with nothing selected, create a song to hold it.
+// Local mode only — folder mode needs an explicit + New so the file gets named.
+function ensureSongForTyping() {
+  if (currentSong() || mode !== 'local') return;
+  const s = blankSong();
+  songs.push(s);
+  currentId = s.id;
+  renderList();
+}
+
 let auxTimer = null;
 el.editor.addEventListener('input', () => {
+  ensureSongForTyping();
   const s = currentSong();
   if (s) el.previewBody.innerHTML = render(el.editor.value, inlineShift(s)); // instant lyric preview
   renderPalette();
@@ -1449,28 +1460,39 @@ function boot() {
   el.toggleLead.checked = prefs.lead;
   el.toggleHarmonica.checked = prefs.harmonica;
   applyPrintCols();
-  if (!songs.length) {
-    // Seed with a short example so the app isn't blank on first run.
-    songs.push({
-      id: newId(),
-      title: 'Stand By Me',
-      artist: 'Ben E. King',
-      body: '{Verse 1}\n[G]When the night has [Em]come\n[G]And the land is [G]dark\n' +
-        '[C]And the moon is the [D]only light we\'ll [G]see\n\n' +
-        '{Chorus}\nNo I [G]won\'t be a[Em]fraid\nNo I [G]won\'t be a[G]fraid',
-      transpose: 0,
-      updated: Date.now(),
-    });
-    saveSongs(songs);
+  // No demo/seed content — start empty and let the user create the first song
+  // (or reconnect a folder below).
+  if (songs.length) {
+    const last = localStorage.getItem(LAST_KEY);
+    const startId = songs.some((s) => s.id === last)
+      ? last
+      : [...songs].sort((a, b) => b.updated - a.updated)[0].id;
+    selectSong(startId);
+  } else {
+    showEmptyState();
   }
-  const last = localStorage.getItem(LAST_KEY);
-  const startId = songs.some((s) => s.id === last)
-    ? last
-    : [...songs].sort((a, b) => b.updated - a.updated)[0].id;
-  selectSong(startId);
 
   // Reconnect any remembered folders (some may need a permission click).
   bootFolders();
+}
+
+// Nothing selected: blank the workspace and invite the user to create a song.
+// Typing in the editor (in local mode) creates one on the first keystroke.
+function showEmptyState() {
+  currentId = null;
+  el.title.value = '';
+  el.artist.value = '';
+  el.editor.value = '';
+  el.trAmount.textContent = '0';
+  el.capoAmount.textContent = '0';
+  el.previewBody.innerHTML = render('', 0); // the "nothing yet" hint
+  el.diagrams.innerHTML = '';
+  el.leadDiagrams.innerHTML = '';
+  el.scalePanel.innerHTML = '';
+  el.harmonica.innerHTML = '';
+  el.capoBanner.innerHTML = '';
+  updatePrintHeader({ title: '', artist: '' });
+  renderList();
 }
 
 // Restore remembered libraries: load the ones already permitted, and surface a
