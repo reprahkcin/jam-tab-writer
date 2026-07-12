@@ -308,6 +308,7 @@ main { display: flex; flex: 1; min-height: 0; }
 .view-toggles { display: flex; align-items: center; gap: 12px; text-transform: none; letter-spacing: 0; }
 .view-toggles label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .view-toggles input { accent-color: var(--accent); }
+.tog-sep { color: var(--line); }
 .print-cols-ctl select {
   background: var(--panel-2);
   color: var(--text);
@@ -360,8 +361,20 @@ main { display: flex; flex: 1; min-height: 0; }
 #lead-section { border-top: 1px dashed var(--line); padding-top: 8px; }
 
 /* Chord diagram strip */
-.chord-diagrams { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.chord-diagrams { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
 .chord-diagrams:empty { display: none; }
+/* One row per instrument: a label, then that instrument's diagrams. */
+.inst-row { display: flex; align-items: flex-start; gap: 10px; }
+.inst-label {
+  flex: 0 0 56px;
+  font: 700 10px system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  padding-top: 18px; /* drop below the chord-name line to align with diagrams */
+  text-align: right;
+}
+.inst-diagrams { display: flex; flex-wrap: wrap; gap: 10px; flex: 1; min-width: 0; }
 .chord-diagram {
   display: flex;
   flex-direction: column;
@@ -393,6 +406,21 @@ main { display: flex; flex: 1; min-height: 0; }
 .chord-diagram svg .cd-dot { fill: var(--text); }
 .chord-diagram svg .cd-mark { fill: var(--muted); font-size: 8px; font-family: system-ui, sans-serif; }
 .chord-diagram svg .cd-fretnum { fill: var(--muted); font-size: 7px; font-family: system-ui, sans-serif; }
+
+/* Piano keyboards (chord charts + scale roll) */
+.piano-diagram { min-width: 90px; }
+.piano-svg { display: block; }
+.pk-white { fill: #e9ecf2; stroke: #10121a; stroke-width: 0.5; }
+.pk-black { fill: #20222e; stroke: #10121a; stroke-width: 0.5; }
+.pk-white.pk-hi, .pk-black.pk-hi { fill: #ffd479; }             /* chord tone */
+.pk-white.pk-root, .pk-black.pk-root { fill: var(--accent); }   /* root */
+.pk-white.pk-scale, .pk-black.pk-scale { fill: var(--section); } /* scale tone */
+.pk-label { fill: #10121a; font: 700 6px system-ui, sans-serif; pointer-events: none; }
+.pk-label-b { font-size: 5px; }
+
+/* One scale diagram per instrument, stacked under the scale controls. */
+.scale-inst { display: flex; align-items: flex-start; gap: 10px; margin-top: 8px; }
+.scale-inst .inst-label { padding-top: 4px; }
 
 /* Scale panel */
 .scale-panel:not(:empty) {
@@ -501,6 +529,15 @@ main { display: flex; flex: 1; min-height: 0; }
   .chord-diagram svg .cd-nut, .chord-diagram svg .cd-dot { fill: #000; }
   .chord-diagram svg .cd-mark, .chord-diagram svg .cd-fretnum { fill: #333; }
   .chord-diagrams, .harmonica-panel, .scale-panel { break-inside: avoid; }
+  .inst-row, .scale-inst { break-inside: avoid; }
+  .inst-label { color: #000; }
+  /* Piano in print: grayscale fills, labels stay legible. */
+  .pk-white { fill: #fff; stroke: #000; }
+  .pk-black { fill: #333; stroke: #000; }
+  .pk-white.pk-hi, .pk-black.pk-hi { fill: #bdbdbd; }
+  .pk-white.pk-root, .pk-black.pk-root { fill: #6f6f6f; }
+  .pk-white.pk-scale, .pk-black.pk-scale { fill: #dcdcdc; }
+  .pk-label { fill: #000; }
   .section-label { color: #000; }
   #lead-section { border-top: 1px dashed #999; }
   .scale-panel:not(:empty) { background: #fff; border: 1px solid #999; }

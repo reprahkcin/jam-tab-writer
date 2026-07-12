@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guitar Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=11" />
+  <link rel="stylesheet" href="styles.css?v=12" />
 </head>
 <body>
   <header>
@@ -74,6 +74,11 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
               <label><input type="checkbox" id="toggle-diagrams" checked /> Chords</label>
               <label><input type="checkbox" id="toggle-lead" checked /> Lead set</label>
               <label><input type="checkbox" id="toggle-harmonica" checked /> Harmonica</label>
+              <span class="tog-sep">|</span>
+              <label title="Show guitar chord/scale diagrams"><input type="checkbox" id="toggle-guitar" checked /> Guitar</label>
+              <label title="Show piano chord charts and scale"><input type="checkbox" id="toggle-piano" checked /> Piano</label>
+              <label title="Show ukulele chord charts"><input type="checkbox" id="toggle-uke" checked /> Uke</label>
+              <span class="tog-sep">|</span>
               <label class="print-cols-ctl" title="Number of columns when you print / save as PDF">Print
                 <select id="print-cols">
                   <option value="1">1 col</option>
@@ -142,7 +147,7 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=11"></script>
-  <script src="app.js?v=11"></script>
+  <script src="chords.js?v=12"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>

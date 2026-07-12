@@ -183,6 +183,18 @@ share a uniform grid and even spacing (on screen and in print).
   with alternate parts and voice leading. Your pick per chord is remembered and
   prints with the sheet.
 
+## Instruments (guitar, piano, ukulele)
+
+Each chord set shows a row per instrument — toggle **Guitar / Piano / Ukulele**
+in the preview header:
+
+- **Guitar** — fretboard diagrams with the voicing dropdown (as below).
+- **Piano** — a keyboard per chord with the chord tones highlighted (root
+  orange, other tones gold) and labelled by interval degree (R/3/5/7 …). Also
+  adds a **piano scale roll** next to the guitar scale map.
+- **Ukulele** — a 4-string (gCEA) fretboard diagram per chord, with voicings
+  generated automatically; anything unreachable shows "shape n/a".
+
 ## Rhythm & Lead sets
 
 The chord area has two independent rows (toggle the **Lead set** checkbox):

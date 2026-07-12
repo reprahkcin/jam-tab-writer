@@ -380,6 +380,9 @@ const el = {
   toggleDiagrams: document.getElementById('toggle-diagrams'),
   toggleLead: document.getElementById('toggle-lead'),
   toggleHarmonica: document.getElementById('toggle-harmonica'),
+  toggleGuitar: document.getElementById('toggle-guitar'),
+  togglePiano: document.getElementById('toggle-piano'),
+  toggleUke: document.getElementById('toggle-uke'),
 };
 
 let songs = loadSongs();
@@ -389,6 +392,7 @@ function loadPrefs() {
   const defaults = {
     diagrams: true, harmonica: true, lead: true, chordMode: 'shapes',
     scaleType: 'majPent', voicings: { rhythm: {}, lead: {} },
+    instruments: { guitar: true, piano: true, ukulele: true },
     perform: { cols: 4, font: 22, panels: { chords: false, lead: false, scale: false, harp: false } },
     printCols: 1,
   };
@@ -397,6 +401,7 @@ function loadPrefs() {
   if (!p.voicings || Array.isArray(p.voicings)) p.voicings = { rhythm: {}, lead: {} };
   p.voicings.rhythm = p.voicings.rhythm || {};
   p.voicings.lead = p.voicings.lead || {};
+  p.instruments = Object.assign({ guitar: true, piano: true, ukulele: true }, p.instruments);
   p.perform = Object.assign({ cols: 4, font: 22, panels: {} }, p.perform);
   p.perform.panels = Object.assign({ chords: false, lead: false, scale: false, harp: false }, p.perform.panels);
   return p;
@@ -537,37 +542,60 @@ function defaultLeadIndex(voicings) {
   return i < 0 ? 0 : i;
 }
 
-// Render one diagram row (setName is 'rhythm' or 'lead') into `container`.
-// Each set keeps its own voicing selection so rhythm and lead differ.
+function instRow(label, diagramsHtml) {
+  return `<div class="inst-row"><span class="inst-label">${label}</span>` +
+    `<div class="inst-diagrams">${diagramsHtml}</div></div>`;
+}
+
+// Render a diagram set (setName is 'rhythm' or 'lead') into `container` as one
+// row per enabled instrument (Guitar / Piano / Ukulele). Each set keeps its own
+// guitar voicing selection so rhythm and lead differ.
 function renderChordSet(s, container, setName) {
   const shapeSh = shapeShift(s), soundSh = soundShift(s);
   const store = prefs.voicings[setName];
   const matches = s.body.match(/\[([^\]]*)\]/g) || [];
   const seen = new Set();
-  let html = '';
+  const chords = []; // { raw, shape }
   for (const tok of matches) {
     const name = tok.slice(1, -1);
     if (!isChord(name)) continue;
     const shape = transposeChord(name, shapeSh);
     if (seen.has(shape)) continue;
     seen.add(shape);
-
-    const voicings = chordVoicings(shape);
-    let idx = store[shape];
-    if (idx === undefined) idx = setName === 'lead' ? defaultLeadIndex(voicings) : 0;
-    if (idx >= voicings.length) idx = 0;
-    const chosen = voicings[idx];
-
-    let select = '';
-    if (voicings.length > 1) {
-      const opts = voicings.map((v, i) =>
-        `<option value="${i}"${i === idx ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('');
-      select = `<select class="cd-voicing" data-set="${setName}" data-chord="${escapeHtml(shape)}">${opts}</select>`;
-    }
-    const sounding = s.capo ? transposeChord(name, soundSh) : null;
-    html += chordDiagramSVG(shape, chosen.frets, sounding, select);
+    chords.push({ raw: name, shape });
   }
-  container.innerHTML = html;
+  const soundOf = (c) => (s.capo ? transposeChord(c.raw, soundSh) : null);
+  const inst = prefs.instruments;
+  let html = '';
+
+  if (inst.guitar) {
+    let g = '';
+    for (const c of chords) {
+      const voicings = chordVoicings(c.shape);
+      let idx = store[c.shape];
+      if (idx === undefined) idx = setName === 'lead' ? defaultLeadIndex(voicings) : 0;
+      if (idx >= voicings.length) idx = 0;
+      let select = '';
+      if (voicings.length > 1) {
+        const opts = voicings.map((v, i) =>
+          `<option value="${i}"${i === idx ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('');
+        select = `<select class="cd-voicing" data-set="${setName}" data-chord="${escapeHtml(c.shape)}">${opts}</select>`;
+      }
+      g += chordDiagramSVG(c.shape, voicings[idx].frets, soundOf(c), select);
+    }
+    html += instRow('Guitar', g);
+  }
+  if (inst.piano) {
+    let pi = '';
+    for (const c of chords) pi += pianoChordSVG(c.shape, soundOf(c), '');
+    html += instRow('Piano', pi);
+  }
+  if (inst.ukulele) {
+    let u = '';
+    for (const c of chords) u += ukeDiagramSVG(c.shape, ukeVoicing(c.shape), soundOf(c), '');
+    html += instRow('Ukulele', u);
+  }
+  container.innerHTML = html || '<span class="palette-empty">No instruments selected — enable one above.</span>';
 
   container.querySelectorAll('.cd-voicing').forEach((sel) => {
     sel.addEventListener('change', () => {
@@ -618,6 +646,11 @@ function renderScale(s) {
     `<option value="${escapeHtml(c)}"${s.focusChord === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
   const legendHi = highlight ? ` <span class="sp-dot hi"></span>chord tone` : '';
 
+  // One scale diagram per enabled fretted/keyed instrument.
+  let diagrams = '';
+  if (prefs.instruments.guitar) diagrams += `<div class="scale-inst"><span class="inst-label">Guitar</span>${scaleDiagramSVG(pc, scale.iv, highlight)}</div>`;
+  if (prefs.instruments.piano) diagrams += `<div class="scale-inst"><span class="inst-label">Piano</span>${pianoScaleSVG(pc, scale.iv, highlight)}</div>`;
+
   el.scalePanel.innerHTML =
     `<div class="sp-head"><span class="sp-title">${HARP_NAMES[pc]} ${escapeHtml(scale.name)}</span>` +
     `<span class="muted">Root</span><select id="scale-root">${rootOpts}</select>` +
@@ -625,7 +658,7 @@ function renderScale(s) {
     `<span class="muted">Chord</span><select id="scale-focus">${focusOpts}</select>` +
     `<span class="sp-legend"><span class="sp-dot root"></span>root <span class="sp-dot note"></span>scale tone${legendHi}</span>` +
     `</div>` +
-    scaleDiagramSVG(pc, scale.iv, highlight);
+    diagrams;
 
   document.getElementById('scale-focus').addEventListener('change', (e) => {
     const cur = currentSong();
@@ -1019,6 +1052,13 @@ el.toggleHarmonica.addEventListener('change', () => {
   prefs.harmonica = el.toggleHarmonica.checked;
   savePrefs();
   renderPreview();
+});
+[['toggleGuitar', 'guitar'], ['togglePiano', 'piano'], ['toggleUke', 'ukulele']].forEach(([elKey, inst]) => {
+  el[elKey].addEventListener('change', () => {
+    prefs.instruments[inst] = el[elKey].checked;
+    savePrefs();
+    renderPreview();
+  });
 });
 document.getElementById('export-btn').addEventListener('click', exportSong);
 document.getElementById('print-btn').addEventListener('click', () => {
@@ -1474,6 +1514,9 @@ function boot() {
   el.toggleDiagrams.checked = prefs.diagrams;
   el.toggleLead.checked = prefs.lead;
   el.toggleHarmonica.checked = prefs.harmonica;
+  el.toggleGuitar.checked = prefs.instruments.guitar;
+  el.togglePiano.checked = prefs.instruments.piano;
+  el.toggleUke.checked = prefs.instruments.ukulele;
   applyPrintCols();
   // No demo/seed content — start empty and let the user create the first song
   // (or reconnect a folder below).

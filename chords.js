@@ -352,6 +352,145 @@ function scaleDiagramSVG(rootPc, intervals, highlight) {
   return `<svg class="${cls}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMinYMin meet">${p}</svg>`;
 }
 
+// ---- Piano diagrams --------------------------------------------------------
+
+const PIANO_WHITE = [0, 2, 4, 5, 7, 9, 11];        // pitch classes of white keys C..B
+const PIANO_BLACK = [                               // black keys: pc + white key it follows
+  { pc: 1, after: 0 }, { pc: 3, after: 1 },
+  { pc: 6, after: 3 }, { pc: 8, after: 4 }, { pc: 10, after: 5 },
+];
+const PK = { ww: 12, wh: 46, bw: 8, bh: 28 };
+
+function pkCls(fill) {
+  return fill === 'root' ? 'pk-root' : fill === 'hi' ? 'pk-hi' : fill === 'scale' ? 'pk-scale' : '';
+}
+
+// A piano keyboard of `octaves` octaves. `style(pc)` returns { fill, label }
+// for each pitch class: fill is 'plain' | 'hi' | 'root' | 'scale'.
+function pianoKeyboardSVG(octaves, style) {
+  const width = octaves * 7 * PK.ww + 2;
+  const height = PK.wh + 2;
+  let p = '';
+  for (let o = 0; o < octaves; o++) {
+    for (let i = 0; i < 7; i++) {
+      const pc = PIANO_WHITE[i];
+      const kx = (o * 7 + i) * PK.ww + 1;
+      const st = style(pc);
+      p += `<rect class="pk-white ${pkCls(st.fill)}" x="${kx}" y="1" width="${PK.ww}" height="${PK.wh}" rx="1"/>`;
+      if (st.label) p += `<text class="pk-label" x="${kx + PK.ww / 2}" y="${PK.wh - 4}" text-anchor="middle">${st.label}</text>`;
+    }
+  }
+  for (let o = 0; o < octaves; o++) {
+    for (const b of PIANO_BLACK) {
+      const kx = (o * 7 + b.after + 1) * PK.ww - PK.bw / 2 + 1;
+      const st = style(b.pc);
+      p += `<rect class="pk-black ${pkCls(st.fill)}" x="${kx}" y="1" width="${PK.bw}" height="${PK.bh}" rx="1"/>`;
+      if (st.label) p += `<text class="pk-label pk-label-b" x="${kx + PK.bw / 2}" y="${PK.bh - 3}" text-anchor="middle">${st.label}</text>`;
+    }
+  }
+  return `<svg class="piano-svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${p}</svg>`;
+}
+
+// One-octave keyboard with a chord's tones highlighted (root emphasized),
+// labelled with interval degrees (R/3/5/7 …). Mirrors chordDiagramSVG's block.
+function pianoChordSVG(displayName, soundingName, extra) {
+  const labels = chordToneLabels(displayName);
+  const m = displayName.match(CHORD_RE);
+  const rootPc = m ? chordRootPc(m[1], m[2]) : -1;
+  const sub = soundingName && soundingName !== displayName
+    ? `<div class="cd-sound">sounds ${escapeHtml(soundingName)}</div>` : '';
+  const tail = sub + (extra || '');
+  const head = `<div class="cd-name" data-chord="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>`;
+  if (!labels) return `<div class="chord-diagram piano-diagram">${head}<div class="cd-na">notes n/a</div>${tail}</div>`;
+  const svg = pianoKeyboardSVG(1, (pc) => labels.has(pc)
+    ? { fill: pc === rootPc ? 'root' : 'hi', label: labels.get(pc) }
+    : { fill: 'plain', label: '' });
+  return `<div class="chord-diagram piano-diagram">${head}${svg}${tail}</div>`;
+}
+
+// Two-octave keyboard scale roll: scale tones teal, root orange; when a chord is
+// focused, its tones are gold with interval labels (like the guitar scale map).
+function pianoScaleSVG(rootPc, intervals, highlight) {
+  const set = new Set(intervals.map((i) => (rootPc + i) % 12));
+  const hi = highlight && highlight.size ? highlight : null;
+  return pianoKeyboardSVG(2, (pc) => {
+    if (hi && hi.has(pc)) return { fill: pc === rootPc ? 'root' : 'hi', label: hi.get(pc) };
+    if (set.has(pc)) return { fill: pc === rootPc ? 'root' : 'scale', label: '' };
+    return { fill: 'plain', label: '' };
+  });
+}
+
+// ---- Ukulele ---------------------------------------------------------------
+// Reentrant gCEA tuning; strings drawn left→right as g, C, E, A.
+const UKE_ABS = [55, 48, 52, 57];
+
+// Best playable voicing (frets per string [g,C,E,A]) that covers every chord
+// tone with the root present, low on the neck. null if none within reach.
+function ukeVoicing(name) {
+  const labels = chordToneLabels(name);
+  const m = name.match(CHORD_RE);
+  if (!labels || !m) return null;
+  const chordPcs = [...labels.keys()];
+  const chordSet = new Set(chordPcs);
+  const rootPc = chordRootPc(m[1], m[2]);
+  const MAXF = 4;
+  const cands = UKE_ABS.map((abs) => {
+    const list = [];
+    for (let f = 0; f <= MAXF; f++) if (chordSet.has((abs + f) % 12)) list.push(f);
+    return list;
+  });
+  if (cands.some((c) => !c.length)) return null;
+  let best = null;
+  const frets = [0, 0, 0, 0];
+  function rec(i) {
+    if (i === 4) {
+      const pcs = new Set(frets.map((f, s) => (UKE_ABS[s] + f) % 12));
+      if (!pcs.has(rootPc)) return;
+      for (const t of chordPcs) if (!pcs.has(t)) return;
+      const fr = frets.filter((f) => f > 0);
+      const span = fr.length ? Math.max(...fr) - Math.min(...fr) : 0;
+      const maxf = fr.length ? Math.max(...fr) : 0;
+      const opens = frets.filter((f) => f === 0).length;
+      const score = maxf * 10 + span * 6 - opens * 2;
+      if (!best || score < best.score) best = { frets: frets.slice(), score };
+      return;
+    }
+    for (const f of cands[i]) { frets[i] = f; rec(i + 1); }
+  }
+  rec(0);
+  return best ? best.frets : null;
+}
+
+// A 4-string ukulele fretboard diagram (same visual style as the guitar one).
+function ukeDiagramSVG(displayName, frets, soundingName, extra) {
+  const sub = soundingName && soundingName !== displayName
+    ? `<div class="cd-sound">sounds ${escapeHtml(soundingName)}</div>` : '';
+  const tail = sub + (extra || '');
+  const head = `<div class="cd-name" data-chord="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>`;
+  if (!frets) return `<div class="chord-diagram uke-diagram">${head}<div class="cd-na">shape n/a</div>${tail}</div>`;
+  const S = 4, rows = 4, cellW = 9, cellH = 12, left = 17, top = 18;
+  const fretted = frets.filter((f) => f > 0);
+  const maxF = fretted.length ? Math.max(...fretted) : 0;
+  const minF = fretted.length ? Math.min(...fretted) : 0;
+  const base = maxF > 4 ? minF : 1;
+  const width = left * 2 + (S - 1) * cellW;
+  const height = top + rows * cellH + 4;
+  const x = (i) => left + i * cellW;
+  const y = (k) => top + k * cellH;
+  let p = '';
+  for (let k = 0; k <= rows; k++) p += `<line x1="${x(0)}" y1="${y(k)}" x2="${x(S - 1)}" y2="${y(k)}"/>`;
+  for (let i = 0; i < S; i++) p += `<line x1="${x(i)}" y1="${y(0)}" x2="${x(i)}" y2="${y(rows)}"/>`;
+  if (base === 1) p += `<rect class="cd-nut" x="${x(0) - 1}" y="${top - 3}" width="${(S - 1) * cellW + 2}" height="3"/>`;
+  else p += `<text class="cd-fretnum" x="0" y="${y(0) + cellH - 1}" text-anchor="start">${base}fr</text>`;
+  for (let i = 0; i < S; i++) {
+    const f = frets[i], cx = x(i);
+    if (f < 0) p += `<text class="cd-mark" x="${cx}" y="${top - 5}" text-anchor="middle">&#215;</text>`;
+    else if (f === 0) p += `<text class="cd-mark" x="${cx}" y="${top - 5}" text-anchor="middle">&#9675;</text>`;
+    else { const cy = y(f - base) + cellH / 2; p += `<circle class="cd-dot" cx="${cx}" cy="${cy}" r="3.4"/>`; }
+  }
+  return `<div class="chord-diagram uke-diagram">${head}<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${p}</svg>${tail}</div>`;
+}
+
 // Harmonica keys the common players' spelling.
 const HARP_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 
