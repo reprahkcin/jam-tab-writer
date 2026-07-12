@@ -1056,6 +1056,36 @@ document.getElementById('pagebreak-btn').addEventListener('click', () => {
   el.editor.dispatchEvent(new Event('input'));
 });
 
+// Strip every [chord] token from the text, keeping lyrics, section labels
+// ({Verse}, or a lone bracketed word like [Chorus]), and {page} markers. Only
+// tokens that actually parse as chords are removed. Trailing whitespace left
+// behind by a removed chord is trimmed per line.
+function stripChords(text) {
+  return text.split('\n').map((line) =>
+    line.replace(/\[([^\[\]]*)\]/g, (m, inner) => (isChord(inner) ? '' : m)).replace(/[ \t]+$/, '')
+  ).join('\n');
+}
+
+document.getElementById('clear-chords-btn').addEventListener('click', () => {
+  const s = currentSong();
+  if (!s) return;
+  const text = el.editor.value;
+  const tokens = text.match(/\[([^\[\]]*)\]/g) || [];
+  const count = tokens.filter((t) => isChord(t.slice(1, -1))).length;
+  if (count === 0) { alert('No chords to clear in this chart.'); return; }
+  if (!confirm(`Remove all ${count} chord${count === 1 ? '' : 's'} from this chart?\n\nLyrics and section labels are kept. You can undo with Cmd/Ctrl+Z.`)) return;
+  const cleared = stripChords(text);
+  // Replace via execCommand where supported so the browser's own undo works;
+  // fall back to a direct assignment otherwise.
+  el.editor.focus();
+  el.editor.select();
+  let ok = false;
+  try { ok = document.execCommand('insertText', false, cleared); } catch { ok = false; }
+  if (!ok) el.editor.value = cleared;
+  el.editor.selectionStart = el.editor.selectionEnd = 0;
+  el.editor.dispatchEvent(new Event('input'));
+});
+
 const importInput = document.getElementById('import-input');
 document.getElementById('import-btn').addEventListener('click', () => importInput.click());
 importInput.addEventListener('change', () => {
