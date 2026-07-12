@@ -391,7 +391,7 @@ let currentId = null;
 function loadPrefs() {
   const defaults = {
     diagrams: true, harmonica: true, lead: true, chordMode: 'shapes',
-    scaleType: 'majPent', voicings: { rhythm: {}, lead: {} },
+    scaleType: 'majPent', voicings: { rhythm: {}, lead: {} }, pianoInv: { rhythm: {}, lead: {} },
     instruments: { guitar: true, piano: true, ukulele: true },
     perform: { cols: 4, font: 22, panels: { chords: false, lead: false, scale: false, harp: false } },
     printCols: 1,
@@ -401,6 +401,9 @@ function loadPrefs() {
   if (!p.voicings || Array.isArray(p.voicings)) p.voicings = { rhythm: {}, lead: {} };
   p.voicings.rhythm = p.voicings.rhythm || {};
   p.voicings.lead = p.voicings.lead || {};
+  if (!p.pianoInv || Array.isArray(p.pianoInv)) p.pianoInv = { rhythm: {}, lead: {} };
+  p.pianoInv.rhythm = p.pianoInv.rhythm || {};
+  p.pianoInv.lead = p.pianoInv.lead || {};
   p.instruments = Object.assign({ guitar: true, piano: true, ukulele: true }, p.instruments);
   p.perform = Object.assign({ cols: 4, font: 22, panels: {} }, p.perform);
   p.perform.panels = Object.assign({ chords: false, lead: false, scale: false, harp: false }, p.perform.panels);
@@ -547,6 +550,8 @@ function instRow(label, diagramsHtml) {
     `<div class="inst-diagrams">${diagramsHtml}</div></div>`;
 }
 
+const PIANO_INV_NAMES = ['root', '1st inv', '2nd inv', '3rd inv'];
+
 // Render a diagram set (setName is 'rhythm' or 'lead') into `container` as one
 // row per enabled instrument (Guitar / Piano / Ukulele). Each set keeps its own
 // guitar voicing selection so rhythm and lead differ.
@@ -586,8 +591,21 @@ function renderChordSet(s, container, setName) {
     html += instRow('Guitar', g);
   }
   if (inst.piano) {
+    const pstore = prefs.pianoInv[setName];
     let pi = '';
-    for (const c of chords) pi += pianoChordSVG(c.shape, soundOf(c), '');
+    for (const c of chords) {
+      const ci = chordIntervals(c.shape);
+      const n = ci ? ci.iv.length : 0;
+      let inv = pstore[c.shape] || 0;
+      if (inv >= n) inv = 0;
+      let select = '';
+      if (n > 1) {
+        const opts = [];
+        for (let k = 0; k < n; k++) opts.push(`<option value="${k}"${k === inv ? ' selected' : ''}>${PIANO_INV_NAMES[k] || (k + ' inv')}</option>`);
+        select = `<select class="pk-inv" data-set="${setName}" data-chord="${escapeHtml(c.shape)}">${opts.join('')}</select>`;
+      }
+      pi += pianoChordSVG(c.shape, inv, soundOf(c), select);
+    }
     html += instRow('Piano', pi);
   }
   if (inst.ukulele) {
@@ -600,6 +618,14 @@ function renderChordSet(s, container, setName) {
   container.querySelectorAll('.cd-voicing').forEach((sel) => {
     sel.addEventListener('change', () => {
       prefs.voicings[sel.dataset.set][sel.dataset.chord] = parseInt(sel.value, 10);
+      savePrefs();
+      renderChordSet(currentSong(), container, sel.dataset.set);
+    });
+  });
+
+  container.querySelectorAll('.pk-inv').forEach((sel) => {
+    sel.addEventListener('change', () => {
+      prefs.pianoInv[sel.dataset.set][sel.dataset.chord] = parseInt(sel.value, 10);
       savePrefs();
       renderChordSet(currentSong(), container, sel.dataset.set);
     });

@@ -414,6 +414,21 @@ main { display: flex; flex: 1; min-height: 0; }
 .piano-svg { display: block; }
 /* Scale roll stretches to the same width as the guitar scale map. */
 .piano-svg.piano-scale { width: 100%; max-width: 560px; height: auto; }
+.piano-svg .pk-bass { fill: var(--text); }
+.pk-inv {
+  margin-top: 4px;
+  width: 98px;
+  box-sizing: border-box;
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 3px 18px 3px 6px;
+  font-size: 10px;
+  font-family: system-ui, sans-serif;
+  cursor: pointer;
+}
+.pk-inv:hover { color: var(--text); border-color: #4a516b; }
 .pk-white { fill: #e9ecf2; stroke: #10121a; stroke-width: 0.5; }
 .pk-black { fill: #20222e; stroke: #10121a; stroke-width: 0.5; }
 .pk-white.pk-hi, .pk-black.pk-hi { fill: #ffd479; }             /* chord tone */
@@ -542,6 +557,8 @@ main { display: flex; flex: 1; min-height: 0; }
   .pk-white.pk-root, .pk-black.pk-root { fill: #6f6f6f; }
   .pk-white.pk-scale, .pk-black.pk-scale { fill: #dcdcdc; }
   .pk-label { fill: #000; }
+  .piano-svg .pk-bass { fill: #000; }
+  .pk-inv { border: none; color: #333; padding: 0; margin-top: 2px; -webkit-appearance: none; appearance: none; }
   .section-label { color: #000; }
   #lead-section { border-top: 1px dashed #999; }
   .scale-panel:not(:empty) { background: #fff; border: 1px solid #999; }

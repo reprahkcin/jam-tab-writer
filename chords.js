@@ -290,20 +290,26 @@ const INTERVAL_LABELS = {
   6: 'b5', 7: '5', 8: '#5', 9: '6', 10: 'b7', 11: '7',
 };
 
-// Map of pitch class -> interval label for a chord name (R/3/5/7 …), or null.
-function chordToneLabels(name) {
+// A chord's root pitch class + its interval list (from the root), or null.
+function chordIntervals(name) {
   const m = name.match(CHORD_RE);
   if (!m) return null;
   const [, root, acc, suffix] = m;
-  const pc = chordRootPc(root, acc);
   let iv = QUALITY_IV[parseQuality(suffix)];
   if (!iv) {
     if (/dim|°/.test(suffix)) iv = [0, 3, 6];
     else if (/aug|\+/.test(suffix)) iv = [0, 4, 8];
     else iv = [0, 4, 7]; // reasonable default
   }
+  return { rootPc: chordRootPc(root, acc), iv };
+}
+
+// Map of pitch class -> interval label for a chord name (R/3/5/7 …), or null.
+function chordToneLabels(name) {
+  const ci = chordIntervals(name);
+  if (!ci) return null;
   const map = new Map();
-  for (const i of iv) map.set((pc + i) % 12, INTERVAL_LABELS[i] || '');
+  for (const i of ci.iv) map.set((ci.rootPc + i) % 12, INTERVAL_LABELS[i] || '');
   return map;
 }
 
@@ -365,47 +371,63 @@ function pkCls(fill) {
   return fill === 'root' ? 'pk-root' : fill === 'hi' ? 'pk-hi' : fill === 'scale' ? 'pk-scale' : '';
 }
 
-// A piano keyboard of `octaves` octaves. `style(pc)` returns { fill, label }
-// for each pitch class: fill is 'plain' | 'hi' | 'root' | 'scale'. `extraCls`
-// adds an SVG class (e.g. 'piano-scale' to stretch it to full width).
+// A piano keyboard of `octaves` octaves. `style(abs)` — called per key with its
+// absolute semitone (0..octaves*12-1) — returns { fill, label, bass }: fill is
+// 'plain' | 'hi' | 'root' | 'scale'; bass draws a marker under the key (used to
+// show the chord inversion's lowest note). `extraCls` adds an SVG class.
 function pianoKeyboardSVG(octaves, style, extraCls) {
   const width = octaves * 7 * PK.ww + 2;
-  const height = PK.wh + 2;
   let p = '';
+  const bassX = [];
   for (let o = 0; o < octaves; o++) {
     for (let i = 0; i < 7; i++) {
-      const pc = PIANO_WHITE[i];
+      const abs = o * 12 + PIANO_WHITE[i];
       const kx = (o * 7 + i) * PK.ww + 1;
-      const st = style(pc);
+      const st = style(abs);
       p += `<rect class="pk-white ${pkCls(st.fill)}" x="${kx}" y="1" width="${PK.ww}" height="${PK.wh}" rx="1"/>`;
       if (st.label) p += `<text class="pk-label" x="${kx + PK.ww / 2}" y="${PK.wh - 4}" text-anchor="middle">${st.label}</text>`;
+      if (st.bass) bassX.push(kx + PK.ww / 2);
     }
   }
   for (let o = 0; o < octaves; o++) {
     for (const b of PIANO_BLACK) {
+      const abs = o * 12 + b.pc;
       const kx = (o * 7 + b.after + 1) * PK.ww - PK.bw / 2 + 1;
-      const st = style(b.pc);
+      const st = style(abs);
       p += `<rect class="pk-black ${pkCls(st.fill)}" x="${kx}" y="1" width="${PK.bw}" height="${PK.bh}" rx="1"/>`;
       if (st.label) p += `<text class="pk-label pk-label-b" x="${kx + PK.bw / 2}" y="${PK.bh - 3}" text-anchor="middle">${st.label}</text>`;
+      if (st.bass) bassX.push(kx + PK.bw / 2);
     }
+  }
+  const markerH = bassX.length ? 8 : 0;
+  const height = PK.wh + 2 + markerH;
+  const y0 = PK.wh + 2;
+  for (const bx of bassX) {
+    p += `<path class="pk-bass" d="M ${bx - 3} ${y0 + markerH} L ${bx + 3} ${y0 + markerH} L ${bx} ${y0 + 1} Z"/>`;
   }
   return `<svg class="piano-svg${extraCls ? ' ' + extraCls : ''}" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${p}</svg>`;
 }
 
 // One-octave keyboard with a chord's tones highlighted (root emphasized),
-// labelled with interval degrees (R/3/5/7 …). Mirrors chordDiagramSVG's block.
-function pianoChordSVG(displayName, soundingName, extra) {
+// labelled with interval degrees (R/3/5/7 …). `inv` is the inversion (0 = root
+// position); a marker under the lowest note of that inversion shows the bass.
+function pianoChordSVG(displayName, inv, soundingName, extra) {
   const labels = chordToneLabels(displayName);
-  const m = displayName.match(CHORD_RE);
-  const rootPc = m ? chordRootPc(m[1], m[2]) : -1;
+  const ci = chordIntervals(displayName);
   const sub = soundingName && soundingName !== displayName
     ? `<div class="cd-sound">sounds ${escapeHtml(soundingName)}</div>` : '';
   const tail = sub + (extra || '');
   const head = `<div class="cd-name" data-chord="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>`;
-  if (!labels) return `<div class="chord-diagram piano-diagram">${head}<div class="cd-na">notes n/a</div>${tail}</div>`;
-  const svg = pianoKeyboardSVG(1, (pc) => labels.has(pc)
-    ? { fill: pc === rootPc ? 'root' : 'hi', label: labels.get(pc) }
-    : { fill: 'plain', label: '' });
+  if (!labels || !ci) return `<div class="chord-diagram piano-diagram">${head}<div class="cd-na">notes n/a</div>${tail}</div>`;
+  const n = ci.iv.length;
+  const invI = ((inv || 0) % n + n) % n;
+  const bassPc = (ci.rootPc + ci.iv[invI]) % 12;
+  const svg = pianoKeyboardSVG(1, (abs) => {
+    const pc = abs % 12;
+    return labels.has(pc)
+      ? { fill: pc === ci.rootPc ? 'root' : 'hi', label: labels.get(pc), bass: pc === bassPc }
+      : { fill: 'plain', label: '' };
+  });
   return `<div class="chord-diagram piano-diagram">${head}${svg}${tail}</div>`;
 }
 
@@ -414,7 +436,8 @@ function pianoChordSVG(displayName, soundingName, extra) {
 function pianoScaleSVG(rootPc, intervals, highlight) {
   const set = new Set(intervals.map((i) => (rootPc + i) % 12));
   const hi = highlight && highlight.size ? highlight : null;
-  return pianoKeyboardSVG(3, (pc) => {
+  return pianoKeyboardSVG(3, (abs) => {
+    const pc = abs % 12;
     if (hi && hi.has(pc)) return { fill: pc === rootPc ? 'root' : 'hi', label: hi.get(pc) };
     if (set.has(pc)) return { fill: pc === rootPc ? 'root' : 'scale', label: '' };
     return { fill: 'plain', label: '' };
