@@ -395,6 +395,7 @@ function loadPrefs() {
     instruments: { guitar: true, piano: true, ukulele: true },
     perform: { cols: 4, font: 22, panels: { chords: false, lead: false, scale: false, harp: false } },
     printCols: 1,
+    metro: { bpm: 100, steps: 16, click: true, pattern: null },
   };
   let p = defaults;
   try { p = Object.assign(defaults, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch { /* keep defaults */ }
@@ -407,6 +408,7 @@ function loadPrefs() {
   p.instruments = Object.assign({ guitar: true, piano: true, ukulele: true }, p.instruments);
   p.perform = Object.assign({ cols: 4, font: 22, panels: {} }, p.perform);
   p.perform.panels = Object.assign({ chords: false, lead: false, scale: false, harp: false }, p.perform.panels);
+  p.metro = Object.assign({ bpm: 100, steps: 16, click: true, pattern: null }, p.metro);
   return p;
 }
 let prefs = loadPrefs();
@@ -1599,40 +1601,162 @@ window.addEventListener('resize', () => { if (perf.open) applyPerfLayout(); });
 // ---- Metronome -------------------------------------------------------------
 // Clicks are scheduled a little ahead on the Web Audio clock so the tempo stays
 // steady regardless of JS timer jitter.
-const metro = { ctx: null, on: false, bpm: 100, beats: 4, next: 0, beat: 0, timer: null, taps: [] };
+// A 16th-note step sequencer: each step is a 16th note, so `steps` = beats × 4
+// (16 = one 4/4 bar). Any step count works, for odd meters (e.g. 14 = 7/8).
+const DRUMS = [
+  { id: 'kick', label: 'Kick' },
+  { id: 'snare', label: 'Snare' },
+  { id: 'hihat', label: 'Hi-hat' },
+  { id: 'tom', label: 'Tom' },
+  { id: 'crash', label: 'Crash' },
+];
+const metro = {
+  ctx: null, on: false, bpm: 100, steps: 16, step: 0, next: 0, timer: null, taps: [],
+  click: true, noiseBuf: null, pattern: null,
+};
 
-function metroClick(t, accent) {
-  const ctx = metro.ctx;
-  const osc = ctx.createOscillator();
-  const g = ctx.createGain();
-  osc.frequency.value = accent ? 1600 : 1000;
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(accent ? 0.6 : 0.4, t + 0.001);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
-  osc.connect(g); g.connect(ctx.destination);
-  osc.start(t); osc.stop(t + 0.06);
+function newPattern(steps) { return DRUMS.map(() => new Array(steps).fill(false)); }
+
+// A basic starter beat: kick on beats 1 & 3, snare on 2 & 4, hats on eighths.
+function defaultGroove(steps) {
+  const p = newPattern(steps);
+  for (let s = 0; s < steps; s++) {
+    if (s % 8 === 0) p[0][s] = true;      // kick
+    if (s % 8 === 4) p[1][s] = true;      // snare
+    if (s % 2 === 0) p[2][s] = true;      // hi-hat
+  }
+  return p;
 }
 
-function metroFlash(idx) {
+function saveMetro() {
+  prefs.metro = { bpm: metro.bpm, steps: metro.steps, click: metro.click, pattern: metro.pattern };
+  savePrefs();
+}
+
+// ---- Synthesized drum voices (Web Audio) ----
+function noiseSource() {
+  const ctx = metro.ctx;
+  if (!metro.noiseBuf) {
+    const buf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    metro.noiseBuf = buf;
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = metro.noiseBuf;
+  return src;
+}
+function drumEnv(t, peak, decay) {
+  const g = metro.ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+  return g;
+}
+function drumKick(t) {
+  const ctx = metro.ctx, o = ctx.createOscillator();
+  o.frequency.setValueAtTime(160, t);
+  o.frequency.exponentialRampToValueAtTime(50, t + 0.11);
+  const g = drumEnv(t, 1.0, 0.18);
+  o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + 0.2);
+}
+function drumSnare(t) {
+  const ctx = metro.ctx;
+  const n = noiseSource(), nf = ctx.createBiquadFilter();
+  nf.type = 'highpass'; nf.frequency.value = 1200;
+  const ng = drumEnv(t, 0.7, 0.14);
+  n.connect(nf); nf.connect(ng); ng.connect(ctx.destination);
+  const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = 190;
+  const og = drumEnv(t, 0.5, 0.1);
+  o.connect(og); og.connect(ctx.destination);
+  n.start(t); n.stop(t + 0.15); o.start(t); o.stop(t + 0.11);
+}
+function drumHihat(t) {
+  const ctx = metro.ctx;
+  const n = noiseSource(), nf = ctx.createBiquadFilter();
+  nf.type = 'highpass'; nf.frequency.value = 7000;
+  const ng = drumEnv(t, 0.35, 0.05);
+  n.connect(nf); nf.connect(ng); ng.connect(ctx.destination);
+  n.start(t); n.stop(t + 0.07);
+}
+function drumTom(t) {
+  const ctx = metro.ctx, o = ctx.createOscillator();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(180, t);
+  o.frequency.exponentialRampToValueAtTime(90, t + 0.18);
+  const g = drumEnv(t, 0.8, 0.25);
+  o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t + 0.3);
+}
+function drumCrash(t) {
+  const ctx = metro.ctx;
+  const n = noiseSource(), nf = ctx.createBiquadFilter();
+  nf.type = 'highpass'; nf.frequency.value = 5000;
+  const ng = drumEnv(t, 0.5, 0.8);
+  n.connect(nf); nf.connect(ng); ng.connect(ctx.destination);
+  n.start(t); n.stop(t + 1.0);
+}
+const DRUM_FN = { kick: drumKick, snare: drumSnare, hihat: drumHihat, tom: drumTom, crash: drumCrash };
+
+// A soft click on the beat (every 4 steps) when Click is on.
+function metroClick(t, accent) {
+  const ctx = metro.ctx, osc = ctx.createOscillator(), g = ctx.createGain();
+  osc.frequency.value = accent ? 1600 : 1000;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(accent ? 0.35 : 0.2, t + 0.001);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+  osc.connect(g); g.connect(ctx.destination); osc.start(t); osc.stop(t + 0.05);
+}
+
+function metroHighlight(step) {
   if (!metro.on) return;
-  document.querySelectorAll('#metro-dots .mdot').forEach((d, i) => d.classList.toggle('on', i === idx));
+  document.querySelectorAll('#dm-grid .dm-cells').forEach((lane) => {
+    lane.querySelectorAll('.dm-cell').forEach((c, i) => c.classList.toggle('playing', i === step));
+  });
 }
 
 function metroSchedule() {
   const ctx = metro.ctx;
+  const stepDur = 15 / metro.bpm; // 16th note = (60/bpm)/4
   while (metro.next < ctx.currentTime + 0.12) {
-    metroClick(metro.next, metro.beat === 0);
-    const idx = metro.beat, when = metro.next;
-    setTimeout(() => metroFlash(idx), Math.max(0, (when - ctx.currentTime) * 1000));
-    metro.beat = (metro.beat + 1) % metro.beats;
-    metro.next += 60 / metro.bpm;
+    const step = metro.step, when = metro.next;
+    DRUMS.forEach((d, r) => { if (metro.pattern[r][step]) DRUM_FN[d.id](when); });
+    if (metro.click && step % 4 === 0) metroClick(when, step === 0);
+    setTimeout(() => metroHighlight(step), Math.max(0, (when - ctx.currentTime) * 1000));
+    metro.step = (step + 1) % metro.steps;
+    metro.next += stepDur;
   }
-  metro.timer = setTimeout(metroSchedule, 25);
+  metro.timer = setTimeout(metroSchedule, 20);
 }
 
-function metroRenderDots() {
-  document.getElementById('metro-dots').innerHTML =
-    Array.from({ length: metro.beats }, (_, i) => `<span class="mdot${i === 0 ? ' accent' : ''}"></span>`).join('');
+function renderDrumGrid() {
+  const grid = document.getElementById('dm-grid');
+  grid.innerHTML = DRUMS.map((d, r) => {
+    let cells = '';
+    for (let s = 0; s < metro.steps; s++) {
+      cells += `<button class="dm-cell${metro.pattern[r][s] ? ' on' : ''}${s % 4 === 0 ? ' beat' : ''}" data-r="${r}" data-s="${s}"></button>`;
+    }
+    return `<div class="dm-lane"><span class="dm-lane-label">${d.label}</span><div class="dm-cells">${cells}</div></div>`;
+  }).join('');
+  grid.querySelectorAll('.dm-cell').forEach((c) => c.addEventListener('click', () => {
+    const r = +c.dataset.r, s = +c.dataset.s;
+    metro.pattern[r][s] = !metro.pattern[r][s];
+    c.classList.toggle('on', metro.pattern[r][s]);
+    saveMetro();
+  }));
+}
+
+function setSteps(n) {
+  n = Math.max(4, Math.min(32, n));
+  metro.pattern = metro.pattern.map((lane) => {
+    const nl = new Array(n).fill(false);
+    for (let i = 0; i < Math.min(n, lane.length); i++) nl[i] = lane[i];
+    return nl;
+  });
+  metro.steps = n;
+  if (metro.step >= n) metro.step = 0;
+  document.getElementById('dm-steps').textContent = n;
+  renderDrumGrid();
+  saveMetro();
 }
 
 function metroStart() {
@@ -1640,7 +1764,7 @@ function metroStart() {
   if (!metro.ctx) metro.ctx = new (window.AudioContext || window.webkitAudioContext)();
   metro.ctx.resume();
   metro.on = true;
-  metro.beat = 0;
+  metro.step = 0;
   metro.next = metro.ctx.currentTime + 0.06;
   const b = document.getElementById('metro-toggle');
   b.textContent = 'Stop'; b.classList.add('on');
@@ -1651,12 +1775,13 @@ function metroStop() {
   clearTimeout(metro.timer);
   const b = document.getElementById('metro-toggle');
   b.textContent = 'Start'; b.classList.remove('on');
-  document.querySelectorAll('#metro-dots .mdot').forEach((d) => d.classList.remove('on'));
+  document.querySelectorAll('#dm-grid .dm-cell.playing').forEach((c) => c.classList.remove('playing'));
 }
 function setBpm(v) {
   metro.bpm = Math.max(40, Math.min(240, Math.round(v)));
   document.getElementById('metro-bpm').textContent = metro.bpm;
   document.getElementById('metro-slider').value = metro.bpm;
+  saveMetro();
 }
 
 // ---- Tuner (microphone + autocorrelation) ----------------------------------
@@ -1771,8 +1896,11 @@ document.querySelectorAll('.tool-close').forEach((b) => b.addEventListener('clic
 document.getElementById('metro-up').addEventListener('click', () => setBpm(metro.bpm + 1));
 document.getElementById('metro-down').addEventListener('click', () => setBpm(metro.bpm - 1));
 document.getElementById('metro-slider').addEventListener('input', (e) => setBpm(+e.target.value));
-document.getElementById('metro-beats').addEventListener('change', (e) => {
-  metro.beats = +e.target.value; metroRenderDots(); if (metro.on) metro.beat = 0;
+document.getElementById('dm-steps-down').addEventListener('click', () => setSteps(metro.steps - 1));
+document.getElementById('dm-steps-up').addEventListener('click', () => setSteps(metro.steps + 1));
+document.getElementById('dm-click').addEventListener('change', (e) => { metro.click = e.target.checked; saveMetro(); });
+document.getElementById('dm-clear').addEventListener('click', () => {
+  metro.pattern = newPattern(metro.steps); renderDrumGrid(); saveMetro();
 });
 document.getElementById('metro-tap').addEventListener('click', () => {
   const now = performance.now();
@@ -1786,7 +1914,20 @@ document.getElementById('metro-tap').addEventListener('click', () => {
 });
 document.getElementById('metro-toggle').addEventListener('click', () => (metro.on ? metroStop() : metroStart()));
 document.getElementById('tuner-toggle').addEventListener('click', () => (tuner.on ? tunerStop() : tunerStart()));
-metroRenderDots();
+
+// Restore saved metronome/drum settings, then draw the grid.
+(function initMetro() {
+  const m = prefs.metro;
+  metro.bpm = m.bpm; metro.steps = m.steps; metro.click = m.click;
+  metro.pattern = (Array.isArray(m.pattern) && m.pattern.length === DRUMS.length &&
+    m.pattern.every((l) => Array.isArray(l) && l.length === m.steps))
+    ? m.pattern.map((l) => l.slice()) : defaultGroove(m.steps);
+  document.getElementById('metro-bpm').textContent = metro.bpm;
+  document.getElementById('metro-slider').value = metro.bpm;
+  document.getElementById('dm-steps').textContent = metro.steps;
+  document.getElementById('dm-click').checked = metro.click;
+  renderDrumGrid();
+})();
 
 // ---- Boot ------------------------------------------------------------------
 

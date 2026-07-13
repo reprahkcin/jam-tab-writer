@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guitar Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=19" />
+  <link rel="stylesheet" href="styles.css?v=20" />
 </head>
 <body>
   <header>
@@ -119,9 +119,9 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
     </section>
   </main>
 
-  <!-- Metronome (floating panel) -->
-  <div id="metro-panel" class="tool-panel" hidden>
-    <div class="tool-head"><span>Metronome</span><button class="tool-close" data-tool="metro" title="Close">&#10005;</button></div>
+  <!-- Metronome + drum machine (floating panel) -->
+  <div id="metro-panel" class="tool-panel tool-panel-wide" hidden>
+    <div class="tool-head"><span>Metronome &amp; Drum Machine</span><button class="tool-close" data-tool="metro" title="Close">&#10005;</button></div>
     <div class="tool-body">
       <div class="metro-tempo">
         <button id="metro-down" title="Slower">&minus;</button>
@@ -131,16 +131,19 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
       </div>
       <input id="metro-slider" class="metro-slider" type="range" min="40" max="240" value="100" />
       <div class="metro-row">
-        <label>Beats
-          <select id="metro-beats">
-            <option value="2">2</option><option value="3">3</option>
-            <option value="4" selected>4</option><option value="6">6</option>
-          </select>
-        </label>
+        <span class="dm-steps-ctl">Steps
+          <button id="dm-steps-down" title="Fewer steps">&minus;</button>
+          <span id="dm-steps">16</span>
+          <button id="dm-steps-up" title="More steps">+</button>
+        </span>
+        <label class="dm-click-lbl"><input type="checkbox" id="dm-click" checked /> Click</label>
         <button id="metro-tap" title="Tap to set the tempo">Tap</button>
       </div>
-      <div id="metro-dots" class="metro-dots"></div>
-      <button id="metro-toggle" class="tool-start">Start</button>
+      <div id="dm-grid" class="dm-grid"></div>
+      <div class="metro-row dm-actions">
+        <button id="metro-toggle" class="tool-start">Start</button>
+        <button id="dm-clear" title="Clear the pattern">Clear</button>
+      </div>
     </div>
   </div>
 
@@ -197,7 +200,7 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=19"></script>
-  <script src="app.js?v=19"></script>
+  <script src="chords.js?v=20"></script>
+  <script src="app.js?v=20"></script>
 </body>
 </html>

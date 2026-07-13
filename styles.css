@@ -792,8 +792,9 @@ body.performing { overflow: hidden; }
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   font-family: system-ui, sans-serif;
 }
+.tool-panel-wide { width: 400px; }
 #tuner-panel { bottom: 16px; }
-#metro-panel:not([hidden]) ~ #tuner-panel { bottom: 250px; } /* stack if both open */
+#metro-panel:not([hidden]) ~ #tuner-panel { bottom: 360px; } /* clear the taller drum panel */
 .tool-panel[hidden] { display: none; }
 .tool-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -823,11 +824,34 @@ body.performing { overflow: hidden; }
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
   border-radius: 5px; padding: 4px 10px; font-size: 13px; cursor: pointer;
 }
-.metro-dots { display: flex; justify-content: center; gap: 8px; min-height: 14px; }
-.mdot { width: 12px; height: 12px; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--line); }
-.mdot.accent { border-color: var(--accent); }
-.mdot.on { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
-.mdot.accent.on { background: #ffd479; box-shadow: 0 0 10px #ffd479; }
+/* Drum machine */
+.dm-steps-ctl { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
+.dm-steps-ctl button {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 5px; width: 22px; height: 22px; cursor: pointer; font-size: 14px; padding: 0;
+}
+#dm-steps { color: var(--text); font-weight: 700; min-width: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+.dm-click-lbl { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); cursor: pointer; }
+.dm-click-lbl input { accent-color: var(--accent); }
+.dm-grid { display: flex; flex-direction: column; gap: 4px; overflow-x: auto; padding-bottom: 2px; }
+.dm-lane { display: flex; align-items: center; gap: 8px; }
+.dm-lane-label { flex: 0 0 44px; font-size: 11px; color: var(--muted); text-align: right; }
+.dm-cells { display: flex; gap: 2px; }
+.dm-cell {
+  width: 17px; height: 20px; border-radius: 3px; padding: 0; flex-shrink: 0; cursor: pointer;
+  background: var(--panel-2); border: 1px solid var(--line);
+}
+.dm-cell.beat { border-color: #565d78; }         /* first of each group of 4 (a beat) */
+.dm-cell.on { background: var(--accent); border-color: var(--accent); }
+.dm-cell.playing { border-color: var(--section); }
+.dm-cell.on.playing { background: #ffd479; box-shadow: 0 0 8px var(--accent); }
+.dm-actions { gap: 8px; }
+.dm-actions .tool-start { flex: 1; }
+#dm-clear {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 8px 14px; cursor: pointer; font-size: 13px;
+}
+#dm-clear:hover { background: #343a4e; }
 
 /* Tuner */
 .tuner-note { font-size: 44px; font-weight: 700; text-align: center; line-height: 1.1; }
