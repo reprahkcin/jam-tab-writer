@@ -762,6 +762,58 @@ function renderPalette() {
   el.palette.querySelectorAll('.chip[data-chord]').forEach((b) =>
     b.addEventListener('click', () => insertAtCursor('[' + b.dataset.chord + ']')));
   document.getElementById('empty-chord-btn').addEventListener('click', insertEmptyChord);
+
+  // Keep the "Replace" dropdown in sync with the chords in use.
+  const sel = document.getElementById('replace-from');
+  if (sel) {
+    const prev = sel.value;
+    sel.innerHTML = list.length
+      ? list.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')
+      : '<option value="">—</option>';
+    if (list.includes(prev)) sel.value = prev;
+  }
+}
+
+// Overwrite the editor's whole text (undo-friendly where supported), then fire
+// input so the preview / palette / save all refresh.
+function replaceEditorText(newText) {
+  const ta = el.editor;
+  if (newText === ta.value) return;
+  ta.focus();
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('insertText', false, newText); } catch { ok = false; }
+  if (!ok) ta.value = newText;
+  ta.selectionStart = ta.selectionEnd = 0;
+  ta.dispatchEvent(new Event('input'));
+}
+
+function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+// Pure transforms (tested in isolation).
+function transposeChordText(text, semi) {
+  return text.replace(/\[([^\[\]]*)\]/g,
+    (m, inner) => (isChord(inner) ? '[' + transposeChord(inner, semi) + ']' : m));
+}
+function replaceChordText(text, from, to) {
+  return text.replace(new RegExp('\\[' + escapeRegex(from) + '\\]', 'g'), '[' + to + ']');
+}
+
+// Transpose every written [chord] in the editor text by `semi` semitones. This
+// rewrites the source (unlike the display-only Transpose stepper).
+function transposeEditorText(semi) {
+  if (!currentSong()) return;
+  replaceEditorText(transposeChordText(el.editor.value, semi));
+}
+
+// Replace every [from] chord token with [to] throughout the editor.
+function replaceChordAll() {
+  if (!currentSong()) return;
+  const from = document.getElementById('replace-from').value;
+  const to = document.getElementById('replace-to').value.trim();
+  if (!from || !to || !el.editor.value.includes('[' + from + ']')) return;
+  replaceEditorText(replaceChordText(el.editor.value, from, to));
+  document.getElementById('replace-to').value = '';
 }
 
 // Insert text at the cursor. cursorOffset (optional) places the caret that many
@@ -1238,6 +1290,13 @@ document.getElementById('clear-chords-btn').addEventListener('click', () => {
   if (!ok) el.editor.value = cleared;
   el.editor.selectionStart = el.editor.selectionEnd = 0;
   el.editor.dispatchEvent(new Event('input'));
+});
+
+document.getElementById('tr-text-down').addEventListener('click', () => transposeEditorText(-1));
+document.getElementById('tr-text-up').addEventListener('click', () => transposeEditorText(1));
+document.getElementById('replace-go').addEventListener('click', replaceChordAll);
+document.getElementById('replace-to').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); replaceChordAll(); }
 });
 
 const importInput = document.getElementById('import-input');

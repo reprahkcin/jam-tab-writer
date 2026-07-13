@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guitar Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=18" />
+  <link rel="stylesheet" href="styles.css?v=19" />
 </head>
 <body>
   <header>
@@ -58,8 +58,17 @@
             <span>Editor</span>
             <span class="hint">
               <button id="pagebreak-btn" class="inline-btn" title="Insert a page break at the cursor">Insert page break</button>
-              &nbsp;&middot;&nbsp;
               <button id="clear-chords-btn" class="inline-btn" title="Remove every [chord] from this chart (keeps lyrics and sections)">Clear chords</button>
+              <span class="etool">Transpose text
+                <button id="tr-text-down" class="inline-btn" title="Transpose the written chords down a semitone">&minus;</button>
+                <button id="tr-text-up" class="inline-btn" title="Transpose the written chords up a semitone">+</button>
+              </span>
+              <span class="etool">Replace
+                <select id="replace-from" class="repl-sel" title="Chord to replace"></select>
+                &rarr;
+                <input id="replace-to" class="repl-in" type="text" placeholder="chord" spellcheck="false" title="Replacement chord" />
+                <button id="replace-go" class="inline-btn" title="Replace every instance of this chord">Replace</button>
+              </span>
             </span>
           </div>
           <div id="section-bar" class="section-bar"></div>
@@ -188,7 +197,7 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=18"></script>
-  <script src="app.js?v=18"></script>
+  <script src="chords.js?v=19"></script>
+  <script src="app.js?v=19"></script>
 </body>
 </html>
