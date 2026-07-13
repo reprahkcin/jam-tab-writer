@@ -854,6 +854,11 @@ body.performing { overflow: hidden; }
 #dm-clear:hover { background: #343a4e; }
 
 /* Tuner */
+.tuner-preset-lbl { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.tuner-preset-lbl select {
+  flex: 1; background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 5px; padding: 3px 6px; font-size: 12px;
+}
 .tuner-note { font-size: 44px; font-weight: 700; text-align: center; line-height: 1.1; }
 .tuner-note.in-tune { color: var(--section); }
 .tuner-meter {

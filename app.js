@@ -396,6 +396,7 @@ function loadPrefs() {
     perform: { cols: 4, font: 22, panels: { chords: false, lead: false, scale: false, harp: false } },
     printCols: 1,
     metro: { bpm: 100, steps: 16, click: true, pattern: null },
+    tunerPreset: 'standard',
   };
   let p = defaults;
   try { p = Object.assign(defaults, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch { /* keep defaults */ }
@@ -1785,7 +1786,17 @@ function setBpm(v) {
 }
 
 // ---- Tuner (microphone + autocorrelation) ----------------------------------
-const tuner = { ctx: null, stream: null, analyser: null, buf: null, raf: null, on: false };
+const tuner = { ctx: null, stream: null, analyser: null, buf: null, raf: null, on: false, preset: 'standard' };
+
+// Tuning presets. `offsets` shifts the in-tune target for each string by cents
+// (keyed by note name + octave, e.g. E2 = low E). null = equal temperament.
+const TUNER_PRESETS = {
+  standard: { name: 'Standard', offsets: null },
+  jamesTaylor: {
+    name: 'James Taylor (sweetened)',
+    offsets: { E2: -12, A2: -10, D3: -8, G3: -4, B3: -6, E4: -3 },
+  },
+};
 
 // Autocorrelation pitch detector. Returns frequency in Hz, or -1 if unclear.
 function detectPitch(buf, sampleRate) {
@@ -1860,12 +1871,23 @@ function updateTuner(freq) {
   const noteEl = document.getElementById('tuner-note');
   const centsEl = document.getElementById('tuner-cents');
   const needle = document.getElementById('tuner-needle');
-  if (freq < 25 || freq > 5000) { needle.style.left = '50%'; needle.classList.remove('in-tune'); return; }
+  if (freq < 25 || freq > 5000) { needle.style.left = '50%'; needle.classList.remove('in-tune'); noteEl.classList.remove('in-tune'); return; }
   const { name, octave, cents } = freqToNote(freq);
+  // Apply the preset's per-string cent offset so the target is the sweetened
+  // pitch, not equal temperament.
+  const key = name + octave;
+  const preset = TUNER_PRESETS[tuner.preset];
+  let offLabel = '';
+  let cts = cents;
+  if (preset && preset.offsets && key in preset.offsets) {
+    const off = preset.offsets[key];
+    cts = cents - off;
+    offLabel = ` · target ${off > 0 ? '+' : ''}${off}¢`;
+  }
   noteEl.textContent = name + octave;
-  const inTune = Math.abs(cents) <= 5;
-  centsEl.textContent = (cents > 0 ? '+' : '') + cents + ' cents' + (inTune ? ' · in tune' : cents > 0 ? ' · sharp' : ' · flat');
-  needle.style.left = (50 + Math.max(-50, Math.min(50, cents))) + '%';
+  const inTune = Math.abs(cts) <= 5;
+  centsEl.textContent = (cts > 0 ? '+' : '') + cts + ' cents' + (inTune ? ' · in tune' : cts > 0 ? ' · sharp' : ' · flat') + offLabel;
+  needle.style.left = (50 + Math.max(-50, Math.min(50, cts))) + '%';
   needle.classList.toggle('in-tune', inTune);
   noteEl.classList.toggle('in-tune', inTune);
 }
@@ -1914,6 +1936,16 @@ document.getElementById('metro-tap').addEventListener('click', () => {
 });
 document.getElementById('metro-toggle').addEventListener('click', () => (metro.on ? metroStop() : metroStart()));
 document.getElementById('tuner-toggle').addEventListener('click', () => (tuner.on ? tunerStop() : tunerStart()));
+(function initTunerPreset() {
+  const tp = document.getElementById('tuner-preset');
+  tuner.preset = TUNER_PRESETS[prefs.tunerPreset] ? prefs.tunerPreset : 'standard';
+  tp.value = tuner.preset;
+  tp.addEventListener('change', () => {
+    tuner.preset = tp.value;
+    prefs.tunerPreset = tp.value;
+    savePrefs();
+  });
+})();
 
 // Restore saved metronome/drum settings, then draw the grid.
 (function initMetro() {
