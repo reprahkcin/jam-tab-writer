@@ -190,14 +190,36 @@ def parse_meta(lines):
             meta['key'] = mk.group(1)
     return meta
 
+HEADER_RE = re.compile(r'https?://|chordify|^\s*(capo|tuning|difficulty|tabbed by|'
+                       r'artist|song|key)\b', re.I)
+
+def find_body_start(lines):
+    """Where the song body begins. Normally the first {Section}; but charts
+    without section labels (e.g. chordify exports) need the header skipped and
+    the body started at the first chord line."""
+    sec = next((i for i, ln in enumerate(lines) if SECTION_RE.match(ln.strip())), None)
+    if sec is not None:
+        return sec
+    for i, ln in enumerate(lines):
+        s = ln.strip()
+        if i == 0 or not s or HEADER_RE.search(s):  # skip title, blanks, header notes
+            continue
+        if is_chord_line(s):
+            return i
+    for i, ln in enumerate(lines):                    # fallback: first real content line
+        s = ln.strip()
+        if i == 0 or not s or HEADER_RE.search(s):
+            continue
+        return i
+    return len(lines)
+
 def to_cho(pdf):
     lines = raw_lines(pdf)
     meta = parse_meta(lines)
     # The filename is the clean song title; OCR of the header is noisy
     # ("I Won't Back Down" -> "| Wont Back Down"), so always prefer the filename.
     meta['title'] = os.path.splitext(os.path.basename(pdf))[0]
-    # Body starts at the first section label (skip the header/diagrams/notes).
-    start = next((i for i, ln in enumerate(lines) if SECTION_RE.match(ln.strip())), len(lines))
+    start = find_body_start(lines)
     body_src = [ln.rstrip() for ln in lines[start:] if not re.match(r'^\s*Page\s*\d', ln)]
 
     out = []
