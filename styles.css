@@ -793,7 +793,7 @@ body.performing { overflow: hidden; }
   font-family: system-ui, sans-serif;
 }
 .tool-panel-wide { width: 400px; }
-#tuner-panel { bottom: 16px; }
+#tuner-panel { bottom: 16px; width: 300px; }
 #metro-panel:not([hidden]) ~ #tuner-panel { bottom: 360px; } /* clear the taller drum panel */
 .tool-panel[hidden] { display: none; }
 .tool-head {
