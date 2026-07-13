@@ -1,0 +1,6 @@
+# macOS
+.DS_Store
+
+# Personal chart library edited via the app's folder mode — keep it out of the
+# public app repo.
+local tab collection/
