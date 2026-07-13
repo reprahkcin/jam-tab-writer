@@ -859,6 +859,13 @@ body.performing { overflow: hidden; }
   flex: 1; background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
   border-radius: 5px; padding: 3px 6px; font-size: 12px;
 }
+.tuner-strings { display: flex; justify-content: center; gap: 6px; }
+.tstr {
+  min-width: 20px; text-align: center; padding: 2px 5px; border-radius: 4px;
+  font-size: 12px; font-weight: 700; font-family: var(--mono);
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
+}
+.tstr.active { background: var(--accent); border-color: var(--accent); color: #1c1e26; }
 .tuner-note { font-size: 44px; font-weight: 700; text-align: center; line-height: 1.1; }
 .tuner-note.in-tune { color: var(--section); }
 .tuner-meter {

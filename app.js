@@ -1788,14 +1788,14 @@ function setBpm(v) {
 // ---- Tuner (microphone + autocorrelation) ----------------------------------
 const tuner = { ctx: null, stream: null, analyser: null, buf: null, raf: null, on: false, preset: 'standard' };
 
-// Tuning presets. `offsets` shifts the in-tune target for each string by cents
-// (keyed by note name + octave, e.g. E2 = low E). null = equal temperament.
+// Tuning presets: each is a list of target strings, low → high, as
+// [note+octave, cent offset]. The offset sweetens the target away from equal
+// temperament (0 = standard pitch). Covers alternate tunings and sweetened ones.
 const TUNER_PRESETS = {
-  standard: { name: 'Standard', offsets: null },
-  jamesTaylor: {
-    name: 'James Taylor (sweetened)',
-    offsets: { E2: -12, A2: -10, D3: -8, G3: -4, B3: -6, E4: -3 },
-  },
+  standard: { name: 'Standard (EADGBE)', strings: [['E2', 0], ['A2', 0], ['D3', 0], ['G3', 0], ['B3', 0], ['E4', 0]] },
+  dropD: { name: 'Drop D (DADGBE)', strings: [['D2', 0], ['A2', 0], ['D3', 0], ['G3', 0], ['B3', 0], ['E4', 0]] },
+  dadgad: { name: 'DADGAD', strings: [['D2', 0], ['A2', 0], ['D3', 0], ['G3', 0], ['A3', 0], ['D4', 0]] },
+  jamesTaylor: { name: 'James Taylor (sweetened)', strings: [['E2', -12], ['A2', -10], ['D3', -8], ['G3', -4], ['B3', -6], ['E4', -3]] },
 };
 
 // Autocorrelation pitch detector. Returns frequency in Hz, or -1 if unclear.
@@ -1871,19 +1871,24 @@ function updateTuner(freq) {
   const noteEl = document.getElementById('tuner-note');
   const centsEl = document.getElementById('tuner-cents');
   const needle = document.getElementById('tuner-needle');
-  if (freq < 25 || freq > 5000) { needle.style.left = '50%'; needle.classList.remove('in-tune'); noteEl.classList.remove('in-tune'); return; }
+  if (freq < 25 || freq > 5000) {
+    needle.style.left = '50%'; needle.classList.remove('in-tune'); noteEl.classList.remove('in-tune');
+    document.querySelectorAll('#tuner-strings .tstr').forEach((s) => s.classList.remove('active'));
+    return;
+  }
   const { name, octave, cents } = freqToNote(freq);
-  // Apply the preset's per-string cent offset so the target is the sweetened
-  // pitch, not equal temperament.
+  // Match the played note to a string in the current tuning and measure against
+  // its (possibly sweetened) target pitch.
   const key = name + octave;
   const preset = TUNER_PRESETS[tuner.preset];
+  const str = preset && preset.strings.find(([n]) => n === key);
   let offLabel = '';
   let cts = cents;
-  if (preset && preset.offsets && key in preset.offsets) {
-    const off = preset.offsets[key];
-    cts = cents - off;
-    offLabel = ` · target ${off > 0 ? '+' : ''}${off}¢`;
+  if (str) {
+    cts = cents - str[1];
+    if (str[1] !== 0) offLabel = ` · target ${str[1] > 0 ? '+' : ''}${str[1]}¢`;
   }
+  document.querySelectorAll('#tuner-strings .tstr').forEach((s) => s.classList.toggle('active', s.dataset.note === key));
   noteEl.textContent = name + octave;
   const inTune = Math.abs(cts) <= 5;
   centsEl.textContent = (cts > 0 ? '+' : '') + cts + ' cents' + (inTune ? ' · in tune' : cts > 0 ? ' · sharp' : ' · flat') + offLabel;
@@ -1936,14 +1941,23 @@ document.getElementById('metro-tap').addEventListener('click', () => {
 });
 document.getElementById('metro-toggle').addEventListener('click', () => (metro.on ? metroStop() : metroStart()));
 document.getElementById('tuner-toggle').addEventListener('click', () => (tuner.on ? tunerStop() : tunerStart()));
+// Show the target strings for the current tuning (low → high) as a reference;
+// the string nearest the played note is highlighted during tuning.
+function renderTunerStrings() {
+  const box = document.getElementById('tuner-strings');
+  box.innerHTML = TUNER_PRESETS[tuner.preset].strings
+    .map(([n]) => `<span class="tstr" data-note="${n}">${n.replace(/[0-9]/g, '')}</span>`).join('');
+}
 (function initTunerPreset() {
   const tp = document.getElementById('tuner-preset');
   tuner.preset = TUNER_PRESETS[prefs.tunerPreset] ? prefs.tunerPreset : 'standard';
   tp.value = tuner.preset;
+  renderTunerStrings();
   tp.addEventListener('change', () => {
     tuner.preset = tp.value;
     prefs.tunerPreset = tp.value;
     savePrefs();
+    renderTunerStrings();
   });
 })();
 

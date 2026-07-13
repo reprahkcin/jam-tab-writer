@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guitar Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=21" />
+  <link rel="stylesheet" href="styles.css?v=22" />
 </head>
 <body>
   <header>
@@ -153,10 +153,13 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
     <div class="tool-body">
       <label class="tuner-preset-lbl">Tuning
         <select id="tuner-preset">
-          <option value="standard">Standard</option>
+          <option value="standard">Standard (EADGBE)</option>
+          <option value="dropD">Drop D (DADGBE)</option>
+          <option value="dadgad">DADGAD</option>
           <option value="jamesTaylor">James Taylor (sweetened)</option>
         </select>
       </label>
+      <div id="tuner-strings" class="tuner-strings"></div>
       <div id="tuner-note" class="tuner-note">&mdash;</div>
       <div class="tuner-meter">
         <div class="tuner-ticks"></div>
@@ -206,7 +209,7 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=21"></script>
-  <script src="app.js?v=21"></script>
+  <script src="chords.js?v=22"></script>
+  <script src="app.js?v=22"></script>
 </body>
 </html>
