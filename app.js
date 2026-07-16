@@ -139,10 +139,42 @@ function newId() {
 // permission click) next session.
 
 let mode = 'local';           // 'local' | 'folder'
-let libraries = [];           // [{ id, name, handle }] — open folders
+let libraries = [];           // [{ id, name, handle, kind, color }] — open folders
 let activeLibId = null;       // folder that + New / Import target
 const fileHandles = {};       // song id -> FileSystemFileHandle
 const collapsed = new Set();  // library ids collapsed in the sidebar
+
+// Every storage system carries an accent colour so charts from different places
+// never look like they belong together. The Collection (your managed home
+// folder) is always the same green; external folders cycle through a palette;
+// browser (localStorage) is neutral grey.
+const COLLECTION_DIR = 'GuitarTabWriterCollection';
+const COLLECTION_COLOR = '#5db073';
+const BROWSER_COLOR = '#8b90a3';
+const EXTERNAL_PALETTE = ['#5b9dd9', '#e0a458', '#a986d6', '#4bb5a8', '#d97aa6', '#c98b4b'];
+function nextExternalColor() {
+  const n = libraries.filter((l) => l.kind === 'external').length;
+  return EXTERNAL_PALETTE[n % EXTERNAL_PALETTE.length];
+}
+// Build a library record from a directory handle. Collection is the managed
+// home ("Collection"); anything else is an ad-hoc external folder.
+function makeLib(handle, kind) {
+  return {
+    id: newLibId(),
+    name: kind === 'collection' ? 'Collection' : handle.name,
+    handle,
+    kind,
+    color: kind === 'collection' ? COLLECTION_COLOR : nextExternalColor(),
+  };
+}
+// The colour + label for whatever system is active right now (for breadcrumb).
+function systemInfo() {
+  if (mode !== 'folder') return { color: BROWSER_COLOR, label: 'Browser', kind: 'browser' };
+  const lib = activeLib();
+  return lib
+    ? { color: lib.color, label: lib.name, kind: lib.kind }
+    : { color: BROWSER_COLOR, label: 'Browser', kind: 'browser' };
+}
 
 const IDB = { name: 'gtw', store: 'kv' };
 function idbReq(fn) {
@@ -203,7 +235,7 @@ async function loadLibrarySongs(lib) {
 }
 
 function persistLibraries() {
-  return idbSet('libraries', libraries.map((l) => ({ id: l.id, name: l.name, handle: l.handle })));
+  return idbSet('libraries', libraries.map((l) => ({ id: l.id, name: l.name, handle: l.handle, kind: l.kind, color: l.color })));
 }
 
 // Turn a title into a safe, unique .cho filename within a folder.
@@ -228,15 +260,16 @@ function setActiveLib(libId) {
   updateModeUI();          // refreshes the "new →" bar and re-renders the list
 }
 
-// "Open folder" in local mode: copy browser songs into the chosen folder and
-// switch to editing files on disk.
-async function establishCollection(handle) {
+// First folder opened from browser mode: copy browser songs into it and switch
+// to editing files on disk. `lib` already carries kind + colour.
+async function adoptFolderFromLocal(lib) {
+  const handle = lib.handle;
   const localSongs = songs.slice();
+  const dest = lib.kind === 'collection' ? 'your Collection' : `"${handle.name}"`;
   if (localSongs.length &&
-      !confirm(`Copy your ${localSongs.length} browser song${localSongs.length === 1 ? '' : 's'} into "${handle.name}" as .cho files and switch to editing files on disk?\n\n(Your browser copy is kept as a backup.)`)) {
+      !confirm(`Copy your ${localSongs.length} browser song${localSongs.length === 1 ? '' : 's'} into ${dest} as .cho files and switch to editing files on disk?\n\n(Your browser copy is kept as a backup.)`)) {
     return;
   }
-  const lib = { id: newLibId(), name: handle.name, handle };
   const onDisk = await loadLibrarySongs(lib);   // .cho already sitting in the folder
   mode = 'folder';
   libraries = [lib];
@@ -258,14 +291,13 @@ async function establishCollection(handle) {
   if (songs.length) selectSong(songs[0].id);
 }
 
-// "Open folder" in folder mode: add another library, leaving the rest open.
-async function addLibrary(handle) {
+// Add another already-built library alongside the open ones (folder mode).
+async function addLibrary(lib) {
   for (const l of libraries) {
-    let same = l.handle === handle;
-    try { same = same || await handle.isSameEntry(l.handle); } catch { /* ignore */ }
-    if (same) { alert(`"${handle.name}" is already open.`); return; }
+    let same = l.handle === lib.handle;
+    try { same = same || await lib.handle.isSameEntry(l.handle); } catch { /* ignore */ }
+    if (same) { alert(`"${l.name}" is already open.`); setActiveLib(l.id); return; }
   }
-  const lib = { id: newLibId(), name: handle.name, handle };
   const loaded = await loadLibrarySongs(lib);
   libraries.push(lib);
   songs.push(...loaded);
@@ -273,6 +305,12 @@ async function addLibrary(handle) {
   await persistLibraries();
   updateModeUI();
   if (loaded.length) selectSong(loaded[0].id); else renderList();
+}
+
+// Bring a freshly-built library into the app, whichever mode we're in.
+async function openLibrary(lib) {
+  if (mode === 'folder') await addLibrary(lib);
+  else await adoptFolderFromLocal(lib);
 }
 
 async function openFolder() {
@@ -284,8 +322,27 @@ async function openFolder() {
   try {
     handle = await window.showDirectoryPicker({ mode: 'readwrite' });
   } catch { return; } // user cancelled
-  if (mode === 'folder') await addLibrary(handle);
-  else await establishCollection(handle);
+  await openLibrary(makeLib(handle, 'external'));
+}
+
+// Set up (or focus) the managed Collection: a GuitarTabWriterCollection folder
+// in a location you pick once. The picker opens in Documents by default.
+async function setupCollection() {
+  if (!window.showDirectoryPicker) {
+    alert('The Collection needs Chrome or Edge, served over http://localhost or https:// (not file://).');
+    return;
+  }
+  const existing = libraries.find((l) => l.kind === 'collection');
+  if (existing) { setActiveLib(existing.id); return; } // already open — just target it
+  let parent;
+  try {
+    parent = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'documents', id: 'gtw-collection' });
+  } catch { return; } // cancelled
+  let handle;
+  try {
+    handle = await parent.getDirectoryHandle(COLLECTION_DIR, { create: true });
+  } catch { alert(`Could not create "${COLLECTION_DIR}" in that location.`); return; }
+  await openLibrary(makeLib(handle, 'collection'));
 }
 
 // Re-scan one library from disk (picks up edits / new / removed files made
@@ -344,20 +401,53 @@ function schedulePersist() {
   // user hits Save (which writes it to the folder). Don't claim it's "Saved".
   if (mode === 'folder' && s.draft && !fileHandles[s.id]) {
     el.status.textContent = 'Draft · Save to write to folder';
+    renderBreadcrumb('Draft — not yet saved to folder');
     return;
   }
   el.status.textContent = 'Saving…';
+  renderBreadcrumb('Saving…');
   clearTimeout(persistTimer);
   persistTimer = setTimeout(async () => {
     if (mode === 'folder') {
-      try { await writeSong(s); el.status.textContent = 'Saved · ' + (s.path || 'file'); }
-      catch { el.status.textContent = 'Save failed'; }
+      try { await writeSong(s); el.status.textContent = 'Saved · ' + (s.path || 'file'); renderBreadcrumb('Saved ✓'); }
+      catch { el.status.textContent = 'Save failed'; renderBreadcrumb('Save failed'); }
     } else {
       saveSongs(songs);
       el.status.textContent = 'Saved';
+      renderBreadcrumb('Saved ✓');
     }
     renderList();
   }, mode === 'folder' ? 600 : 400);
+}
+
+// The breadcrumb under the title: which system + folder path the current chart
+// lives in, plus its save state. Colour matches the sidebar system colour.
+function renderBreadcrumb(stateText) {
+  const bc = el.breadcrumb;
+  if (!bc) return;
+  const s = currentSong();
+  if (!s) { bc.hidden = true; bc.innerHTML = ''; return; }
+  const sys = systemInfo();
+  const loc = [
+    `<span class="bc-dot" style="background:${sys.color}"></span>`,
+    `<span class="bc-sys">${escapeHtml(sys.label)}</span>`,
+  ];
+  if (mode === 'folder') {
+    const segs = (s.path || '').split('/');
+    const file = segs.pop() || '';
+    for (const seg of segs)
+      loc.push(`<span class="bc-sep">›</span><span class="bc-seg">${escapeHtml(seg)}</span>`);
+    loc.push(`<span class="bc-sep">›</span><span class="bc-file">${escapeHtml(file)}</span>`);
+  }
+  if (stateText === undefined)
+    stateText = s.draft ? 'Draft — not yet saved to folder'
+      : (mode === 'folder' ? '' : 'Autosaves to this browser');
+  let cls = '';
+  if (/^Saved/.test(stateText)) cls = 'ok';
+  else if (/fail|Draft/i.test(stateText)) cls = 'warn';
+  const chip = stateText ? `<span class="bc-state ${cls}">${escapeHtml(stateText)}</span>` : '';
+  bc.innerHTML = `<span class="bc-loc">${loc.join('')}</span>${chip}`;
+  bc.hidden = false;
 }
 
 // ---- App state -------------------------------------------------------------
@@ -376,6 +466,7 @@ const el = {
   trAmount: document.getElementById('tr-amount'),
   capoAmount: document.getElementById('capo-amount'),
   status: document.getElementById('save-status'),
+  breadcrumb: document.getElementById('save-breadcrumb'),
   capoBanner: document.getElementById('capo-banner'),
   diagrams: document.getElementById('chord-diagrams'),
   leadDiagrams: document.getElementById('lead-diagrams'),
@@ -449,6 +540,7 @@ function selectSong(id) {
   renderPreview();
   renderPalette();
   renderList();
+  renderBreadcrumb();
 }
 
 // Two views of every chord:
@@ -914,10 +1006,16 @@ function renderList() {
     const isCollapsed = collapsed.has(lib.id);
     const isActive = lib.id === activeLibId;
     const header = document.createElement('li');
-    header.className = 'lib-header' + (isCollapsed ? ' collapsed' : '') + (isActive ? ' active-lib' : '');
+    header.className = 'lib-header' + (isCollapsed ? ' collapsed' : '') + (isActive ? ' active-lib' : '') +
+      (lib.kind === 'collection' ? ' lib-collection' : '');
+    header.style.setProperty('--lib-color', lib.color);
+    const kindTitle = lib.kind === 'collection'
+      ? 'Your managed Collection'
+      : 'External folder';
     header.innerHTML =
       `<span class="lib-caret" title="${isCollapsed ? 'Expand' : 'Collapse'}">${isCollapsed ? '▸' : '▾'}</span>` +
-      `<span class="lib-name" title="Make this the target folder for + New / Import">${escapeHtml(lib.name)}</span>` +
+      `<span class="lib-dot" title="${kindTitle}"></span>` +
+      `<span class="lib-name" title="Make this the target for + New / Import">${escapeHtml(lib.name)}</span>` +
       `<span class="lib-count">${libSongs.length}</span>` +
       `<button class="lib-btn lib-reload" title="Reload this folder from disk">↻</button>` +
       `<button class="lib-btn lib-close" title="Close this folder">×</button>`;
@@ -1233,6 +1331,7 @@ function computePrintFont() {
 // Folder mode controls.
 const reopenBtn = document.getElementById('reopen-btn');
 document.getElementById('folder-btn').addEventListener('click', openFolder);
+document.getElementById('collection-btn').addEventListener('click', setupCollection);
 document.getElementById('save-btn').addEventListener('click', saveCurrentNow);
 
 async function saveCurrentNow() {
@@ -1245,12 +1344,13 @@ async function saveCurrentNow() {
       const ok = await materializeDraft(s);
       if (!ok) return;
     }
-    try { await writeSong(s); s.draft = false; el.status.textContent = 'Saved · ' + (s.path || 'file'); renderList(); }
-    catch { el.status.textContent = 'Save failed'; }
+    try { await writeSong(s); s.draft = false; el.status.textContent = 'Saved · ' + (s.path || 'file'); renderList(); renderBreadcrumb('Saved ✓'); }
+    catch { el.status.textContent = 'Save failed'; renderBreadcrumb('Save failed'); }
   } else {
     s.draft = false;
     saveSongs(songs);
     el.status.textContent = 'Saved';
+    renderBreadcrumb('Saved ✓');
   }
 }
 
@@ -1284,13 +1384,15 @@ function updateModeUI() {
   if (folder) {
     bar.hidden = false;
     const active = activeLib();
-    bar.innerHTML = `<span class="fb-name" title="+ New and Import create files here — click a folder name to change">` +
-      `+ New → ${escapeHtml(active ? active.name : '—')}</span>`;
+    const dot = active ? `<span class="fb-dot" style="background:${active.color}"></span>` : '';
+    bar.innerHTML = `<span class="fb-name" title="+ New, Import and PDF drops create files here — click a folder to change">` +
+      `${dot}+ New → ${escapeHtml(active ? active.name : '—')}</span>`;
   } else {
     bar.hidden = true;
     bar.innerHTML = '';
   }
   renderList();
+  renderBreadcrumb();
 }
 
 // Cmd/Ctrl+S saves the current chart immediately.
@@ -2199,7 +2301,16 @@ async function reconnectLibraries(entries) {
   for (const entry of entries) {
     if (libraries.some((l) => l.id === entry.id)) continue;
     if (mode === 'local') { mode = 'folder'; songs = []; currentId = null; }
-    const lib = { id: entry.id || newLibId(), name: entry.name, handle: entry.handle };
+    // Legacy saved folders predate kind/colour — treat them as external and
+    // give them a palette colour.
+    const kind = entry.kind || 'external';
+    const lib = {
+      id: entry.id || newLibId(),
+      name: entry.name,
+      handle: entry.handle,
+      kind,
+      color: entry.color || (kind === 'collection' ? COLLECTION_COLOR : nextExternalColor()),
+    };
     const loaded = await loadLibrarySongs(lib);
     libraries.push(lib);
     songs.push(...loaded);
