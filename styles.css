@@ -180,6 +180,44 @@ main { display: flex; flex: 1; min-height: 0; }
 .lib-close:hover { color: #ff8080; }
 .song-item.in-lib { margin-left: 10px; }
 
+/* Subfolder rows in the library tree. */
+.subfolder-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: default;
+}
+.subfolder-row.active-lib {
+  background: var(--panel-2);
+  border-radius: 6px;
+  box-shadow: inset 3px 0 0 var(--lib-color, var(--accent));
+}
+.sf-name {
+  cursor: pointer;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-weight: 500;
+}
+.sf-name::before {
+  content: '';
+  display: inline-block;
+  width: 7px; height: 6px;
+  margin-right: 5px;
+  border-radius: 1px 1px 0 0;
+  background: var(--lib-color, var(--accent));
+  opacity: 0.75;
+  vertical-align: baseline;
+}
+.subfolder-row .lib-btn { opacity: 0; }
+.subfolder-row:hover .lib-btn { opacity: 1; }
+.sf-add:hover { color: var(--lib-color, var(--accent)); }
+
 /* Colour dot in the "+ New →" bar, matching the active folder. */
 .folder-bar .fb-dot {
   display: inline-block;

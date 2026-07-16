@@ -139,10 +139,11 @@ function newId() {
 // permission click) next session.
 
 let mode = 'local';           // 'local' | 'folder'
-let libraries = [];           // [{ id, name, handle, kind, color }] — open folders
+let libraries = [];           // [{ id, name, handle, kind, color, subdirs }] — open folders
 let activeLibId = null;       // folder that + New / Import target
+let activeSubpath = '';       // subfolder within that folder that new charts target
 const fileHandles = {};       // song id -> FileSystemFileHandle
-const collapsed = new Set();  // library ids collapsed in the sidebar
+const collapsed = new Set();  // collapsed nodes: libId, or libId+'\0'+subpath
 
 // Every storage system carries an accent colour so charts from different places
 // never look like they belong together. The Collection (your managed home
@@ -206,20 +207,24 @@ function idbSet(key, val) {
 let libCounter = 1;
 function newLibId() { return 'lib' + (libCounter++).toString(36) + newId(); }
 
-async function scanDir(dir, prefix, out) {
+async function scanDir(dir, prefix, out, dirs) {
   for await (const entry of dir.values()) {
     if (entry.kind === 'file' && entry.name.endsWith('.cho')) {
       out.push({ name: entry.name, path: prefix + entry.name, handle: entry });
     } else if (entry.kind === 'directory') {
-      await scanDir(entry, prefix + entry.name + '/', out);
+      if (dirs) dirs.add(prefix + entry.name);            // remember (incl. empty)
+      await scanDir(entry, prefix + entry.name + '/', out, dirs);
     }
   }
 }
 
 // Read every .cho in a library's folder into song objects tagged with libId.
+// Also records the folder's subdirectory paths (so empty ones show in the tree).
 async function loadLibrarySongs(lib) {
   const found = [];
-  await scanDir(lib.handle, '', found);
+  const dirs = new Set();
+  await scanDir(lib.handle, '', found, dirs);
+  lib.subdirs = dirs;
   found.sort((a, b) => a.path.localeCompare(b.path));
   const loaded = [];
   for (const f of found) {
@@ -255,9 +260,35 @@ function activeLib() {
 }
 
 function setActiveLib(libId) {
+  setActiveTarget(libId, '');
+}
+
+// Point + New / Import / PDF-drop at a specific folder AND subfolder.
+function setActiveTarget(libId, subpath) {
   activeLibId = libId;
-  collapsed.delete(libId); // expand so you can see / fill it
+  activeSubpath = subpath || '';
+  collapsed.delete(libId); // expand the library so you can see / fill it
+  // expand each ancestor folder down to the target
+  let acc = '';
+  for (const seg of activeSubpath.split('/').filter(Boolean)) {
+    acc = acc ? acc + '/' + seg : seg;
+    collapsed.delete(libId + '\0' + acc);
+  }
   updateModeUI();          // refreshes the "new →" bar and re-renders the list
+}
+
+// Walk (optionally creating) the directory handle for a subpath inside a library.
+async function resolveDir(lib, subpath, create) {
+  let dir = lib.handle;
+  for (const seg of (subpath || '').split('/').filter(Boolean)) {
+    dir = await dir.getDirectoryHandle(seg, { create: !!create });
+  }
+  return dir;
+}
+
+// Join a subfolder path and filename into a library-relative path.
+function joinPath(subpath, fname) {
+  return subpath ? subpath + '/' + fname : fname;
 }
 
 // First folder opened from browser mode: copy browser songs into it and switch
@@ -531,7 +562,12 @@ function selectSong(id) {
   }
   currentId = id;
   if (mode === 'local') localStorage.setItem(LAST_KEY, id);
-  else { if (s.libId) activeLibId = s.libId; if (s.path) idbSet('lastPath', s.path); }
+  else {
+    // Selecting a chart points the new-file target at its folder + subfolder, so
+    // + New / Import / PDF-drop land next to what you're looking at.
+    if (s.libId) { activeLibId = s.libId; activeSubpath = (s.path || '').split('/').slice(0, -1).join('/'); }
+    if (s.path) idbSet('lastPath', s.path);
+  }
   el.title.value = s.title;
   el.artist.value = s.artist;
   el.editor.value = s.body;
@@ -967,10 +1003,14 @@ function initSectionBar() {
   document.getElementById('empty-section-btn').addEventListener('click', insertEmptySection);
 }
 
-function songItem(s, deletable) {
+function songItem(s, deletable, depth) {
   const li = document.createElement('li');
   li.className = 'song-item' + (deletable ? '' : ' in-lib') + (s.id === currentId ? ' active' : '') + (s.draft ? ' draft' : '');
-  const sub = s.draft ? 'not saved yet' : (mode === 'folder' ? (s.path || '') : (s.artist || ''));
+  if (depth) li.style.paddingLeft = (10 + depth * 14) + 'px';
+  // In a folder tree the subfolders convey location, so the leaf shows just its
+  // own filename (not the whole path).
+  const sub = s.draft ? 'not saved yet'
+    : (mode === 'folder' ? ((s.path || '').split('/').pop() || '') : (s.artist || ''));
   li.innerHTML =
     `<span class="st"><b>${escapeHtml(s.title || 'Untitled')}</b>` +
     `<small>${escapeHtml(sub)}</small></span>` +
@@ -981,9 +1021,63 @@ function songItem(s, deletable) {
   return li;
 }
 
-function toggleCollapse(libId) {
-  if (collapsed.has(libId)) collapsed.delete(libId); else collapsed.add(libId);
+function toggleCollapse(key) {
+  if (collapsed.has(key)) collapsed.delete(key); else collapsed.add(key);
   renderList();
+}
+
+// Nested tree of a library's songs, keyed by subfolder segment. Empty
+// subfolders (from lib.subdirs) are included so you can target them.
+function buildLibTree(lib) {
+  const root = { folders: new Map(), songs: [] };
+  const descend = (segs) => {
+    let node = root;
+    for (const seg of segs.filter(Boolean)) {
+      if (!node.folders.has(seg)) node.folders.set(seg, { folders: new Map(), songs: [] });
+      node = node.folders.get(seg);
+    }
+    return node;
+  };
+  for (const s of songs.filter((x) => x.libId === lib.id)) {
+    const segs = (s.path || '').split('/');
+    segs.pop(); // drop filename
+    descend(segs).songs.push(s);
+  }
+  for (const sub of (lib.subdirs || [])) descend(sub.split('/'));
+  return root;
+}
+
+function countUnder(node) {
+  let n = node.songs.length;
+  for (const child of node.folders.values()) n += countUnder(child);
+  return n;
+}
+
+// Render one folder's contents (subfolders then songs), recursing into subs.
+function renderTreeNode(lib, node, subpath, depth) {
+  for (const name of [...node.folders.keys()].sort((a, b) => a.localeCompare(b))) {
+    const child = node.folders.get(name);
+    const childPath = subpath ? subpath + '/' + name : name;
+    const key = lib.id + '\0' + childPath;
+    const isCollapsed = collapsed.has(key);
+    const isTarget = activeLibId === lib.id && activeSubpath === childPath;
+    const row = document.createElement('li');
+    row.className = 'subfolder-row' + (isTarget ? ' active-lib' : '');
+    row.style.setProperty('--lib-color', lib.color);
+    row.style.paddingLeft = (6 + depth * 14) + 'px';
+    row.innerHTML =
+      `<span class="lib-caret" title="${isCollapsed ? 'Expand' : 'Collapse'}">${isCollapsed ? '▸' : '▾'}</span>` +
+      `<span class="sf-name" title="Make this the target for + New / Import">${escapeHtml(name)}</span>` +
+      `<span class="lib-count">${countUnder(child)}</span>` +
+      `<button class="lib-btn sf-add" title="New subfolder inside">+</button>`;
+    row.querySelector('.lib-caret').addEventListener('click', (e) => { e.stopPropagation(); toggleCollapse(key); });
+    row.querySelector('.sf-name').addEventListener('click', () => setActiveTarget(lib.id, childPath));
+    row.querySelector('.sf-add').addEventListener('click', (e) => { e.stopPropagation(); createSubfolder(lib, childPath); });
+    el.list.appendChild(row);
+    if (!isCollapsed) renderTreeNode(lib, child, childPath, depth + 1);
+  }
+  for (const s of node.songs.sort((a, b) => (a.path || '').localeCompare(b.path || '')))
+    el.list.appendChild(songItem(s, false, depth));
 }
 
 function renderList() {
@@ -997,30 +1091,29 @@ function renderList() {
     return;
   }
 
-  // Folder mode: group by library, each with a collapsible header. Files can't
-  // be deleted from the tool, so folder songs carry no delete button.
+  // Folder mode: one collapsible tree per library. The header is the library
+  // root; subfolders nest below. Files can't be deleted from the tool, so folder
+  // songs carry no delete button.
   for (const lib of libraries) {
-    const libSongs = songs
-      .filter((s) => s.libId === lib.id)
-      .sort((a, b) => (a.path || '').localeCompare(b.path || ''));
+    const total = songs.filter((s) => s.libId === lib.id).length;
     const isCollapsed = collapsed.has(lib.id);
-    const isActive = lib.id === activeLibId;
+    const isTarget = lib.id === activeLibId && !activeSubpath;
     const header = document.createElement('li');
-    header.className = 'lib-header' + (isCollapsed ? ' collapsed' : '') + (isActive ? ' active-lib' : '') +
+    header.className = 'lib-header' + (isCollapsed ? ' collapsed' : '') + (isTarget ? ' active-lib' : '') +
       (lib.kind === 'collection' ? ' lib-collection' : '');
     header.style.setProperty('--lib-color', lib.color);
-    const kindTitle = lib.kind === 'collection'
-      ? 'Your managed Collection'
-      : 'External folder';
+    const kindTitle = lib.kind === 'collection' ? 'Your managed Collection' : 'External folder';
     header.innerHTML =
       `<span class="lib-caret" title="${isCollapsed ? 'Expand' : 'Collapse'}">${isCollapsed ? '▸' : '▾'}</span>` +
       `<span class="lib-dot" title="${kindTitle}"></span>` +
       `<span class="lib-name" title="Make this the target for + New / Import">${escapeHtml(lib.name)}</span>` +
-      `<span class="lib-count">${libSongs.length}</span>` +
+      `<span class="lib-count">${total}</span>` +
+      `<button class="lib-btn sf-add" title="New subfolder">+</button>` +
       `<button class="lib-btn lib-reload" title="Reload this folder from disk">↻</button>` +
       `<button class="lib-btn lib-close" title="Close this folder">×</button>`;
     header.querySelector('.lib-caret').addEventListener('click', () => toggleCollapse(lib.id));
-    header.querySelector('.lib-name').addEventListener('click', () => setActiveLib(lib.id));
+    header.querySelector('.lib-name').addEventListener('click', () => setActiveTarget(lib.id, ''));
+    header.querySelector('.sf-add').addEventListener('click', (e) => { e.stopPropagation(); createSubfolder(lib, ''); });
     header.querySelector('.lib-reload').addEventListener('click', (e) => {
       e.stopPropagation(); reloadLibrary(lib.id);
     });
@@ -1029,8 +1122,24 @@ function renderList() {
       if (confirm(`Close "${lib.name}"? The files stay on disk; the folder is just removed from the sidebar.`)) closeLibrary(lib.id);
     });
     el.list.appendChild(header);
-    if (!isCollapsed) for (const s of libSongs) el.list.appendChild(songItem(s, false));
+    if (!isCollapsed) renderTreeNode(lib, buildLibTree(lib), '', 1);
   }
+}
+
+// Create a subfolder on disk inside a library (or a nested folder) and target it.
+async function createSubfolder(lib, parentSubpath) {
+  const inside = parentSubpath ? ` inside "${parentSubpath}"` : ` in "${lib.name}"`;
+  const name = prompt(`New subfolder name${inside}:`, '');
+  if (name === null) return;
+  const clean = name.trim().replace(/[\\/]+/g, '-');
+  if (!clean) return;
+  try {
+    const parent = await resolveDir(lib, parentSubpath, true);
+    await parent.getDirectoryHandle(clean, { create: true });
+  } catch { alert('Could not create the subfolder.'); return; }
+  if (!lib.subdirs) lib.subdirs = new Set();
+  lib.subdirs.add(parentSubpath ? parentSubpath + '/' + clean : clean);
+  setActiveTarget(lib.id, parentSubpath ? parentSubpath + '/' + clean : clean);
 }
 
 function deleteSong(id) {
@@ -1052,14 +1161,17 @@ async function createSong() {
   if (mode === 'folder') {
     const lib = activeLib();
     if (!lib) { alert('Open a folder first.'); return; }
-    const name = prompt(`New chart file name in "${lib.name}":`, 'new-song.cho');
+    const where = lib.name + (activeSubpath ? ' / ' + activeSubpath : '');
+    const name = prompt(`New chart file name in "${where}":`, 'new-song.cho');
     if (!name) return;
     const fname = name.endsWith('.cho') ? name : name + '.cho';
     let handle;
-    try { handle = await lib.handle.getFileHandle(fname, { create: true }); }
-    catch { alert('Could not create the file.'); return; }
+    try {
+      const dir = await resolveDir(lib, activeSubpath, true);
+      handle = await dir.getFileHandle(fname, { create: true });
+    } catch { alert('Could not create the file.'); return; }
     const s = blankSong();
-    s.path = fname;
+    s.path = joinPath(activeSubpath, fname);
     s.libId = lib.id;
     fileHandles[s.id] = handle;
     songs.push(s);
@@ -1166,17 +1278,33 @@ function exportSong() {
   URL.revokeObjectURL(url);
 }
 
+// Filenames (lowercased basenames) already living directly in a library's
+// subfolder — for de-duplicating a new file's name within that folder.
+function usedNamesIn(lib, subpath) {
+  const prefix = subpath ? subpath + '/' : '';
+  const set = new Set();
+  for (const x of songs) {
+    if (x.libId !== lib.id) continue;
+    const p = x.path || '';
+    if (!p.startsWith(prefix)) continue;
+    const rest = p.slice(prefix.length);
+    if (rest.indexOf('/') === -1) set.add(rest.toLowerCase());
+  }
+  return set;
+}
+
 async function importText(text, fallbackTitle) {
   const s = parseCho(text, fallbackTitle);
   if (mode === 'folder') {
     const lib = activeLib();
     if (!lib) { alert('Open a folder first.'); return; }
-    const used = new Set(songs.filter((x) => x.libId === lib.id).map((x) => (x.path || '').toLowerCase()));
-    const fname = slugFilename(s.title || fallbackTitle, used);
+    const fname = slugFilename(s.title || fallbackTitle, usedNamesIn(lib, activeSubpath));
     let handle;
-    try { handle = await lib.handle.getFileHandle(fname, { create: true }); }
-    catch { alert('Could not create the file.'); return; }
-    s.path = fname;
+    try {
+      const dir = await resolveDir(lib, activeSubpath, true);
+      handle = await dir.getFileHandle(fname, { create: true });
+    } catch { alert('Could not create the file.'); return; }
+    s.path = joinPath(activeSubpath, fname);
     s.libId = lib.id;
     fileHandles[s.id] = handle;
     songs.push(s);
@@ -1205,6 +1333,7 @@ function importDraft(text, fallbackTitle) {
   s.draft = true;
   const lib = activeLib();
   s.libId = lib ? lib.id : null;
+  s.subpath = activeSubpath;   // remember where Save should write it
   songs.push(s);
   selectSong(s.id);
   renderList();
@@ -1360,13 +1489,16 @@ async function materializeDraft(s) {
   commit(); // fold the latest title/body edits into s before choosing a filename
   const lib = libraries.find((l) => l.id === s.libId) || activeLib();
   if (!lib) { alert('Open a folder first, then Save.'); return false; }
-  const used = new Set(songs.filter((x) => x.libId === lib.id && x.path).map((x) => x.path.toLowerCase()));
-  const fname = slugFilename(s.title || 'untitled', used);
+  const subpath = s.subpath || '';
+  const fname = slugFilename(s.title || 'untitled', usedNamesIn(lib, subpath));
   let handle;
-  try { handle = await lib.handle.getFileHandle(fname, { create: true }); }
-  catch { alert('Could not create the file in this folder.'); return false; }
-  s.path = fname;
+  try {
+    const dir = await resolveDir(lib, subpath, true);
+    handle = await dir.getFileHandle(fname, { create: true });
+  } catch { alert('Could not create the file in this folder.'); return false; }
+  s.path = joinPath(subpath, fname);
   s.libId = lib.id;
+  delete s.subpath;
   fileHandles[s.id] = handle;
   return true;
 }
@@ -1385,8 +1517,9 @@ function updateModeUI() {
     bar.hidden = false;
     const active = activeLib();
     const dot = active ? `<span class="fb-dot" style="background:${active.color}"></span>` : '';
+    const target = active ? active.name + (activeSubpath ? ' / ' + activeSubpath : '') : '—';
     bar.innerHTML = `<span class="fb-name" title="+ New, Import and PDF drops create files here — click a folder to change">` +
-      `${dot}+ New → ${escapeHtml(active ? active.name : '—')}</span>`;
+      `${dot}+ New → ${escapeHtml(target)}</span>`;
   } else {
     bar.hidden = true;
     bar.innerHTML = '';
