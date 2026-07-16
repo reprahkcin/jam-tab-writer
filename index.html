@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guitar Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=23" />
+  <link rel="stylesheet" href="styles.css?v=25" />
 </head>
 <body>
   <header>
@@ -20,7 +20,7 @@
       <button id="tuner-btn" title="Instrument tuner (uses your microphone)">Tuner</button>
       <button id="perform-btn" title="Full-screen performance view">Perform</button>
       <button id="print-btn" title="Print / save as PDF">Print</button>
-      <input type="file" id="import-input" accept=".txt,.cho,.chordpro,.crd,text/plain" hidden />
+      <input type="file" id="import-input" accept=".txt,.cho,.chordpro,.crd,.pdf,text/plain,application/pdf" hidden />
     </div>
   </header>
 
@@ -170,6 +170,17 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
     </div>
   </div>
 
+  <!-- PDF drop / conversion overlay. Doubles as the drag hint and the OCR
+       progress display; script wiring lives in app.js (convertPdfFile). -->
+  <div id="pdf-overlay" class="pdf-overlay" hidden>
+    <div class="pdf-card">
+      <div id="pdf-spinner" class="pdf-spinner" hidden></div>
+      <div class="pdf-icon">&#127925;</div>
+      <div id="pdf-msg" class="pdf-msg">Drop a PDF chart to convert it</div>
+      <div id="pdf-sub" class="pdf-sub">Chords-over-lyrics PDFs become an editable draft</div>
+    </div>
+  </div>
+
   <!-- Full-screen performance view. Hidden until "Perform" is clicked. -->
   <div id="perform-overlay" class="perform-overlay" hidden>
     <div id="perform-bar" class="perform-bar">
@@ -209,7 +220,8 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=23"></script>
-  <script src="app.js?v=23"></script>
+  <script src="chords.js?v=25"></script>
+  <script src="pdf2cho.js?v=25"></script>
+  <script src="app.js?v=25"></script>
 </body>
 </html>

@@ -60,6 +60,24 @@ The on-disk format is the same `.cho` used by Import/Export: a `{title}` /
 `{artist}` / `{key}` / `{capo}` / `{transpose}` directive block, then the body
 with inline `[chord]` tags. Round-trips losslessly.
 
+## Convert a PDF chart
+
+Drag a chords-over-lyrics PDF anywhere onto the window (or pick it via
+**Import**) and it's converted to an editable draft — chords lifted into inline
+`[chord]` tags over the lyrics, sections turned into `{labels}`, title/artist/key
+scraped from the header. It opens in the editor unsaved so you can review and
+fix the odd chord before keeping it (in folder mode, hit **Save** to write it
+into the active folder).
+
+- PDFs that carry a real text layer convert instantly.
+- Image-only PDFs (e.g. Ultimate Guitar's exported charts) are read with OCR.
+  The first such conversion downloads the OCR engine (~6 MB, from a CDN) and then
+  caches it; conversion needs an internet connection that first time. Keep the
+  tab visible while it works.
+- Pure tablature (ASCII fret numbers, not chords-over-lyrics) can't be
+  meaningfully converted. Treat all output as a **draft** to skim, not a
+  finished chart — it's the same engine as the `tools/` batch converter.
+
 ## Writing syntax
 
 - **Chords** go in square brackets, placed right before the syllable they land on:
@@ -165,6 +183,8 @@ share a uniform grid and even spacing (on screen and in print).
 - **Harmonica suggestions** — recommended harp keys for the song's sounding key
 - Auto-save per song + a song list in the sidebar
 - **Export** a song to a `.cho` text file, **Import** one back
+- **Drop a PDF** to convert it to an editable chart (text layer or OCR) — see
+  "Convert a PDF chart" above
 - Slash chords (`[D/F#]`) and any suffix (`[Cadd9]`, `[Asus4]`, `[Bbm7]`) supported
 
 ## Capo, chord diagrams & harmonica

@@ -340,6 +340,12 @@ let persistTimer = null;
 function schedulePersist() {
   const s = currentSong();
   if (!s) return;
+  // A folder draft has no file to autosave into; leave it in memory until the
+  // user hits Save (which writes it to the folder). Don't claim it's "Saved".
+  if (mode === 'folder' && s.draft && !fileHandles[s.id]) {
+    el.status.textContent = 'Draft · Save to write to folder';
+    return;
+  }
   el.status.textContent = 'Saving…';
   clearTimeout(persistTimer);
   persistTimer = setTimeout(async () => {
@@ -871,8 +877,8 @@ function initSectionBar() {
 
 function songItem(s, deletable) {
   const li = document.createElement('li');
-  li.className = 'song-item' + (deletable ? '' : ' in-lib') + (s.id === currentId ? ' active' : '');
-  const sub = mode === 'folder' ? (s.path || '') : (s.artist || '');
+  li.className = 'song-item' + (deletable ? '' : ' in-lib') + (s.id === currentId ? ' active' : '') + (s.draft ? ' draft' : '');
+  const sub = s.draft ? 'not saved yet' : (mode === 'folder' ? (s.path || '') : (s.artist || ''));
   li.innerHTML =
     `<span class="st"><b>${escapeHtml(s.title || 'Untitled')}</b>` +
     `<small>${escapeHtml(sub)}</small></span>` +
@@ -1085,6 +1091,27 @@ async function importText(text, fallbackTitle) {
   selectSong(s.id);
 }
 
+// Open converted/imported text as an unsaved DRAFT: nothing is written to disk
+// until the user reviews it and hits Save. In folder mode the draft is tagged
+// with the active folder (so it shows in the sidebar and Save knows where to
+// write it) but gets no file handle, so autosave's writeSong stays a no-op.
+function importDraft(text, fallbackTitle) {
+  const s = parseCho(text, fallbackTitle);
+  if (mode !== 'folder') {
+    // Local mode has no "disk" — localStorage IS the store, so it's saved now.
+    songs.push(s);
+    saveSongs(songs);
+    selectSong(s.id);
+    return;
+  }
+  s.draft = true;
+  const lib = activeLib();
+  s.libId = lib ? lib.id : null;
+  songs.push(s);
+  selectSong(s.id);
+  renderList();
+}
+
 // ---- Wire up ---------------------------------------------------------------
 
 // If the user starts typing with nothing selected, create a song to hold it.
@@ -1212,12 +1239,36 @@ async function saveCurrentNow() {
   const s = currentSong();
   if (!s) return;
   if (mode === 'folder') {
-    try { await writeSong(s); el.status.textContent = 'Saved · ' + (s.path || 'file'); }
+    // A PDF/import draft has no file yet — create one in the active folder on
+    // first Save (the moment anything actually touches disk).
+    if (s.draft && !fileHandles[s.id]) {
+      const ok = await materializeDraft(s);
+      if (!ok) return;
+    }
+    try { await writeSong(s); s.draft = false; el.status.textContent = 'Saved · ' + (s.path || 'file'); renderList(); }
     catch { el.status.textContent = 'Save failed'; }
   } else {
+    s.draft = false;
     saveSongs(songs);
     el.status.textContent = 'Saved';
   }
+}
+
+// Give a folder-mode draft a real file handle + name in its target library,
+// so Save can write it. Returns false if there's no folder to write into.
+async function materializeDraft(s) {
+  commit(); // fold the latest title/body edits into s before choosing a filename
+  const lib = libraries.find((l) => l.id === s.libId) || activeLib();
+  if (!lib) { alert('Open a folder first, then Save.'); return false; }
+  const used = new Set(songs.filter((x) => x.libId === lib.id && x.path).map((x) => x.path.toLowerCase()));
+  const fname = slugFilename(s.title || 'untitled', used);
+  let handle;
+  try { handle = await lib.handle.getFileHandle(fname, { create: true }); }
+  catch { alert('Could not create the file in this folder.'); return false; }
+  s.path = fname;
+  s.libId = lib.id;
+  fileHandles[s.id] = handle;
+  return true;
 }
 
 function updateModeUI() {
@@ -1307,13 +1358,114 @@ document.getElementById('import-btn').addEventListener('click', () => importInpu
 importInput.addEventListener('change', () => {
   const file = importInput.files[0];
   if (!file) return;
+  importInput.value = '';
+  if (isPdf(file)) { convertPdfFile(file); return; }
   const reader = new FileReader();
   reader.onload = () => {
     const name = file.name.replace(/\.[^.]+$/, '');
     importText(String(reader.result), name);
   };
   reader.readAsText(file);
-  importInput.value = '';
+});
+
+function isPdf(file) {
+  return file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+}
+
+// ---- PDF -> .cho conversion ------------------------------------------------
+// OCR (or the text layer, when present) turns a chart PDF into an editable
+// draft. The heavy libraries load from a CDN on first use only; the parser
+// lives in pdf2cho.js and is a verified port of tools/pdf2cho.py.
+
+const pdfOverlay = document.getElementById('pdf-overlay');
+const pdfMsg = document.getElementById('pdf-msg');
+const pdfSub = document.getElementById('pdf-sub');
+const pdfSpinner = document.getElementById('pdf-spinner');
+
+function showPdfOverlay(state, msg, sub) {
+  pdfOverlay.hidden = false;
+  pdfOverlay.classList.toggle('dragging', state === 'drag');
+  pdfOverlay.classList.toggle('busy', state === 'busy');
+  pdfSpinner.hidden = state !== 'busy';
+  if (msg !== undefined) pdfMsg.textContent = msg;
+  if (sub !== undefined) pdfSub.textContent = sub;
+}
+
+function hidePdfOverlay() {
+  pdfOverlay.hidden = true;
+  pdfOverlay.classList.remove('dragging', 'busy');
+}
+
+let converting = false;
+let lastProgress = '';
+
+// Rendering a PDF page stalls while the tab is in the background (the browser
+// throttles canvas work), so conversion pauses if the user switches away. Nudge
+// them to keep it visible; restore the real progress line when they return.
+document.addEventListener('visibilitychange', () => {
+  if (!converting) return;
+  pdfSub.textContent = document.hidden
+    ? 'Paused — keep this tab visible to finish converting'
+    : lastProgress;
+});
+
+async function convertPdfFile(file) {
+  if (converting) return;
+  if (!window.PdfToCho) { alert('PDF conversion is unavailable (pdf2cho.js failed to load).'); return; }
+  converting = true;
+  lastProgress = 'Starting…';
+  showPdfOverlay('busy', 'Converting ' + file.name, lastProgress);
+  try {
+    const { cho, usedOcr } = await window.PdfToCho.pdfToCho(file, (m) => {
+      lastProgress = m;
+      if (!document.hidden) pdfSub.textContent = m;
+    });
+    const name = file.name.replace(/\.[^.]+$/, '');
+    hidePdfOverlay();
+    importDraft(cho, name);
+    const how = usedOcr ? 'Converted by OCR' : 'Converted from PDF text';
+    el.status.textContent = mode === 'folder'
+      ? how + ' — review, then Save to the folder'
+      : how + ' — review the chords';
+  } catch (err) {
+    hidePdfOverlay();
+    console.error(err);
+    alert('Could not convert this PDF.\n\n' + (err && err.message ? err.message : err) +
+      '\n\nTip: only chords-over-lyrics charts convert — pure tablature can’t.');
+  } finally {
+    converting = false;
+  }
+}
+
+// Drag a PDF anywhere over the window to convert it. dragenter/leave can fire
+// per element, so count depth and only hide the hint when the drag truly leaves.
+let dragDepth = 0;
+function dragHasFiles(e) {
+  return !!(e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files'));
+}
+window.addEventListener('dragenter', (e) => {
+  if (converting || !dragHasFiles(e)) return;
+  e.preventDefault();
+  dragDepth++;
+  showPdfOverlay('drag', 'Drop a PDF chart to convert it',
+    'Chords-over-lyrics PDFs become an editable draft');
+});
+window.addEventListener('dragover', (e) => {
+  if (dragHasFiles(e) && !converting) e.preventDefault();
+});
+window.addEventListener('dragleave', (e) => {
+  if (converting || !dragHasFiles(e)) return;
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) hidePdfOverlay();
+});
+window.addEventListener('drop', (e) => {
+  if (!dragHasFiles(e)) return;
+  e.preventDefault();
+  dragDepth = 0;
+  if (converting) return;
+  const file = Array.from(e.dataTransfer.files).find(isPdf);
+  if (!file) { hidePdfOverlay(); return; }
+  convertPdfFile(file);
 });
 
 // Support Tab key in the editor (insert two spaces instead of leaving field).
