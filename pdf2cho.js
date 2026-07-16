@@ -83,9 +83,9 @@
 
   const collapse = (s) => s.replace(/ {2,}/g, ' ').trim();
 
-  // Insert [chord] into the lyric at each chord's column, then tidy spacing.
-  // An OCR-merged blob expands to several chords sharing one column, since their
-  // true separate columns are unrecoverable.
+  // Insert [chord] into the lyric at each chord's column. An OCR-merged blob
+  // expands to several chords sharing one column, since their true separate
+  // columns are unrecoverable.
   function merge(chordText, lyric) {
     const inserts = [];
     let seq = 0;
@@ -94,7 +94,12 @@
     while ((m = re.exec(chordText.replace(/\|/g, ' ')))) {
       const chords = parseChords(m[0], true);
       if (!chords) continue;
-      for (const ch of chords) inserts.push([m.index, seq++, '[' + ch + ']']);
+      // A chord whose column falls in the gap between two words belongs to the
+      // next word — slide past the spaces to its start. Inserting on the gap
+      // instead would consume it and smash the words together ("one[G]word").
+      let col = m.index;
+      while (col < lyric.length && lyric[col] === ' ') col++;
+      for (const ch of chords) inserts.push([col, seq++, '[' + ch + ']']);
     }
     inserts.sort((a, b) => b[0] - a[0] || b[1] - a[1]);
     let s = lyric;
@@ -102,7 +107,7 @@
       const c = Math.min(ins[0], s.length);
       s = s.slice(0, c) + ins[2] + s.slice(c);
     }
-    return collapse(s.replace(/(\]) +/g, '$1')); // keep [chord] glued to its word
+    return collapse(s); // chords now sit at word starts; no space-eating needed
   }
 
   function bracketChordLine(text) {

@@ -130,7 +130,7 @@ def collapse(s):
     return re.sub(r' {2,}', ' ', s).strip()
 
 def merge(chord_text, lyric):
-    """Insert [chord] into lyric at each chord's column, then tidy spacing.
+    """Insert [chord] into lyric at each chord's column.
     OCR-merged blobs (e.g. 'EmD') expand to several chords placed adjacently,
     since their true separate columns are unrecoverable."""
     inserts, seq = [], 0
@@ -138,14 +138,18 @@ def merge(chord_text, lyric):
         chords = parse_chords(m.group(), allow_bare=True)
         if not chords:
             continue
+        # A chord whose column falls in the gap between two words belongs to the
+        # next word -- slide past the spaces to its start. Inserting on the gap
+        # instead would consume it and smash the words together ("one[G]word").
+        col = m.start()
+        while col < len(lyric) and lyric[col] == ' ':
+            col += 1
         for ch in chords:  # merged blob -> chords share the column, stay grouped
-            inserts.append((m.start(), seq, '[' + ch + ']')); seq += 1
+            inserts.append((col, seq, '[' + ch + ']')); seq += 1
     s = lyric
     for col, _, tag in sorted(inserts, key=lambda x: (x[0], x[1]), reverse=True):
         s = s[:min(col, len(s))] + tag + s[min(col, len(s)):]
-    # collapse runs of spaces but keep a [chord] glued to the word after it
-    s = re.sub(r'(\]) +', r'\1', s)
-    return collapse(s)
+    return collapse(s)  # chords now sit at word starts; no space-eating needed
 
 SECTION_RE = re.compile(r'^\[([A-Za-z][\w /\'-]{0,24})\]$')
 
