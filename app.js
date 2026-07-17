@@ -529,6 +529,8 @@ const el = {
   status: document.getElementById('save-status'),
   breadcrumb: document.getElementById('save-breadcrumb'),
   capoBanner: document.getElementById('capo-banner'),
+  tuningBanner: document.getElementById('tuning-banner'),
+  songTuning: document.getElementById('song-tuning'),
   instBar: document.getElementById('instrument-bar'),
   instPanels: document.getElementById('instrument-panels'),
   roadmap: document.getElementById('roadmap'),
@@ -580,7 +582,7 @@ function currentSong() {
 }
 
 function blankSong() {
-  return { id: newId(), title: '', artist: '', body: '', transpose: 0, capo: 0, key: null, scaleRoot: null, focusChord: null, riffs: [], tempo: null, updated: Date.now() };
+  return { id: newId(), title: '', artist: '', body: '', transpose: 0, capo: 0, key: null, scaleRoot: null, focusChord: null, riffs: [], tempo: null, tuning: null, updated: Date.now() };
 }
 
 function selectSong(id) {
@@ -607,6 +609,7 @@ function selectSong(id) {
   el.trAmount.textContent = (s.transpose > 0 ? '+' : '') + s.transpose;
   el.capoAmount.textContent = s.capo || 0;
   el.tempoInput.value = s.tempo || '';
+  el.songTuning.value = s.tuning || 'standard';
   renderPreview();
   renderPalette();
   renderList();
@@ -635,6 +638,7 @@ function renderPreview() {
   if (!s) return;
   el.previewBody.innerHTML = render(s.body, inlineShift(s), numberKeyFor(s));
   updatePrintHeader(s);
+  renderTuningBanner(s);
   renderCapoBanner(s);
   renderInstrumentBar();
   renderInstruments(s);
@@ -837,6 +841,17 @@ function soundingKeyPc(s) {
   const pc = firstChordPc(s.body);
   if (pc === null) return null;
   return (((pc + s.transpose + (s.capo || 0)) % 12) + 12) % 12;
+}
+
+// Fill the meta-row tuning dropdown from the tuner presets (once).
+function initTuningSelect() {
+  el.songTuning.innerHTML = Object.entries(TUNER_PRESETS)
+    .map(([id, t]) => `<option value="${id}">${escapeHtml(id === 'standard' ? 'Standard' : t.name)}</option>`).join('');
+}
+function renderTuningBanner(s) {
+  const id = s.tuning;
+  if (!id || id === 'standard' || !TUNER_PRESETS[id]) { el.tuningBanner.innerHTML = ''; return; }
+  el.tuningBanner.innerHTML = `<b>Tune to ${escapeHtml(TUNER_PRESETS[id].name)}</b> for this song`;
 }
 
 function renderCapoBanner(s) {
@@ -1697,6 +1712,7 @@ function songToCho(s) {
   if (s.transpose) out += `{transpose: ${s.transpose}}\n`;
   if (s.capo) out += `{capo: ${s.capo}}\n`;
   if (s.tempo) out += `{tempo: ${s.tempo}}\n`;
+  if (s.tuning && s.tuning !== 'standard') out += `{tuning: ${s.tuning}}\n`;
   if (out) out += '\n';
   out += s.body;
   if (s.riffs && s.riffs.length) {
@@ -1724,7 +1740,7 @@ function parseCho(text, fallbackTitle) {
     }
     const sot = line.match(/^\{(?:start_of_tab|sot)\s*:?\s*(.*)\}\s*$/i);
     if (sot) { sawDirective = true; tabLabel = sot[1].trim() || 'Riff'; tabLines = []; continue; }
-    const t = line.match(/^\{(title|artist|transpose|capo|key|tempo)\s*:\s*(.*)\}\s*$/i);
+    const t = line.match(/^\{(title|artist|transpose|capo|key|tempo|tuning)\s*:\s*(.*)\}\s*$/i);
     if (t) {
       sawDirective = true;
       const key = t[1].toLowerCase();
@@ -1734,6 +1750,7 @@ function parseCho(text, fallbackTitle) {
       else if (key === 'capo') s.capo = Math.max(0, Math.min(11, parseInt(t[2], 10) || 0));
       else if (key === 'key') s.key = noteToPc(t[2]);
       else if (key === 'tempo') s.tempo = Math.max(20, Math.min(400, parseInt(t[2], 10))) || null;
+      else if (key === 'tuning') { const v = t[2].trim(); s.tuning = TUNER_PRESETS[v] ? v : null; }
     } else {
       body.push(line);
     }
@@ -1858,6 +1875,14 @@ document.getElementById('capo-down').addEventListener('click', () => setCapo(-1)
 document.getElementById('tempo-up').addEventListener('click', () => bumpTempo(5));
 document.getElementById('tempo-down').addEventListener('click', () => bumpTempo(-5));
 document.getElementById('count-in-btn').addEventListener('click', countIn);
+el.songTuning.addEventListener('change', () => {
+  const s = currentSong();
+  if (!s) return;
+  s.tuning = el.songTuning.value === 'standard' ? null : el.songTuning.value;
+  s.updated = Date.now();
+  schedulePersist();
+  renderTuningBanner(s);
+});
 el.tempoInput.addEventListener('change', () => {
   const v = parseInt(el.tempoInput.value, 10);
   setTempo(Number.isFinite(v) && v > 0 ? v : null);
@@ -2932,6 +2957,7 @@ function renderTunerStrings() {
 
 function boot() {
   initSectionBar();
+  initTuningSelect();
   el.toggleChords.checked = prefs.showChords;
   el.toggleScales.checked = prefs.showScales;
   el.toggleNumbers.checked = prefs.nashville;
@@ -2968,6 +2994,8 @@ function showEmptyState() {
   el.riffPanels.innerHTML = '';
   el.riffEditors.innerHTML = '';
   el.harmonica.innerHTML = '';
+  el.tuningBanner.innerHTML = '';
+  el.songTuning.value = 'standard';
   el.capoBanner.innerHTML = '';
   updatePrintHeader({ title: '', artist: '' });
   renderPalette(); // show the [ ] insert button even before a song exists
