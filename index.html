@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guitar Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=34" />
+  <link rel="stylesheet" href="styles.css?v=35" />
 </head>
 <body>
   <header>
@@ -80,6 +80,14 @@
           <textarea id="editor" spellcheck="false" placeholder="[G]Type your lyrics here and drop [C]chords in [D]brackets...
 
 Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
+          <!-- Author riffs/solos as tab grids; each prints on its own page. -->
+          <div id="riffs-authoring" class="riffs-authoring">
+            <div class="riffs-head">
+              <span>Riffs &amp; Solos</span>
+              <button id="add-riff-btn" class="inline-btn" title="Add a new riff or solo">+ Add riff</button>
+            </div>
+            <div id="riff-editors"></div>
+          </div>
         </div>
 
         <div class="pane preview-pane">
@@ -107,6 +115,8 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
             <!-- One section per active instrument (chords + scale), built by renderInstruments(). -->
             <div id="instrument-panels"></div>
             <div id="preview-body"></div>
+            <!-- Rendered riffs/solos; each block prints on its own page. -->
+            <div id="riff-panels"></div>
           </div>
         </div>
       </div>
@@ -212,8 +222,8 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=34"></script>
-  <script src="pdf2cho.js?v=34"></script>
-  <script src="app.js?v=34"></script>
+  <script src="chords.js?v=35"></script>
+  <script src="pdf2cho.js?v=35"></script>
+  <script src="app.js?v=35"></script>
 </body>
 </html>

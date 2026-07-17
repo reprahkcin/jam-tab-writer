@@ -203,6 +203,19 @@ Click **Perform** (top bar) for a full-screen stage view of the current song:
   the whole screen when you want.
 - **Esc** exits. Column count, size, and panel choices are remembered.
 
+## Riffs & solos
+
+Below the editor, the **Riffs & Solos** panel lets you author tablature. Click
+**+ Add riff**, give it a name, and fill in the grid — six string rows (high e
+down to low E), one column per step. Click a cell and type the fret; two-digit
+frets (10, 12) just work, no dash-alignment to fight. **+ step / − step** grow or
+trim the length, and you can add as many riffs as you like.
+
+Each riff renders as clean tab in the preview and — for now — **prints on its own
+page**, after the chart. Riffs are saved with the song as standard ChordPro
+`{start_of_tab: Label}` … `{end_of_tab}` blocks, so they round-trip through your
+`.cho` files in folder mode.
+
 ## Printing
 
 Click **Print** (top right) to open your browser's print dialog — from there you

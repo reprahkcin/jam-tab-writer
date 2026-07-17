@@ -509,6 +509,8 @@ const el = {
   capoBanner: document.getElementById('capo-banner'),
   instBar: document.getElementById('instrument-bar'),
   instPanels: document.getElementById('instrument-panels'),
+  riffPanels: document.getElementById('riff-panels'),
+  riffEditors: document.getElementById('riff-editors'),
   harmonica: document.getElementById('harmonica-panel'),
   toggleChords: document.getElementById('toggle-chords'),
   toggleScales: document.getElementById('toggle-scales'),
@@ -554,7 +556,7 @@ function currentSong() {
 }
 
 function blankSong() {
-  return { id: newId(), title: '', artist: '', body: '', transpose: 0, capo: 0, key: null, scaleRoot: null, focusChord: null, updated: Date.now() };
+  return { id: newId(), title: '', artist: '', body: '', transpose: 0, capo: 0, key: null, scaleRoot: null, focusChord: null, riffs: [], updated: Date.now() };
 }
 
 function selectSong(id) {
@@ -584,6 +586,7 @@ function selectSong(id) {
   renderPalette();
   renderList();
   renderBreadcrumb();
+  renderRiffEditor(s);
 }
 
 // Two views of every chord:
@@ -610,6 +613,7 @@ function renderPreview() {
   renderCapoBanner(s);
   renderInstrumentBar();
   renderInstruments(s);
+  renderRiffs(s);
   if (prefs.ensemble.harmonica) renderHarmonica(s);
   else el.harmonica.innerHTML = '';
   // In performance mode the panels are relocated into the overlay and shown
@@ -880,6 +884,95 @@ function renderHarmonica(s) {
     schedulePersist();
     renderPreview();
   });
+}
+
+// ---- Riffs: rendered output (preview/print) + authoring grid ---------------
+
+// Rendered riffs, into #riff-panels (shown on screen; each its own print page).
+function renderRiffs(s) {
+  const riffs = (s && s.riffs) || [];
+  el.riffPanels.innerHTML = riffs.map((riff) => {
+    const lines = riffToLines(riff).map((ln) => `<div class="line">${escapeHtml(ln)}</div>`).join('');
+    return `<section class="riff-block"><div class="riff-title">${escapeHtml(riff.label || 'Riff')}</div>` +
+      `<div class="riff-tab">${lines}</div></section>`;
+  }).join('');
+}
+
+// The authoring grid (below the editor): one editable tab grid per riff.
+function renderRiffEditor(s) {
+  const cont = el.riffEditors;
+  if (!s) { cont.innerHTML = ''; return; }
+  const riffs = s.riffs || (s.riffs = []);
+  if (!riffs.length) {
+    cont.innerHTML = '<div class="riff-empty">No riffs yet — “+ Add riff” starts a tab that prints on its own page.</div>';
+    return;
+  }
+  cont.innerHTML = riffs.map((riff, ri) => {
+    const steps = riff.cols.length;
+    let rows = '';
+    for (let r = 0; r < 6; r++) {
+      let cells = `<span class="rg-str">${RIFF_STRINGS[r]}</span>`;
+      for (let c = 0; c < steps; c++) {
+        cells += `<input class="rg-cell" inputmode="numeric" maxlength="2" data-ri="${ri}" data-c="${c}" data-r="${r}" value="${escapeHtml(riff.cols[c][r] || '')}" />`;
+      }
+      rows += `<div class="rg-row">${cells}</div>`;
+    }
+    return `<div class="riff-edit">` +
+      `<div class="riff-edit-head">` +
+        `<input class="riff-label" data-ri="${ri}" value="${escapeHtml(riff.label || '')}" placeholder="Riff name" title="Riff name (prints as the heading)" />` +
+        `<span class="riff-tools">` +
+          `<button class="inline-btn rg-addstep" data-ri="${ri}" title="Add a step">+ step</button>` +
+          `<button class="inline-btn rg-delstep" data-ri="${ri}" title="Remove the last step">&minus; step</button>` +
+          `<button class="inline-btn rg-del" data-ri="${ri}" title="Delete this riff">Delete</button>` +
+        `</span>` +
+      `</div><div class="riff-grid">${rows}</div></div>`;
+  }).join('');
+  wireRiffEditor(s);
+}
+
+function wireRiffEditor(s) {
+  const cont = el.riffEditors;
+  cont.querySelectorAll('.rg-cell').forEach((inp) => {
+    inp.addEventListener('input', () => {
+      const v = inp.value.replace(/[^0-9]/g, '').slice(0, 2);
+      if (v !== inp.value) inp.value = v;
+      s.riffs[+inp.dataset.ri].cols[+inp.dataset.c][+inp.dataset.r] = v;
+      s.updated = Date.now(); schedulePersist();
+      renderRiffs(s); // update the rendered tab without rebuilding the grid (keeps focus)
+    });
+    inp.addEventListener('keydown', (e) => riffCellNav(e, inp));
+  });
+  cont.querySelectorAll('.riff-label').forEach((inp) => inp.addEventListener('input', () => {
+    s.riffs[+inp.dataset.ri].label = inp.value;
+    s.updated = Date.now(); schedulePersist();
+    renderRiffs(s);
+  }));
+  cont.querySelectorAll('.rg-addstep').forEach((b) => b.addEventListener('click', () => {
+    s.riffs[+b.dataset.ri].cols.push(['', '', '', '', '', '']);
+    s.updated = Date.now(); schedulePersist(); renderRiffEditor(s); renderRiffs(s);
+  }));
+  cont.querySelectorAll('.rg-delstep').forEach((b) => b.addEventListener('click', () => {
+    const riff = s.riffs[+b.dataset.ri];
+    if (riff.cols.length > 1) riff.cols.pop();
+    s.updated = Date.now(); schedulePersist(); renderRiffEditor(s); renderRiffs(s);
+  }));
+  cont.querySelectorAll('.rg-del').forEach((b) => b.addEventListener('click', () => {
+    if (!confirm('Delete this riff?')) return;
+    s.riffs.splice(+b.dataset.ri, 1);
+    s.updated = Date.now(); schedulePersist(); renderRiffEditor(s); renderRiffs(s);
+  }));
+}
+
+// Arrow-key navigation across grid cells.
+function riffCellNav(e, inp) {
+  const step = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key];
+  if (!step) return;
+  // Let Left/Right move the caret inside a two-digit entry before leaving the cell.
+  if (step[1] === -1 && inp.selectionStart > 0) return;
+  if (step[1] === 1 && inp.selectionStart < inp.value.length) return;
+  const r = +inp.dataset.r + step[0], c = +inp.dataset.c + step[1];
+  const next = el.riffEditors.querySelector(`.rg-cell[data-ri="${inp.dataset.ri}"][data-c="${c}"][data-r="${r}"]`);
+  if (next) { e.preventDefault(); next.focus(); next.select(); }
 }
 
 function updatePrintHeader(s) {
@@ -1402,6 +1495,56 @@ function noteToPc(str) {
 }
 
 // Serialize a song to .cho text (directive block + body).
+// ---- Riffs / solos (tablature) ---------------------------------------------
+// A riff is { id, label, cols }: cols is an array of steps, each step a 6-cell
+// array [high-e … low-E], each cell '' or a fret number. It serializes to a
+// standard ChordPro {start_of_tab: label} … {end_of_tab} block so it round-trips
+// through .cho files. The ASCII uses a fixed 3-char field per step (dash + a
+// two-char fret) so grid ↔ text is lossless.
+const RIFF_STRINGS = ['e', 'B', 'G', 'D', 'A', 'E']; // top (high e) → bottom (low E)
+const RIFF_DEFAULT_STEPS = 8;
+
+function newRiff(label) {
+  const cols = [];
+  for (let c = 0; c < RIFF_DEFAULT_STEPS; c++) cols.push(['', '', '', '', '', '']);
+  return { id: newId(), label: label || 'Riff', cols };
+}
+
+function riffRowAscii(riff, r) {
+  let out = RIFF_STRINGS[r] + '|';
+  for (const col of riff.cols) {
+    const cell = String(col[r] || '').replace(/[^0-9]/g, '').slice(0, 2);
+    out += '-' + (cell ? cell.padStart(2, '-') : '--');
+  }
+  return out + '|';
+}
+function riffToLines(riff) { return RIFF_STRINGS.map((_, r) => riffRowAscii(riff, r)); }
+function riffToBlock(riff) {
+  return `{start_of_tab: ${riff.label}}\n` + riffToLines(riff).join('\n') + '\n{end_of_tab}';
+}
+
+// Parse fixed-width tab lines back into columns (best-effort for hand edits).
+function riffFromBlock(label, lines) {
+  const byLetter = {};
+  for (const ln of lines) {
+    const m = ln.match(/^([eBGDAE])\|(.*)$/);
+    if (m) byLetter[m[1]] = m[2].replace(/\|\s*$/, '');
+  }
+  let steps = 0;
+  for (const L of RIFF_STRINGS) if (byLetter[L] != null) steps = Math.max(steps, Math.floor(byLetter[L].length / 3));
+  const cols = [];
+  for (let c = 0; c < steps; c++) {
+    const col = [];
+    for (let r = 0; r < 6; r++) {
+      const content = byLetter[RIFF_STRINGS[r]] || '';
+      col.push(content.substr(c * 3, 3).replace(/[^0-9]/g, '').slice(0, 2));
+    }
+    cols.push(col);
+  }
+  if (!cols.length) cols.push(['', '', '', '', '', '']);
+  return { id: newId(), label: label || 'Riff', cols };
+}
+
 function songToCho(s) {
   let out = '';
   if (s.title) out += `{title: ${s.title}}\n`;
@@ -1411,6 +1554,9 @@ function songToCho(s) {
   if (s.capo) out += `{capo: ${s.capo}}\n`;
   if (out) out += '\n';
   out += s.body;
+  if (s.riffs && s.riffs.length) {
+    out += (out.endsWith('\n') ? '\n' : '\n\n') + s.riffs.map(riffToBlock).join('\n\n') + '\n';
+  }
   return out;
 }
 
@@ -1420,7 +1566,19 @@ function parseCho(text, fallbackTitle) {
   const lines = text.split('\n');
   const body = [];
   let sawDirective = false;
+  let tabLabel = null, tabLines = null; // inside a {start_of_tab}…{end_of_tab}
   for (const line of lines) {
+    if (tabLines) {
+      if (/^\{(end_of_tab|eot)\}\s*$/i.test(line)) {
+        s.riffs.push(riffFromBlock(tabLabel, tabLines));
+        tabLines = null; tabLabel = null;
+      } else {
+        tabLines.push(line);
+      }
+      continue;
+    }
+    const sot = line.match(/^\{(?:start_of_tab|sot)\s*:?\s*(.*)\}\s*$/i);
+    if (sot) { sawDirective = true; tabLabel = sot[1].trim() || 'Riff'; tabLines = []; continue; }
     const t = line.match(/^\{(title|artist|transpose|capo|key)\s*:\s*(.*)\}\s*$/i);
     if (t) {
       sawDirective = true;
@@ -1434,7 +1592,10 @@ function parseCho(text, fallbackTitle) {
       body.push(line);
     }
   }
+  if (tabLines) s.riffs.push(riffFromBlock(tabLabel, tabLines)); // unterminated block
   if (sawDirective && body[0] === '') body.shift(); // drop blank after directives
+  // Drop trailing blank lines left where riff blocks were lifted out of the body.
+  while (body.length && body[body.length - 1] === '') body.pop();
   s.body = body.join('\n');
   if (!s.title) s.title = fallbackTitle || '';
   return s;
@@ -1561,6 +1722,17 @@ el.toggleScales.addEventListener('change', () => {
   renderPreview();
 });
 document.getElementById('export-btn').addEventListener('click', exportSong);
+document.getElementById('add-riff-btn').addEventListener('click', () => {
+  ensureSongForTyping(); // create a local song to hold it if none is selected
+  const cur = currentSong();
+  if (!cur) { alert('Start or open a song first, then add a riff.'); return; }
+  if (!cur.riffs) cur.riffs = [];
+  cur.riffs.push(newRiff('Riff ' + (cur.riffs.length + 1)));
+  cur.updated = Date.now();
+  schedulePersist();
+  renderRiffEditor(cur);
+  renderRiffs(cur);
+});
 document.getElementById('print-btn').addEventListener('click', () => {
   computePrintFont();      // size the font to the column width before printing
   updateMetaBreak();       // put the reference panels on their own page when shown
@@ -1594,7 +1766,7 @@ printColsSel.addEventListener('change', () => {
 // (chord rows included — positioned with spaces).
 function widestBodyLinePx() {
   let m = 1;
-  document.querySelectorAll('#preview-body .line').forEach((l) => {
+  document.querySelectorAll('#preview-body .line, #riff-panels .line').forEach((l) => {
     if (l.scrollWidth > m) m = l.scrollWidth;
   });
   return m;
@@ -2591,6 +2763,8 @@ function showEmptyState() {
   el.previewBody.innerHTML = render('', 0); // the "nothing yet" hint
   el.instBar.innerHTML = '';
   el.instPanels.innerHTML = '';
+  el.riffPanels.innerHTML = '';
+  el.riffEditors.innerHTML = '';
   el.harmonica.innerHTML = '';
   el.capoBanner.innerHTML = '';
   updatePrintHeader({ title: '', artist: '' });
