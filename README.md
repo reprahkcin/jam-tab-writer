@@ -60,6 +60,41 @@ The on-disk format is the same `.cho` used by Import/Export: a `{title}` /
 `{artist}` / `{key}` / `{capo}` / `{transpose}` directive block, then the body
 with inline `[chord]` tags. Round-trips losslessly.
 
+### Where charts live: systems, colours & the breadcrumb
+
+Charts can live in three places, and each is **colour-coded** so they never look
+like they belong together:
+
+- ⚪ **Browser** — localStorage, the neutral default.
+- 🟢 **Collection** — your managed home folder (always green, with a ring).
+- 🔵 **External folders** — ad-hoc folders you open for a task (each a distinct
+  colour from a palette).
+
+A **breadcrumb under the song title** always shows where the current chart is
+saved: the system's colour, the folder path (subfolders included), the file
+name, and a live state (`Saving…` / `Saved ✓` / `Draft` / `Save failed`).
+
+### The Collection
+
+Click **Collection** to set up a managed home folder. **Important:** the folder
+you pick in the dialog is the **parent** — a folder named
+`GuitarTabWriterCollection` is created *inside* it to hold your charts. So pick a
+location like *Documents*, not an existing collection folder. (The picker opens
+in Documents by default.) It reconnects each session like any other folder.
+
+### Subfolders & where new charts go
+
+- Each folder shows as a **collapsible tree**: subfolders nest (with counts) and
+  even **empty** subfolders appear so you can aim at them.
+- **New charts go to a target** you control, shown as `+ New → Folder / sub` and
+  highlighted in the tree. Click any folder or subfolder name to change it;
+  selecting a chart points the target at that chart's folder. **+ New**,
+  **Import**, and **PDF drop** all create files there.
+- The **+** on any folder row creates a **subfolder on disk** inside it.
+- **+ New** asks for a **file name** — that names the `.cho` file only. The
+  song's **title** and **artist** are set separately inside the editor and can
+  differ from the file name.
+
 ## Convert a PDF chart
 
 Drag a chords-over-lyrics PDF anywhere onto the window (or pick it via

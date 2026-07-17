@@ -365,6 +365,14 @@ async function setupCollection() {
   }
   const existing = libraries.find((l) => l.kind === 'collection');
   if (existing) { setActiveLib(existing.id); return; } // already open — just target it
+  // The folder you pick is the PARENT: a "GuitarTabWriterCollection" folder is
+  // created inside it to hold your charts. Spell that out so the picked folder
+  // isn't mistaken for the collection root itself.
+  if (!confirm(
+    `Pick where your Collection should live.\n\n` +
+    `A folder named "${COLLECTION_DIR}" will be created inside the folder you choose, ` +
+    `and all your charts will live in there.\n\n` +
+    `So pick the PARENT location (e.g. Documents) — not an existing collection folder.`)) return;
   let parent;
   try {
     parent = await window.showDirectoryPicker({ mode: 'readwrite', startIn: 'documents', id: 'gtw-collection' });
@@ -1162,7 +1170,11 @@ async function createSong() {
     const lib = activeLib();
     if (!lib) { alert('Open a folder first.'); return; }
     const where = lib.name + (activeSubpath ? ' / ' + activeSubpath : '');
-    const name = prompt(`New chart file name in "${where}":`, 'new-song.cho');
+    const name = prompt(
+      `File name for the new chart in "${where}".\n\n` +
+      `This names the .cho file only — you set the song's title and artist inside ` +
+      `the editor, and they can be different from the file name.`,
+      'new-song.cho');
     if (!name) return;
     const fname = name.endsWith('.cho') ? name : name + '.cho';
     let handle;
