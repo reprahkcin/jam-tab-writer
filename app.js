@@ -49,7 +49,7 @@ function escapeHtml(s) {
   return s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 }
 
-function renderLine(raw, semitones) {
+function renderLine(raw, semitones, numKey) {
   const trimmed = raw.trim();
 
   if (trimmed === '') return '<div class="blank"></div>';
@@ -76,7 +76,8 @@ function renderLine(raw, semitones) {
   let last = 0, m;
   while ((m = re.exec(raw)) !== null) {
     lyric += raw.slice(last, m.index);
-    const text = isChord(m[1]) ? transposeChord(m[1], semitones) : m[1];
+    let text = isChord(m[1]) ? transposeChord(m[1], semitones) : m[1];
+    if (numKey !== null && numKey !== undefined && isChord(m[1])) text = chordToNumber(text, numKey);
     chords.push({ pos: lyric.length, text });
     last = m.index + m[0].length;
   }
@@ -102,12 +103,32 @@ function renderLine(raw, semitones) {
   return chordHtml + `<div class="line lyricline">${escapeHtml(lyric)}</div>`;
 }
 
-function render(body, semitones) {
+function render(body, semitones, numKey) {
   if (!body.trim()) {
     return '<div class="empty-hint">Nothing yet — start typing in the editor. ' +
       'Chords go in brackets, e.g. <code>[Am]</code>.</div>';
   }
-  return body.split('\n').map((l) => renderLine(l, semitones)).join('');
+  return body.split('\n').map((l) => renderLine(l, semitones, numKey)).join('');
+}
+
+// Nashville Number System: show chords as scale degrees relative to the tonic,
+// so the band can follow in any key. Transposition-invariant by construction.
+const NASH_DEG = ['1', 'b2', '2', 'b3', '3', '4', 'b5', '5', 'b6', '6', 'b7', '7'];
+function chordToNumber(name, tonicPc) {
+  const m = name.match(CHORD_RE);
+  if (!m) return name;
+  const deg = (pc) => NASH_DEG[(((pc - tonicPc) % 12) + 12) % 12];
+  let out = deg(chordRootPc(m[1], m[2])) + (m[3] || '');
+  if (m[4]) out += '/' + deg(chordRootPc(m[4], m[5] || ''));
+  return out;
+}
+// The tonic pitch class in the same shift reference as the displayed chords, or
+// null when numbering is off / no chord to anchor on.
+function numberKeyFor(s) {
+  if (!prefs.nashville) return null;
+  const raw = firstChordPc(s.body);
+  if (raw === null) return null;
+  return (((raw + inlineShift(s)) % 12) + 12) % 12;
 }
 
 // ---- Storage ---------------------------------------------------------------
@@ -514,6 +535,7 @@ const el = {
   harmonica: document.getElementById('harmonica-panel'),
   toggleChords: document.getElementById('toggle-chords'),
   toggleScales: document.getElementById('toggle-scales'),
+  toggleNumbers: document.getElementById('toggle-numbers'),
 };
 
 let songs = loadSongs();
@@ -524,7 +546,7 @@ const ENSEMBLE_DEFAULTS = { guitar1: true, guitar2: true, ukulele: true, mandoli
 
 function loadPrefs() {
   const defaults = {
-    showChords: true, showScales: true, harmonica: true, chordMode: 'shapes',
+    showChords: true, showScales: true, harmonica: true, chordMode: 'shapes', nashville: false,
     scaleType: 'majPent',
     voicings: { guitar1: {}, guitar2: {} }, pianoInv: { piano: {} },
     ensemble: Object.assign({}, ENSEMBLE_DEFAULTS),
@@ -608,7 +630,7 @@ function inlineShift(s) {
 function renderPreview() {
   const s = currentSong();
   if (!s) return;
-  el.previewBody.innerHTML = render(s.body, inlineShift(s));
+  el.previewBody.innerHTML = render(s.body, inlineShift(s), numberKeyFor(s));
   updatePrintHeader(s);
   renderCapoBanner(s);
   renderInstrumentBar();
@@ -1734,7 +1756,7 @@ let auxTimer = null;
 el.editor.addEventListener('input', () => {
   ensureSongForTyping();
   const s = currentSong();
-  if (s) el.previewBody.innerHTML = render(el.editor.value, inlineShift(s)); // instant lyric preview
+  if (s) el.previewBody.innerHTML = render(el.editor.value, inlineShift(s), numberKeyFor(s)); // instant lyric preview
   renderPalette();
   commit();
   // Refresh diagrams / harmonica / scale shortly after typing stops so newly
@@ -1762,6 +1784,11 @@ el.toggleChords.addEventListener('change', () => {
 });
 el.toggleScales.addEventListener('change', () => {
   prefs.showScales = el.toggleScales.checked;
+  savePrefs();
+  renderPreview();
+});
+el.toggleNumbers.addEventListener('change', () => {
+  prefs.nashville = el.toggleNumbers.checked;
   savePrefs();
   renderPreview();
 });
@@ -2228,7 +2255,7 @@ function renderPerformBody() {
   const s = currentSong();
   if (!s) return;
   pf.song.textContent = (s.title || 'Untitled') + (s.artist ? ' · ' + s.artist : '');
-  pf.cols.innerHTML = render(s.body, inlineShift(s));
+  pf.cols.innerHTML = render(s.body, inlineShift(s), numberKeyFor(s));
   perf.page = 0;
   applyPerfLayout();
 }
@@ -2782,6 +2809,7 @@ function boot() {
   initSectionBar();
   el.toggleChords.checked = prefs.showChords;
   el.toggleScales.checked = prefs.showScales;
+  el.toggleNumbers.checked = prefs.nashville;
   applyPrintCols();
   // No demo/seed content — start empty and let the user create the first song
   // (or reconnect a folder below).
