@@ -551,7 +551,7 @@ function loadPrefs() {
     scaleType: 'majPent',
     voicings: { guitar1: {}, guitar2: {} }, pianoInv: { piano: {} },
     ensemble: Object.assign({}, ENSEMBLE_DEFAULTS),
-    perform: { cols: 4, font: 22, panels: { instruments: true, harp: true } },
+    perform: { cols: 4, font: 22, autoSecs: 25, panels: { instruments: true, harp: true } },
     printCols: 1,
     metro: { bpm: 100, steps: 16, click: true, pattern: null },
     tunerPreset: 'standard',
@@ -567,7 +567,7 @@ function loadPrefs() {
   p.ensemble = Object.assign({}, ENSEMBLE_DEFAULTS, p.ensemble);
   if (typeof p.showChords !== 'boolean') p.showChords = p.diagrams !== false;  // old 'diagrams' toggle
   if (typeof p.showScales !== 'boolean') p.showScales = p.lead !== false;      // old 'lead' carried the scale
-  p.perform = Object.assign({ cols: 4, font: 22, panels: {} }, p.perform);
+  p.perform = Object.assign({ cols: 4, font: 22, autoSecs: 25, panels: {} }, p.perform);
   p.perform.panels = Object.assign({ instruments: true, harp: true }, p.perform.panels);
   p.metro = Object.assign({ bpm: 100, steps: 16, click: true, pattern: null }, p.metro);
   return p;
@@ -2226,7 +2226,7 @@ const PERF_LABELS = { instruments: 'Instruments', harp: 'Harmonica' };
 const PERF_PADX = 28; // must match .perform-cols left/right padding in CSS
 const PERF_GAP = 36;  // gap between columns, in px
 
-const perf = { open: false, page: 0, pages: 1, orig: {}, idleTimer: null };
+const perf = { open: false, page: 0, pages: 1, orig: {}, idleTimer: null, auto: false, autoTimer: null };
 const pf = {
   overlay: document.getElementById('perform-overlay'),
   bar: document.getElementById('perform-bar'),
@@ -2279,6 +2279,8 @@ function openPerform() {
   document.body.classList.add('performing');
   pf.colNum.textContent = prefs.perform.cols;
   pf.fontNum.textContent = prefs.perform.font;
+  document.getElementById('pf-auto-secs').textContent = prefs.perform.autoSecs || 25;
+  stopAuto();
   syncPerfToggles();
   renderPerformBody();
   perfAutoFont();     // size text to the saved column count for this song/screen
@@ -2286,11 +2288,12 @@ function openPerform() {
   document.addEventListener('keydown', perfKeydown, true);
   pf.overlay.addEventListener('mousemove', perfActivity);
   perfActivity();
-  try { if (pf.overlay.requestFullscreen) pf.overlay.requestFullscreen(); } catch { /* ignore */ }
+  try { if (pf.overlay.requestFullscreen) pf.overlay.requestFullscreen().catch(() => {}); } catch { /* ignore */ }
 }
 
 function closePerform() {
   if (!perf.open) return;
+  stopAuto();
   perf.open = false;
   document.removeEventListener('keydown', perfKeydown, true);
   pf.overlay.removeEventListener('mousemove', perfActivity);
@@ -2406,6 +2409,38 @@ function perfChangeSong(dir) {
   renderPerformBody();
 }
 
+// ---- Auto-advance (hands-free) ---------------------------------------------
+function perfAtEnd() {
+  if (perf.page < perf.pages - 1) return false;
+  const list = perfSetlist();
+  return list.findIndex((x) => x.id === currentId) >= list.length - 1;
+}
+function updateAutoBtn() {
+  const b = document.getElementById('pf-auto');
+  if (b) b.innerHTML = perf.auto ? '&#10074;&#10074;' : '&#9654;'; // pause : play
+}
+function startAuto() {
+  clearInterval(perf.autoTimer);
+  perf.auto = true;
+  updateAutoBtn();
+  perf.autoTimer = setInterval(() => {
+    if (perfAtEnd()) { stopAuto(); return; }
+    perfForward();
+  }, (prefs.perform.autoSecs || 25) * 1000);
+}
+function stopAuto() {
+  perf.auto = false;
+  clearInterval(perf.autoTimer);
+  updateAutoBtn();
+}
+function setAutoSecs(delta) {
+  prefs.perform.autoSecs = Math.max(5, Math.min(120, (prefs.perform.autoSecs || 25) + delta));
+  savePrefs();
+  const el2 = document.getElementById('pf-auto-secs');
+  if (el2) el2.textContent = prefs.perform.autoSecs;
+  if (perf.auto) startAuto(); // restart with the new interval
+}
+
 function perfKeydown(e) {
   if (!perf.open) return;
   switch (e.key) {
@@ -2469,6 +2504,9 @@ function perfFit() {
 
 document.getElementById('perform-btn').addEventListener('click', openPerform);
 document.getElementById('pf-exit').addEventListener('click', closePerform);
+document.getElementById('pf-auto').addEventListener('click', () => (perf.auto ? stopAuto() : startAuto()));
+document.getElementById('pf-auto-slower').addEventListener('click', () => setAutoSecs(5));
+document.getElementById('pf-auto-faster').addEventListener('click', () => setAutoSecs(-5));
 document.getElementById('pf-col-up').addEventListener('click', () => setPerfCols(1));
 document.getElementById('pf-col-down').addEventListener('click', () => setPerfCols(-1));
 document.getElementById('pf-font-up').addEventListener('click', () => setPerfFont(1));
