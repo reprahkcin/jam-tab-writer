@@ -624,8 +624,8 @@ function renderPreview() {
 const INSTRUMENTS = [
   { id: 'guitar1', label: 'Guitar 1', kind: 'guitar', chords: true, scale: true, tuning: STRING_ABS, high: false },
   { id: 'guitar2', label: 'Guitar 2', kind: 'guitar', chords: true, scale: true, tuning: STRING_ABS, high: true },
-  { id: 'ukulele', label: 'Ukulele', kind: 'fret', chords: true, scale: true, tuning: UKE_ABS, voicing: ukeVoicing, diagram: ukeDiagramSVG },
   { id: 'mandolin', label: 'Mandolin', kind: 'fret', chords: true, scale: true, tuning: MANDO_ABS, voicing: mandoVoicing, diagram: mandoDiagramSVG },
+  { id: 'ukulele', label: 'Ukulele', kind: 'fret', chords: true, scale: true, tuning: UKE_ABS, voicing: ukeVoicing, diagram: ukeDiagramSVG },
   { id: 'piano', label: 'Piano', kind: 'piano', chords: true, scale: true },
   { id: 'bass', label: 'Bass', kind: 'fret', chords: false, scale: true, tuning: BASS_ABS },
   { id: 'harmonica', label: 'Harmonica', kind: 'harmonica', chords: false, scale: false },
