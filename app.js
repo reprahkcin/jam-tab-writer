@@ -1909,6 +1909,68 @@ document.getElementById('song-search').addEventListener('input', (e) => {
   renderList();
 });
 document.getElementById('export-btn').addEventListener('click', exportSong);
+
+// ---- Share a song as a link ------------------------------------------------
+// The whole .cho is gzipped and base64url-packed into the URL hash — no server,
+// nothing leaves the device until the link is sent. Opening such a link imports
+// the song locally.
+function b64urlEncode(bytes) {
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function b64urlDecode(str) {
+  str = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (str.length % 4) str += '=';
+  const bin = atob(str), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+async function gzipToB64(text) {
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
+  return b64urlEncode(new Uint8Array(await new Response(stream).arrayBuffer()));
+}
+async function b64ToText(b64) {
+  const stream = new Blob([b64urlDecode(b64)]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return await new Response(stream).text();
+}
+
+async function shareSong() {
+  const s = currentSong();
+  if (!s) { alert('Select a song to share first.'); return; }
+  let url;
+  try {
+    const packed = await gzipToB64(songToCho(s));
+    url = location.origin + location.pathname + '#song=' + packed;
+  } catch { alert('Could not build a share link in this browser.'); return; }
+  const input = document.getElementById('share-url');
+  input.value = url;
+  document.getElementById('share-modal').hidden = false;
+  input.focus(); input.select();
+}
+
+// On load, import a song carried in the URL hash (#song=…), then clean the URL.
+async function importSharedSong() {
+  const m = location.hash.match(/^#song=(.+)$/);
+  if (!m) return;
+  try {
+    const s = parseCho(await b64ToText(m[1]), 'Shared song');
+    s.id = newId();
+    if (mode === 'folder') s.libId = null; // a received chart lives outside folders
+    songs.push(s);
+    if (mode !== 'folder') saveSongs(songs);
+    selectSong(s.id);
+  } catch { /* malformed link — ignore */ }
+  history.replaceState(null, '', location.pathname + location.search);
+}
+document.getElementById('share-btn').addEventListener('click', shareSong);
+document.getElementById('share-close').addEventListener('click', () => { document.getElementById('share-modal').hidden = true; });
+document.getElementById('share-copy').addEventListener('click', async () => {
+  const input = document.getElementById('share-url');
+  try { await navigator.clipboard.writeText(input.value); document.getElementById('share-copy').textContent = 'Copied ✓'; }
+  catch { input.select(); document.execCommand('copy'); document.getElementById('share-copy').textContent = 'Copied ✓'; }
+  setTimeout(() => { document.getElementById('share-copy').textContent = 'Copy link'; }, 1500);
+});
 document.getElementById('add-riff-btn').addEventListener('click', () => {
   ensureSongForTyping(); // create a local song to hold it if none is selected
   const cur = currentSong();
@@ -2976,6 +3038,8 @@ function boot() {
 
   // Reconnect any remembered folders (some may need a permission click).
   bootFolders();
+  // Import a shared song if the URL carries one.
+  importSharedSong();
 }
 
 // Nothing selected: blank the workspace and invite the user to create a song.

@@ -1212,6 +1212,41 @@ body.performing { overflow: hidden; }
 
 @media print { .tool-panel { display: none !important; } }
 
+/* Share-a-song dialog. */
+.share-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(28, 30, 38, 0.7);
+}
+.share-modal[hidden] { display: none; }
+.share-card {
+  width: min(90vw, 460px);
+  padding: 20px 22px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  font-family: system-ui, sans-serif;
+}
+.share-head { font-size: 16px; font-weight: 700; color: var(--text); }
+.share-sub { font-size: 13px; color: var(--muted); margin: 4px 0 12px; }
+.share-url {
+  width: 100%;
+  padding: 7px 9px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: var(--mono);
+}
+.share-actions { display: flex; gap: 8px; margin-top: 14px; }
+.share-actions button { padding: 6px 14px; border-radius: 6px; cursor: pointer; }
+
 /* ---- PDF drop / conversion overlay --------------------------------------- */
 .pdf-overlay {
   position: fixed;
