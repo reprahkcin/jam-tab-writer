@@ -531,6 +531,7 @@ const el = {
   capoBanner: document.getElementById('capo-banner'),
   instBar: document.getElementById('instrument-bar'),
   instPanels: document.getElementById('instrument-panels'),
+  roadmap: document.getElementById('roadmap'),
   riffPanels: document.getElementById('riff-panels'),
   riffEditors: document.getElementById('riff-editors'),
   harmonica: document.getElementById('harmonica-panel'),
@@ -637,6 +638,7 @@ function renderPreview() {
   renderCapoBanner(s);
   renderInstrumentBar();
   renderInstruments(s);
+  renderRoadmap(s);
   renderRiffs(s);
   if (prefs.ensemble.harmonica) renderHarmonica(s);
   else el.harmonica.innerHTML = '';
@@ -908,6 +910,33 @@ function renderHarmonica(s) {
     schedulePersist();
     renderPreview();
   });
+}
+
+// The song's section labels, in order — mirrors renderLine's section detection
+// so the roadmap chips line up 1:1 with the .section divs in the preview.
+function songSections(body) {
+  const out = [];
+  for (const raw of body.split('\n')) {
+    const t = raw.trim();
+    if (!t || /^\{(page|pagebreak|newpage|page break)\}$/i.test(t)) continue;
+    let m = t.match(/^\{(.+)\}$/);
+    const lone = t.match(/^\[([^\[\]]+)\]$/);
+    if (!m && lone && !isChord(lone[1])) m = lone;
+    if (m) out.push(m[1]);
+  }
+  return out;
+}
+
+// Arrangement roadmap: a chip per section; click to scroll the chart to it.
+function renderRoadmap(s) {
+  const secs = songSections(s.body);
+  if (secs.length < 2) { el.roadmap.innerHTML = ''; return; } // needs real structure
+  el.roadmap.innerHTML = '<span class="rm-label">Form</span>' +
+    secs.map((name, i) => `<button class="rm-chip" data-i="${i}">${escapeHtml(name)}</button>`).join('');
+  el.roadmap.querySelectorAll('.rm-chip').forEach((b) => b.addEventListener('click', () => {
+    const target = el.previewBody.querySelectorAll('.section')[+b.dataset.i];
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
 }
 
 // ---- Riffs: rendered output (preview/print) + authoring grid ---------------
@@ -2935,6 +2964,7 @@ function showEmptyState() {
   el.previewBody.innerHTML = render('', 0); // the "nothing yet" hint
   el.instBar.innerHTML = '';
   el.instPanels.innerHTML = '';
+  el.roadmap.innerHTML = '';
   el.riffPanels.innerHTML = '';
   el.riffEditors.innerHTML = '';
   el.harmonica.innerHTML = '';

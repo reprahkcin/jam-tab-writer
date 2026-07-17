@@ -565,6 +565,28 @@ main { display: flex; flex: 1; min-height: 0; }
 }
 #lead-section { border-top: 1px dashed var(--line); padding-top: 8px; }
 
+/* Arrangement roadmap: click a section to jump to it. */
+.roadmap { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-bottom: 12px; }
+.roadmap:empty { display: none; }
+.rm-label {
+  font: 700 10px system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+  margin-right: 3px;
+}
+.rm-chip {
+  font: 600 11px system-ui, sans-serif;
+  padding: 2px 9px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+}
+.rm-chip:hover { border-color: var(--accent); color: var(--accent); }
+@media print { .roadmap { display: none !important; } }
+
 /* The jam roster: an on/off chip per instrument. */
 .instrument-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .instrument-bar:empty { display: none; }
