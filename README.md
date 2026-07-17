@@ -148,6 +148,16 @@ into the active folder).
 - **Chord palette**: every chord already used in the chart appears as a chip
   above the editor — click one to insert that `[chord]` at the cursor. New
   chords join the palette as you introduce them.
+- **Keyboard chord placement** (no mouse trip to the palette):
+  - **Alt/Option + 1–9** drops the corresponding palette chord at the caret. The
+    chip shows its number (the first nine chords in the song).
+  - **Type `[`** (or **Cmd/Ctrl + K**) to open a type-ahead popup at the caret
+    over your song's chords plus common ones. Keep typing to filter, **↑/↓** to
+    pick, **Enter/Tab** to insert (the `]` is added for you), **Esc** to cancel.
+    Typing a chord that isn't listed works too — it's inserted as you typed it.
+
+  Position the caret with the arrow keys and you can chord an entire song without
+  touching the mouse.
 - **Section buttons**: a toolbar (Intro, Verse, Pre-Chorus, Chorus, Bridge,
   Solo, Outro) inserts a `{Section}` label at the cursor on its own line.
   **Verse** auto-increments to the next number already in the chart.

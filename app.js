@@ -892,6 +892,141 @@ function updatePrintHeader(s) {
 // Palette of the chords already used in the current chart. Clicking a chip
 // inserts that bracketed chord at the editor cursor. Reads the raw text so the
 // chips match exactly what's typed (independent of transpose).
+// ---- Keyboard chord placement ----------------------------------------------
+// Drop a [chord] without leaving the keyboard:
+//  - Alt/Option + 1–9 inserts the Nth palette chord (the chords already in use).
+//  - Typing "[" (or Cmd/Ctrl+K) opens a type-ahead popup at the caret over the
+//    song's chords plus common ones; arrows/typing filter, Enter/Tab inserts.
+const IS_MAC = /Mac|iP(hone|ad|od)/.test(navigator.platform);
+const ALT_LABEL = IS_MAC ? '⌥' : 'Alt+';
+let paletteChords = [];   // chords in the song, in palette order (Alt+N maps to these)
+let chordPopup = null;    // { bracketStart, active, items, el } while the popup is open
+
+const COMMON_CHORDS = ['G', 'C', 'D', 'A', 'E', 'F', 'Am', 'Em', 'Dm', 'Bm', 'Fm',
+  'Gm', 'Cm', 'Bb', 'Eb', 'Ab', 'G7', 'C7', 'D7', 'A7', 'E7', 'B7', 'Dsus4',
+  'Asus4', 'Cadd9', 'Am7', 'Em7', 'Dm7', 'Gmaj7', 'Cmaj7'];
+
+// Song chords first (so Alt+N order matches), then common ones, de-duplicated.
+function chordCandidates() {
+  const seen = new Set(), out = [];
+  for (const c of paletteChords.concat(COMMON_CHORDS)) {
+    if (!seen.has(c)) { seen.add(c); out.push(c); }
+  }
+  return out;
+}
+
+// Caret pixel position inside the textarea (mirror-div technique), as viewport
+// coords for placing the popup just below the caret's line.
+function caretCoords(ta, pos) {
+  const div = document.createElement('div');
+  const cs = getComputedStyle(ta);
+  const props = ['boxSizing', 'width', 'paddingTop', 'paddingRight', 'paddingBottom',
+    'paddingLeft', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth',
+    'borderLeftWidth', 'fontFamily', 'fontSize', 'fontWeight', 'fontStyle',
+    'letterSpacing', 'lineHeight', 'textTransform', 'wordSpacing', 'tabSize'];
+  for (const p of props) div.style[p] = cs[p];
+  Object.assign(div.style, { position: 'absolute', visibility: 'hidden',
+    whiteSpace: 'pre-wrap', wordWrap: 'break-word', overflow: 'hidden', height: 'auto' });
+  div.textContent = ta.value.slice(0, pos);
+  const span = document.createElement('span');
+  span.textContent = ta.value.slice(pos) || '.';
+  div.appendChild(span);
+  document.body.appendChild(div);
+  const rect = ta.getBoundingClientRect();
+  const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2;
+  const top = rect.top + span.offsetTop - ta.scrollTop + lh;
+  const left = rect.left + span.offsetLeft - ta.scrollLeft;
+  document.body.removeChild(div);
+  return { top, left };
+}
+
+// Open the popup: insert an empty [] with the caret between, then show matches.
+function triggerChordPopup() {
+  if (!currentSong()) return;
+  const ta = el.editor;
+  const pos = ta.selectionStart;
+  ta.value = ta.value.slice(0, pos) + '[]' + ta.value.slice(ta.selectionEnd);
+  ta.selectionStart = ta.selectionEnd = pos + 1;
+  ta.focus();
+  ta.dispatchEvent(new Event('input'));
+  chordPopup = { bracketStart: pos, active: 0, items: [], el: null };
+  renderChordPopup();
+}
+
+// Re-filter and reposition. Closes itself if the caret has left the [ … ] it opened.
+function renderChordPopup() {
+  const cp = chordPopup;
+  if (!cp) return;
+  const ta = el.editor;
+  const caret = ta.selectionStart;
+  const close = ta.value.indexOf(']', cp.bracketStart);
+  if (ta.value[cp.bracketStart] !== '[' || caret <= cp.bracketStart || close === -1 || caret > close) {
+    closeChordPopup(); return;
+  }
+  const query = ta.value.slice(cp.bracketStart + 1, caret);
+  if (/[\s[\]]/.test(query)) { closeChordPopup(); return; }
+  const q = query.toLowerCase();
+  let items = chordCandidates().filter((c) => c.toLowerCase().startsWith(q));
+  if (query && isChord(query) && !items.some((c) => c.toLowerCase() === q)) items.unshift(query);
+  cp.items = items.slice(0, 8);
+  if (cp.active >= cp.items.length) cp.active = Math.max(0, cp.items.length - 1);
+  if (!cp.items.length) { if (cp.el) cp.el.hidden = true; return; }
+  if (!cp.el) { cp.el = document.createElement('div'); cp.el.className = 'chord-pop'; document.body.appendChild(cp.el); }
+  cp.el.innerHTML = cp.items.map((c, i) =>
+    `<div class="chord-pop-item${i === cp.active ? ' active' : ''}" data-i="${i}">${escapeHtml(c)}</div>`).join('');
+  cp.el.querySelectorAll('.chord-pop-item').forEach((it) =>
+    it.addEventListener('mousedown', (e) => { e.preventDefault(); cp.active = +it.dataset.i; acceptActiveChord(); }));
+  const { top, left } = caretCoords(ta, caret);
+  cp.el.style.top = top + 'px';
+  cp.el.style.left = left + 'px';
+  cp.el.hidden = false;
+}
+
+function moveChordActive(d) {
+  const cp = chordPopup;
+  if (!cp || !cp.items.length) return;
+  cp.active = (cp.active + d + cp.items.length) % cp.items.length;
+  renderChordPopup();
+}
+
+// Insert the highlighted chord (or whatever's typed if none), caret after the ].
+function acceptActiveChord() {
+  const cp = chordPopup;
+  if (!cp) return;
+  const ta = el.editor;
+  const close = ta.value.indexOf(']', cp.bracketStart);
+  if (close === -1) { closeChordPopup(); return; }
+  const chosen = cp.items[cp.active] != null ? cp.items[cp.active] : ta.value.slice(cp.bracketStart + 1, close);
+  const before = ta.value.slice(0, cp.bracketStart);
+  const tok = '[' + chosen + ']';
+  ta.value = before + tok + ta.value.slice(close + 1);
+  ta.selectionStart = ta.selectionEnd = before.length + tok.length;
+  closeChordPopup();
+  ta.focus();
+  ta.dispatchEvent(new Event('input'));
+}
+
+// Escape: bail out. If nothing was typed, remove the auto-inserted [].
+function cancelChordPopup() {
+  const cp = chordPopup;
+  if (!cp) return;
+  const ta = el.editor;
+  const close = ta.value.indexOf(']', cp.bracketStart);
+  const empty = close > -1 && ta.value[cp.bracketStart] === '[' && !ta.value.slice(cp.bracketStart + 1, close);
+  if (empty) {
+    ta.value = ta.value.slice(0, cp.bracketStart) + ta.value.slice(close + 1);
+    ta.selectionStart = ta.selectionEnd = cp.bracketStart;
+    ta.dispatchEvent(new Event('input'));
+  }
+  closeChordPopup();
+  ta.focus();
+}
+
+function closeChordPopup() {
+  if (chordPopup && chordPopup.el) chordPopup.el.remove();
+  chordPopup = null;
+}
+
 function renderPalette() {
   const re = /\[([^\]]*)\]/g;
   const seen = new Set();
@@ -900,10 +1035,14 @@ function renderPalette() {
   while ((m = re.exec(el.editor.value)) !== null) {
     if (isChord(m[1]) && !seen.has(m[1])) { seen.add(m[1]); list.push(m[1]); }
   }
-  const emptyBtn = '<button class="chip chip-empty" id="empty-chord-btn" title="Insert empty [ ] brackets at the cursor">[ ]</button>';
-  el.palette.innerHTML = emptyBtn + list.map((c) =>
-    `<button class="chip" data-chord="${escapeHtml(c)}" title="Insert [${escapeHtml(c)}] at the cursor">${escapeHtml(c)}</button>`
-  ).join('');
+  paletteChords = list; // Alt+1..9 map onto these, in order
+  const emptyBtn = '<button class="chip chip-empty" id="empty-chord-btn" title="Insert empty [ ] — or just type [ to search chords">[ ]</button>';
+  el.palette.innerHTML = emptyBtn + list.map((c, i) => {
+    const key = i < 9 ? `<span class="chip-key">${i + 1}</span>` : '';
+    const hint = i < 9 ? `  (${ALT_LABEL}${i + 1})` : '';
+    return `<button class="chip" data-chord="${escapeHtml(c)}" title="Insert [${escapeHtml(c)}]${hint}">${key}${escapeHtml(c)}</button>`;
+  }).join('') +
+    `<span class="palette-hint" title="Alt/Option + a number drops that chord; typing [ opens a chord search">${ALT_LABEL}1–9 · type [ to search</span>`;
   el.palette.querySelectorAll('.chip[data-chord]').forEach((b) =>
     b.addEventListener('click', () => insertAtCursor('[' + b.dataset.chord + ']')));
   document.getElementById('empty-chord-btn').addEventListener('click', insertEmptyChord);
@@ -1397,6 +1536,7 @@ el.editor.addEventListener('input', () => {
   // added (or removed) chords show up there too.
   clearTimeout(auxTimer);
   auxTimer = setTimeout(() => { if (currentSong()) renderPreview(); }, 250);
+  if (chordPopup) renderChordPopup(); // re-filter as you type inside [ … ]
 });
 el.title.addEventListener('input', () => updatePrintHeader({ title: el.title.value, artist: el.artist.value }));
 el.artist.addEventListener('input', () => updatePrintHeader({ title: el.title.value, artist: el.artist.value }));
@@ -1738,8 +1878,36 @@ window.addEventListener('drop', (e) => {
   convertPdfFile(file);
 });
 
-// Support Tab key in the editor (insert two spaces instead of leaving field).
+// Keyboard chord placement + Tab-inserts-spaces.
 el.editor.addEventListener('keydown', (e) => {
+  // While the chord popup is open, it owns the arrow / enter / tab / escape keys.
+  if (chordPopup) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); moveChordActive(1); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); moveChordActive(-1); return; }
+    if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); acceptActiveChord(); return; }
+    if (e.key === 'Escape') { e.preventDefault(); cancelChordPopup(); return; }
+    // other keys fall through; keyup/input re-filter the list
+  }
+  // Alt/Option + 1–9 : drop the Nth palette chord at the caret. Use e.code so the
+  // digit is layout-independent (Alt often remaps the character on Mac).
+  if (e.altKey && !e.metaKey && !e.ctrlKey && /^Digit[1-9]$/.test(e.code)) {
+    const n = +e.code.slice(5) - 1;
+    if (paletteChords[n]) {
+      e.preventDefault();
+      if (chordPopup) closeChordPopup();
+      insertAtCursor('[' + paletteChords[n] + ']');
+    }
+    return;
+  }
+  // Cmd/Ctrl+K : open the chord search popup at the caret.
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k') {
+    e.preventDefault(); triggerChordPopup(); return;
+  }
+  // "[" always starts a chord, so open the search popup instead of a bare bracket.
+  if (e.key === '[' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    e.preventDefault(); triggerChordPopup(); return;
+  }
+  // Tab : two spaces (only reached when the popup is closed).
   if (e.key === 'Tab') {
     e.preventDefault();
     const start = el.editor.selectionStart, end = el.editor.selectionEnd;
@@ -1748,6 +1916,11 @@ el.editor.addEventListener('keydown', (e) => {
     el.editor.dispatchEvent(new Event('input'));
   }
 });
+
+// Keep the popup in sync as the caret moves (arrows, clicks) or focus leaves.
+el.editor.addEventListener('keyup', () => { if (chordPopup) renderChordPopup(); });
+el.editor.addEventListener('click', () => { if (chordPopup) renderChordPopup(); });
+el.editor.addEventListener('blur', () => { if (chordPopup) setTimeout(closeChordPopup, 120); });
 
 // ---- Performance mode ------------------------------------------------------
 // A full-screen overlay that lays the current song's chords-over-lyrics out in

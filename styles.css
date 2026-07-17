@@ -383,6 +383,50 @@ main { display: flex; flex: 1; min-height: 0; }
 .chord-palette .chip:hover { background: #343a4e; border-color: #4a516b; }
 .chord-palette .palette-empty { color: var(--muted); font-size: 12px; }
 
+/* The Alt+N digit badge on the first nine palette chips. */
+.chip-key {
+  display: inline-block;
+  min-width: 11px;
+  margin-right: 5px;
+  padding: 0 3px;
+  font-family: system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--bg);
+  background: var(--muted);
+  border-radius: 3px;
+  vertical-align: middle;
+}
+.palette-hint { margin-left: auto; color: var(--muted); font-size: 11px; white-space: nowrap; }
+
+/* Type-ahead chord popup anchored at the caret. */
+.chord-pop {
+  position: absolute;
+  z-index: 1300;
+  min-width: 110px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.chord-pop-item {
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--chord);
+  font-weight: 700;
+}
+.chord-pop-item:hover { background: var(--panel-2); }
+.chord-pop-item.active { background: var(--accent); color: var(--bg); }
+.chord-pop-item.active:hover { background: var(--accent); }
+
 #editor {
   flex: 1;
   resize: none;
