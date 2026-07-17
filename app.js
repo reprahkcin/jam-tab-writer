@@ -2342,7 +2342,7 @@ const PERF_LABELS = { instruments: 'Instruments', harp: 'Harmonica' };
 const PERF_PADX = 28; // must match .perform-cols left/right padding in CSS
 const PERF_GAP = 36;  // gap between columns, in px
 
-const perf = { open: false, page: 0, pages: 1, orig: {}, idleTimer: null, auto: false, autoTimer: null };
+const perf = { open: false, page: 0, pages: 1, orig: {}, idleTimer: null, auto: false, autoTimer: null, setlist: null };
 const pf = {
   overlay: document.getElementById('perform-overlay'),
   bar: document.getElementById('perform-bar'),
@@ -2355,9 +2355,97 @@ const pf = {
   pageLabel: document.getElementById('pf-page'),
 };
 
-// The ordered list the page-turner flows through: the current folder's charts
-// (by path) in folder mode, else the local songs (recent first).
+// ---- Setlists --------------------------------------------------------------
+// Named, ordered lists of songs to perform through. Entries reference songs
+// stably (folder: libId+path, local: id) so a set survives reloads.
+const SETLIST_KEY = 'gtw.setlists';
+let setlists = loadSetlists();
+let editingSetId = null; // which setlist the modal is showing
+
+function loadSetlists() { try { return JSON.parse(localStorage.getItem(SETLIST_KEY) || '[]'); } catch { return []; } }
+function saveSetlists() { localStorage.setItem(SETLIST_KEY, JSON.stringify(setlists)); }
+function songKey(s) { return s.libId ? 'lib:' + s.libId + '|' + (s.path || '') : 'local:' + s.id; }
+function resolveKey(key) {
+  if (key.startsWith('lib:')) {
+    const [libId, path] = key.slice(4).split('|');
+    return songs.find((s) => s.libId === libId && (s.path || '') === path);
+  }
+  return songs.find((s) => s.id === key.slice(6));
+}
+
+function openSetlistModal() {
+  if (!setlists.find((x) => x.id === editingSetId)) editingSetId = setlists[0] ? setlists[0].id : null;
+  document.getElementById('setlist-modal').hidden = false;
+  renderSetlistModal();
+}
+function renderSetlistModal() {
+  const listEl = document.getElementById('setlist-list');
+  listEl.innerHTML = setlists.map((sl) =>
+    `<li class="sl-item${sl.id === editingSetId ? ' active' : ''}" data-id="${sl.id}">${escapeHtml(sl.name)}<span class="sl-count">${sl.items.length}</span></li>`).join('')
+    || '<li class="sl-empty">No setlists yet.</li>';
+  listEl.querySelectorAll('.sl-item').forEach((li) => li.addEventListener('click', () => { editingSetId = li.dataset.id; renderSetlistModal(); }));
+
+  const detail = document.getElementById('setlist-detail');
+  const sl = setlists.find((x) => x.id === editingSetId);
+  if (!sl) { detail.innerHTML = '<div class="sl-hint">Create a setlist to start.</div>'; return; }
+  const rows = sl.items.map((it, i) => {
+    const found = resolveKey(it.key);
+    const missing = found ? '' : ' <span class="sl-missing">(not open)</span>';
+    return `<li class="sl-row"><span class="sl-song">${i + 1}. ${escapeHtml(it.title || (found && found.title) || 'Untitled')}${missing}</span>` +
+      `<span class="sl-tools"><button class="sl-up" data-i="${i}" title="Move up">&#8593;</button>` +
+      `<button class="sl-down" data-i="${i}" title="Move down">&#8595;</button>` +
+      `<button class="sl-rm" data-i="${i}" title="Remove">&#10005;</button></span></li>`;
+  }).join('');
+  detail.innerHTML =
+    `<div class="sl-detail-head"><b>${escapeHtml(sl.name)}</b>` +
+    `<span class="sl-detail-tools"><button class="inline-btn" id="sl-rename">Rename</button>` +
+    `<button class="inline-btn" id="sl-delete">Delete</button></span></div>` +
+    `<ul class="sl-rows">${rows || '<li class="sl-hint">Empty — add the current song below.</li>'}</ul>` +
+    `<div class="sl-actions"><button class="inline-btn" id="sl-add-current">+ Add current song</button>` +
+    `<button class="tool-start" id="sl-perform"${sl.items.length ? '' : ' disabled'}>Perform set &#9654;</button></div>`;
+  wireSetlistDetail(sl);
+}
+function wireSetlistDetail(sl) {
+  const d = document.getElementById('setlist-detail');
+  d.querySelector('#sl-rename').onclick = () => { const n = prompt('Setlist name:', sl.name); if (n && n.trim()) { sl.name = n.trim(); saveSetlists(); renderSetlistModal(); } };
+  d.querySelector('#sl-delete').onclick = () => { if (confirm('Delete this setlist?')) { setlists = setlists.filter((x) => x.id !== sl.id); editingSetId = setlists[0] ? setlists[0].id : null; saveSetlists(); renderSetlistModal(); } };
+  d.querySelector('#sl-add-current').onclick = () => {
+    const cur = currentSong();
+    if (!cur) { alert('Select a song first.'); return; }
+    sl.items.push({ key: songKey(cur), title: cur.title || 'Untitled' });
+    saveSetlists(); renderSetlistModal();
+  };
+  const perfBtn = d.querySelector('#sl-perform');
+  if (perfBtn && !perfBtn.disabled) perfBtn.onclick = () => performSetlist(sl);
+  d.querySelectorAll('.sl-up').forEach((b) => (b.onclick = () => { const i = +b.dataset.i; if (i > 0) { [sl.items[i - 1], sl.items[i]] = [sl.items[i], sl.items[i - 1]]; saveSetlists(); renderSetlistModal(); } }));
+  d.querySelectorAll('.sl-down').forEach((b) => (b.onclick = () => { const i = +b.dataset.i; if (i < sl.items.length - 1) { [sl.items[i + 1], sl.items[i]] = [sl.items[i], sl.items[i + 1]]; saveSetlists(); renderSetlistModal(); } }));
+  d.querySelectorAll('.sl-rm').forEach((b) => (b.onclick = () => { sl.items.splice(+b.dataset.i, 1); saveSetlists(); renderSetlistModal(); }));
+}
+function performSetlist(sl) {
+  const first = sl.items.map((it) => resolveKey(it.key)).find(Boolean);
+  if (!first) { alert('None of this set’s songs are open right now — open their folder first.'); return; }
+  document.getElementById('setlist-modal').hidden = true;
+  perf.setlist = sl;
+  selectSong(first.id);
+  openPerform();
+}
+
+document.getElementById('setlist-btn').addEventListener('click', openSetlistModal);
+document.getElementById('setlist-close').addEventListener('click', () => { document.getElementById('setlist-modal').hidden = true; });
+document.getElementById('setlist-new').addEventListener('click', () => {
+  const name = prompt('New setlist name:', 'Set ' + (setlists.length + 1));
+  if (name === null) return;
+  const sl = { id: newId(), name: name.trim() || 'Set ' + (setlists.length + 1), items: [] };
+  setlists.push(sl); editingSetId = sl.id; saveSetlists(); renderSetlistModal();
+});
+
+// The ordered list the page-turner flows through: a chosen setlist if we're
+// performing one, else the current folder's charts (by path), else local songs.
 function perfSetlist() {
+  if (perf.setlist) {
+    const out = perf.setlist.items.map((it) => resolveKey(it.key)).filter(Boolean);
+    if (out.length) return out;
+  }
   if (mode === 'folder') {
     const cur = currentSong();
     const libId = cur && cur.libId;
@@ -2410,6 +2498,7 @@ function openPerform() {
 function closePerform() {
   if (!perf.open) return;
   stopAuto();
+  perf.setlist = null;
   perf.open = false;
   document.removeEventListener('keydown', perfKeydown, true);
   pf.overlay.removeEventListener('mousemove', perfActivity);
@@ -2618,7 +2707,7 @@ function perfFit() {
   applyPerfLayout();
 }
 
-document.getElementById('perform-btn').addEventListener('click', openPerform);
+document.getElementById('perform-btn').addEventListener('click', () => { perf.setlist = null; openPerform(); });
 document.getElementById('pf-exit').addEventListener('click', closePerform);
 document.getElementById('pf-auto').addEventListener('click', () => (perf.auto ? stopAuto() : startAuto()));
 document.getElementById('pf-auto-slower').addEventListener('click', () => setAutoSecs(5));

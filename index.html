@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guitar Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=43" />
+  <link rel="stylesheet" href="styles.css?v=44" />
 </head>
 <body>
   <header>
@@ -20,6 +20,7 @@
       <button id="share-btn" title="Share this song as a link">Share</button>
       <button id="metro-btn" title="Metronome">Metronome</button>
       <button id="tuner-btn" title="Instrument tuner (uses your microphone)">Tuner</button>
+      <button id="setlist-btn" title="Build and perform setlists">Setlists</button>
       <button id="perform-btn" title="Full-screen performance view">Perform</button>
       <button id="print-btn" title="Print / save as PDF">Print</button>
       <input type="file" id="import-input" accept=".txt,.cho,.chordpro,.crd,.pdf,text/plain,application/pdf" hidden />
@@ -243,6 +244,21 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
     </div>
   </div>
 
+  <!-- Setlist builder. -->
+  <div id="setlist-modal" class="share-modal" hidden>
+    <div class="share-card setlist-card">
+      <div class="share-head">Setlists</div>
+      <div class="setlist-body">
+        <div class="setlist-side">
+          <ul id="setlist-list"></ul>
+          <button id="setlist-new" class="inline-btn">+ New setlist</button>
+        </div>
+        <div id="setlist-detail" class="setlist-detail"></div>
+      </div>
+      <div class="share-actions"><button id="setlist-close">Close</button></div>
+    </div>
+  </div>
+
   <!-- Share-a-song link dialog. -->
   <div id="share-modal" class="share-modal" hidden>
     <div class="share-card">
@@ -258,8 +274,8 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=43"></script>
-  <script src="pdf2cho.js?v=43"></script>
-  <script src="app.js?v=43"></script>
+  <script src="chords.js?v=44"></script>
+  <script src="pdf2cho.js?v=44"></script>
+  <script src="app.js?v=44"></script>
 </body>
 </html>

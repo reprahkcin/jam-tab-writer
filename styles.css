@@ -1247,6 +1247,34 @@ body.performing { overflow: hidden; }
 .share-actions { display: flex; gap: 8px; margin-top: 14px; }
 .share-actions button { padding: 6px 14px; border-radius: 6px; cursor: pointer; }
 
+/* Setlist builder. */
+.setlist-card { width: min(92vw, 640px); }
+.setlist-body { display: flex; gap: 14px; margin-top: 12px; min-height: 260px; }
+.setlist-side { flex: 0 0 180px; display: flex; flex-direction: column; gap: 8px; }
+#setlist-list { list-style: none; margin: 0; padding: 0; flex: 1; overflow-y: auto; }
+.sl-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 9px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--text);
+}
+.sl-item:hover { background: var(--panel-2); }
+.sl-item.active { background: #33384c; }
+.sl-count { color: var(--muted); font-size: 11px; }
+.sl-empty, .sl-hint { color: var(--muted); font-size: 12px; padding: 6px 4px; list-style: none; }
+.setlist-detail { flex: 1; min-width: 0; border-left: 1px solid var(--line); padding-left: 14px; }
+.sl-detail-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.sl-detail-tools { display: flex; gap: 4px; }
+.sl-rows { list-style: none; margin: 0 0 10px; padding: 0; max-height: 220px; overflow-y: auto; }
+.sl-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 2px; font-size: 13px; }
+.sl-row:hover { background: var(--panel-2); border-radius: 5px; }
+.sl-song { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sl-missing { color: var(--muted); font-size: 11px; }
+.sl-tools { display: flex; gap: 2px; flex-shrink: 0; }
+.sl-tools button { background: none; border: none; color: var(--muted); cursor: pointer; padding: 1px 5px; font-size: 13px; }
+.sl-tools button:hover { color: var(--accent); }
+.sl-actions { display: flex; gap: 8px; align-items: center; }
+.sl-actions .tool-start { padding: 5px 12px; border-radius: 6px; cursor: pointer; }
+.sl-actions .tool-start:disabled { opacity: 0.4; cursor: default; }
+
 /* ---- PDF drop / conversion overlay --------------------------------------- */
 .pdf-overlay {
   position: fixed;
