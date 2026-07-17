@@ -525,6 +525,35 @@ main { display: flex; flex: 1; min-height: 0; }
 }
 #lead-section { border-top: 1px dashed var(--line); padding-top: 8px; }
 
+/* The jam roster: an on/off chip per instrument. */
+.instrument-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.instrument-bar:empty { display: none; }
+.inst-chip {
+  font: 600 12px system-ui, sans-serif;
+  padding: 3px 11px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+.inst-chip:hover { border-color: var(--section); color: var(--text); }
+.inst-chip.on { background: var(--section); border-color: var(--section); color: var(--bg); }
+
+/* One panel per active instrument: header + chords + scale. */
+.inst-panel { margin-bottom: 14px; }
+.inst-panel:not(:last-child) { border-bottom: 1px dashed var(--line); padding-bottom: 10px; }
+.inst-head {
+  font: 700 12px system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--section);
+  margin: 2px 0 8px;
+}
+.inst-chords { display: flex; flex-wrap: wrap; gap: 10px; }
+.inst-scale { margin-top: 8px; overflow-x: auto; }
+.inst-scale:empty { display: none; }
+
 /* Chord diagram strip */
 .chord-diagrams { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
 .chord-diagrams:empty { display: none; }
@@ -618,7 +647,7 @@ main { display: flex; flex: 1; min-height: 0; }
 }
 .sp-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; font-family: system-ui, sans-serif; font-size: 13px; }
 .sp-title { font-weight: 700; color: var(--section); }
-.scale-panel select {
+.scale-panel select, .sp-head select {
   background: var(--panel);
   color: var(--text);
   border: 1px solid var(--line);

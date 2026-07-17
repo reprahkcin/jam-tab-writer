@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guitar Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=31" />
+  <link rel="stylesheet" href="styles.css?v=33" />
 </head>
 <body>
   <header>
@@ -86,13 +86,8 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
           <div class="pane-head">
             <span>Preview</span>
             <span class="view-toggles">
-              <label><input type="checkbox" id="toggle-diagrams" checked /> Chords</label>
-              <label><input type="checkbox" id="toggle-lead" checked /> Lead set</label>
-              <label><input type="checkbox" id="toggle-harmonica" checked /> Harmonica</label>
-              <span class="tog-sep">|</span>
-              <label title="Show guitar chord/scale diagrams"><input type="checkbox" id="toggle-guitar" checked /> Guitar</label>
-              <label title="Show piano chord charts and scale"><input type="checkbox" id="toggle-piano" checked /> Piano</label>
-              <label title="Show ukulele chord charts"><input type="checkbox" id="toggle-uke" checked /> Uke</label>
+              <label title="Show chord diagrams for each instrument"><input type="checkbox" id="toggle-chords" checked /> Chords</label>
+              <label title="Show a scale map for each instrument"><input type="checkbox" id="toggle-scales" checked /> Scales</label>
               <span class="tog-sep">|</span>
               <label class="print-cols-ctl" title="Number of columns when you print / save as PDF">Print
                 <select id="print-cols">
@@ -106,16 +101,11 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
           <div id="preview" class="preview">
             <div id="print-header"></div>
             <div id="capo-banner"></div>
+            <!-- The jam: on/off chip per instrument, built by renderInstrumentBar(). -->
+            <div id="instrument-bar" class="instrument-bar"></div>
             <div id="harmonica-panel" class="harmonica-panel"></div>
-            <div id="rhythm-section" class="chord-section">
-              <div class="section-label" id="rhythm-label">Rhythm</div>
-              <div id="chord-diagrams" class="chord-diagrams"></div>
-            </div>
-            <div id="lead-section" class="chord-section">
-              <div class="section-label">Lead Guitar</div>
-              <div id="lead-diagrams" class="chord-diagrams"></div>
-              <div id="scale-panel" class="scale-panel"></div>
-            </div>
+            <!-- One section per active instrument (chords + scale), built by renderInstruments(). -->
+            <div id="instrument-panels"></div>
             <div id="preview-body"></div>
           </div>
         </div>
@@ -204,10 +194,8 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
       </div>
       <div class="pf-group pf-toggles">
         <label>Show</label>
-        <button class="pf-toggle" data-panel="chords">Chords</button>
-        <button class="pf-toggle" data-panel="lead">Lead</button>
-        <button class="pf-toggle" data-panel="scale">Scale</button>
-        <button class="pf-toggle" data-panel="harp">Harp</button>
+        <button class="pf-toggle" data-panel="instruments">Instruments</button>
+        <button class="pf-toggle" data-panel="harp">Harmonica</button>
       </div>
       <div class="pf-group">
         <button id="pf-prev-song" title="Previous song (&larr; at start)">&#9664; Song</button>
@@ -224,8 +212,8 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=31"></script>
-  <script src="pdf2cho.js?v=31"></script>
-  <script src="app.js?v=31"></script>
+  <script src="chords.js?v=33"></script>
+  <script src="pdf2cho.js?v=33"></script>
+  <script src="app.js?v=33"></script>
 </body>
 </html>

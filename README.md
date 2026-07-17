@@ -267,37 +267,42 @@ share a uniform grid and even spacing (on screen and in print).
   with alternate parts and voice leading. Your pick per chord is remembered and
   prints with the sheet.
 
-## Instruments (guitar, piano, ukulele)
+## Instruments — the jam
 
-Each chord set shows a row per instrument — toggle **Guitar / Piano / Ukulele**
-in the preview header:
+Charts are organized **by instrument**. A row of chips at the top of the preview
+is your jam roster — switch each instrument on or off. Every instrument you turn
+on gets its own section with **its chord diagrams and its scale map**, stacked so
+you can see the whole band at once. Two global toggles, **Chords** and
+**Scales**, hide those rows across every instrument.
 
-- **Guitar** — fretboard diagrams with the voicing dropdown (as below).
+- **Guitar 1 / Guitar 2** — two guitar parts (your first and second guitar).
+  Both show fretboard diagrams with the voicing dropdown; **Guitar 1** defaults
+  to standard open shapes, **Guitar 2** to **triads up the neck**, and each
+  remembers its own picks — hold an open rhythm voicing on one while the other
+  builds a line from a triad inversion.
+- **Ukulele** — a 4-string (gCEA) fretboard diagram per chord, voicings found
+  automatically; anything unreachable shows "shape n/a".
+- **Mandolin** — a 4-course (GDAE, fifths) diagram per chord, plus a mandolin
+  scale map.
 - **Piano** — a keyboard per chord with the chord tones highlighted (root
-  orange, other tones gold) and labelled by interval degree (R/3/5/7 …). Also
-  adds a **piano scale roll** next to the guitar scale map.
-- **Ukulele** — a 4-string (gCEA) fretboard diagram per chord, with voicings
-  generated automatically; anything unreachable shows "shape n/a".
+  orange, other tones gold) and labelled by interval degree (R/3/5/7 …), plus a
+  piano scale roll.
+- **Bass** — a scale map on the bass neck (EADG); no chord grid.
+- **Harmonica** — its own panel (see below), toggled from the roster like the
+  rest.
 
-## Rhythm & Lead sets
-
-The chord area has two independent rows (toggle the **Lead set** checkbox):
-
-- **Rhythm** — your main parts; each chord defaults to the standard shape, with
-  the voicing dropdown for swapping individual chords.
-- **Lead** — the same chords defaulting to **triads up the neck** (each with its
-  own voicing dropdown, kept separate from the rhythm choices), plus a **scale
-  map**. The two sets remember different picks, so you can hold an open-chord
-  rhythm voicing while the lead row shows a triad inversion to build a line from.
+The lineup is **global** — one jam applies to every song. Fretted-instrument
+voicings and piano inversions are remembered per chord; the scale root, scale
+type, and focused chord are shared across all the instruments' scale maps.
 
 The **scale map** is a full-neck (15-fret) fretboard: the **root** is filled
 orange, other **scale tones** teal. Pick the **root** (defaults to the song's
 sounding key, or override it) and the **scale** — major/minor pentatonic, blues,
 major, natural minor, Dorian, or Mixolydian.
 
-**Chord-tone highlight**: click any chord's name (in the Rhythm or Lead row), or
-use the **Chord** dropdown in the scale panel, to overlay that chord's notes on
-the scale map. Each chord tone is labelled with its **interval degree**
+**Chord-tone highlight**: click any chord's name, or use the **Chord** dropdown
+in the scale controls, to overlay that chord's notes on **every** scale map. Each
+chord tone is labelled with its **interval degree**
 (R, 3, 5, b7, …): tones that are in the scale get a gold ring with the label;
 tones that fall *outside* the scale are drawn as hollow gold markers with the
 label, so you can see the whole chord across the neck and aim for specific
@@ -306,8 +311,8 @@ Everything prints with the sheet.
 - **Harmonica** suggests diatonic harp keys for the sounding key: 2nd position
   (cross harp — blues/folk), 1st (straight — melody), and 3rd (slant — minor).
   The song key is auto-detected from the first chord; override it with the
-  dropdown. Toggle the panel with the **Harmonica** checkbox. Both diagrams and
-  harmonica picks are included when you print.
+  dropdown. Toggle it from the instrument roster. Both diagrams and harmonica
+  picks are included when you print.
 
 ## Files
 

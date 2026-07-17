@@ -507,44 +507,43 @@ const el = {
   status: document.getElementById('save-status'),
   breadcrumb: document.getElementById('save-breadcrumb'),
   capoBanner: document.getElementById('capo-banner'),
-  diagrams: document.getElementById('chord-diagrams'),
-  leadDiagrams: document.getElementById('lead-diagrams'),
-  scalePanel: document.getElementById('scale-panel'),
-  rhythmLabel: document.getElementById('rhythm-label'),
-  leadSection: document.getElementById('lead-section'),
+  instBar: document.getElementById('instrument-bar'),
+  instPanels: document.getElementById('instrument-panels'),
   harmonica: document.getElementById('harmonica-panel'),
-  toggleDiagrams: document.getElementById('toggle-diagrams'),
-  toggleLead: document.getElementById('toggle-lead'),
-  toggleHarmonica: document.getElementById('toggle-harmonica'),
-  toggleGuitar: document.getElementById('toggle-guitar'),
-  togglePiano: document.getElementById('toggle-piano'),
-  toggleUke: document.getElementById('toggle-uke'),
+  toggleChords: document.getElementById('toggle-chords'),
+  toggleScales: document.getElementById('toggle-scales'),
 };
 
 let songs = loadSongs();
 let currentId = null;
 
+// Default jam: two guitars, uke, piano, harmonica on; mandolin + bass off.
+const ENSEMBLE_DEFAULTS = { guitar1: true, guitar2: true, ukulele: true, mandolin: false, piano: true, bass: false, harmonica: true };
+
 function loadPrefs() {
   const defaults = {
-    diagrams: true, harmonica: true, lead: true, chordMode: 'shapes',
-    scaleType: 'majPent', voicings: { rhythm: {}, lead: {} }, pianoInv: { rhythm: {}, lead: {} },
-    instruments: { guitar: true, piano: true, ukulele: true },
-    perform: { cols: 4, font: 22, panels: { chords: false, lead: false, scale: false, harp: false } },
+    showChords: true, showScales: true, harmonica: true, chordMode: 'shapes',
+    scaleType: 'majPent',
+    voicings: { guitar1: {}, guitar2: {} }, pianoInv: { piano: {} },
+    ensemble: Object.assign({}, ENSEMBLE_DEFAULTS),
+    perform: { cols: 4, font: 22, panels: { instruments: true, harp: true } },
     printCols: 1,
     metro: { bpm: 100, steps: 16, click: true, pattern: null },
     tunerPreset: 'standard',
   };
   let p = defaults;
   try { p = Object.assign(defaults, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch { /* keep defaults */ }
-  if (!p.voicings || Array.isArray(p.voicings)) p.voicings = { rhythm: {}, lead: {} };
-  p.voicings.rhythm = p.voicings.rhythm || {};
-  p.voicings.lead = p.voicings.lead || {};
-  if (!p.pianoInv || Array.isArray(p.pianoInv)) p.pianoInv = { rhythm: {}, lead: {} };
-  p.pianoInv.rhythm = p.pianoInv.rhythm || {};
-  p.pianoInv.lead = p.pianoInv.lead || {};
-  p.instruments = Object.assign({ guitar: true, piano: true, ukulele: true }, p.instruments);
+  // Migrate the old rhythm/lead voicing stores onto the new guitar1/guitar2 slots.
+  if (!p.voicings || Array.isArray(p.voicings)) p.voicings = {};
+  p.voicings.guitar1 = p.voicings.guitar1 || p.voicings.rhythm || {};
+  p.voicings.guitar2 = p.voicings.guitar2 || p.voicings.lead || {};
+  if (!p.pianoInv || Array.isArray(p.pianoInv)) p.pianoInv = {};
+  p.pianoInv.piano = p.pianoInv.piano || p.pianoInv.rhythm || {};
+  p.ensemble = Object.assign({}, ENSEMBLE_DEFAULTS, p.ensemble);
+  if (typeof p.showChords !== 'boolean') p.showChords = p.diagrams !== false;  // old 'diagrams' toggle
+  if (typeof p.showScales !== 'boolean') p.showScales = p.lead !== false;      // old 'lead' carried the scale
   p.perform = Object.assign({ cols: 4, font: 22, panels: {} }, p.perform);
-  p.perform.panels = Object.assign({ chords: false, lead: false, scale: false, harp: false }, p.perform.panels);
+  p.perform.panels = Object.assign({ instruments: true, harp: true }, p.perform.panels);
   p.metro = Object.assign({ bpm: 100, steps: 16, click: true, pattern: null }, p.metro);
   return p;
 }
@@ -609,21 +608,185 @@ function renderPreview() {
   el.previewBody.innerHTML = render(s.body, inlineShift(s));
   updatePrintHeader(s);
   renderCapoBanner(s);
-  if (prefs.diagrams) renderChordSet(s, el.diagrams, 'rhythm');
-  else el.diagrams.innerHTML = '';
-  el.rhythmLabel.style.display = prefs.lead ? '' : 'none';
-  if (prefs.lead) {
-    el.leadSection.style.display = '';
-    renderChordSet(s, el.leadDiagrams, 'lead');
-    renderScale(s);
-  } else {
-    el.leadSection.style.display = 'none';
-  }
-  if (prefs.harmonica) renderHarmonica(s);
+  renderInstrumentBar();
+  renderInstruments(s);
+  if (prefs.ensemble.harmonica) renderHarmonica(s);
   else el.harmonica.innerHTML = '';
   // In performance mode the panels are relocated into the overlay and shown
   // independently of the app's own toggles, so keep them all populated.
   if (typeof perf !== 'undefined' && perf.open) perfRenderPanels(s);
+}
+
+// ---- The jam: instruments, their chords, and their scales ------------------
+// Each instrument is one section (chords + scale). guitar1/guitar2 are two
+// guitar voicing sets (low vs high — your first/second guitar). Bass is scale-
+// only; harmonica keeps its own separate panel.
+const INSTRUMENTS = [
+  { id: 'guitar1', label: 'Guitar 1', kind: 'guitar', chords: true, scale: true, tuning: STRING_ABS, high: false },
+  { id: 'guitar2', label: 'Guitar 2', kind: 'guitar', chords: true, scale: true, tuning: STRING_ABS, high: true },
+  { id: 'ukulele', label: 'Ukulele', kind: 'fret', chords: true, scale: true, tuning: UKE_ABS, voicing: ukeVoicing, diagram: ukeDiagramSVG },
+  { id: 'mandolin', label: 'Mandolin', kind: 'fret', chords: true, scale: true, tuning: MANDO_ABS, voicing: mandoVoicing, diagram: mandoDiagramSVG },
+  { id: 'piano', label: 'Piano', kind: 'piano', chords: true, scale: true },
+  { id: 'bass', label: 'Bass', kind: 'fret', chords: false, scale: true, tuning: BASS_ABS },
+  { id: 'harmonica', label: 'Harmonica', kind: 'harmonica', chords: false, scale: false },
+];
+function activeInstruments() { return INSTRUMENTS.filter((i) => prefs.ensemble[i.id]); }
+
+// A song's chords, transposed to shapes, de-duplicated: [{raw, shape}].
+function chordListFor(s) {
+  const shapeSh = shapeShift(s);
+  const seen = new Set(), out = [];
+  for (const tok of s.body.match(/\[([^\]]*)\]/g) || []) {
+    const name = tok.slice(1, -1);
+    if (!isChord(name)) continue;
+    const shape = transposeChord(name, shapeSh);
+    if (seen.has(shape)) continue;
+    seen.add(shape);
+    out.push({ raw: name, shape });
+  }
+  return out;
+}
+
+// The jam roster: an on/off chip per instrument.
+function renderInstrumentBar() {
+  el.instBar.innerHTML = INSTRUMENTS.map((i) => {
+    const on = !!prefs.ensemble[i.id];
+    return `<button class="inst-chip${on ? ' on' : ''}" data-inst="${i.id}" ` +
+      `title="${on ? 'Remove from' : 'Add to'} the jam">${escapeHtml(i.label)}</button>`;
+  }).join('');
+  el.instBar.querySelectorAll('.inst-chip').forEach((b) => b.addEventListener('click', () => {
+    prefs.ensemble[b.dataset.inst] = !prefs.ensemble[b.dataset.inst];
+    savePrefs();
+    renderPreview();
+  }));
+}
+
+// Scale root/type/focus controls — shown once above the per-instrument scales.
+function scaleControlsHtml(s, pc, auto, scale, highlight) {
+  let rootOpts = `<option value="auto"${auto ? ' selected' : ''}>Auto (${HARP_NAMES[pc]})</option>`;
+  for (let i = 0; i < 12; i++) rootOpts += `<option value="${i}"${!auto && s.scaleRoot === i ? ' selected' : ''}>${HARP_NAMES[i]}</option>`;
+  const scaleOpts = SCALES.map((sc) => `<option value="${sc.id}"${sc.id === scale.id ? ' selected' : ''}>${sc.name}</option>`).join('');
+  const focusOpts = `<option value="">none</option>` + uniqueShapes(s).map((c) =>
+    `<option value="${escapeHtml(c)}"${s.focusChord === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
+  const legendHi = highlight ? ` <span class="sp-dot hi"></span>chord tone` : '';
+  return `<div class="sp-head"><span class="sp-title">${HARP_NAMES[pc]} ${escapeHtml(scale.name)}</span>` +
+    `<span class="muted">Root</span><select id="scale-root">${rootOpts}</select>` +
+    `<select id="scale-type">${scaleOpts}</select>` +
+    `<span class="muted">Chord</span><select id="scale-focus">${focusOpts}</select>` +
+    `<span class="sp-legend"><span class="sp-dot root"></span>root <span class="sp-dot note"></span>scale tone${legendHi}</span></div>`;
+}
+
+// Build a section for every active instrument (chords + scale, per toggles).
+function renderInstruments(s) {
+  const chords = chordListFor(s);
+  const soundSh = soundShift(s);
+  const soundOf = (c) => (s.capo ? transposeChord(c.raw, soundSh) : null);
+
+  const auto = s.scaleRoot === null || s.scaleRoot === undefined;
+  const pc = auto ? soundingKeyPc(s) : s.scaleRoot;
+  const scale = scaleById(prefs.scaleType);
+  let highlight = null;
+  if (s.focusChord) {
+    const soundingName = s.capo ? transposeChord(s.focusChord, s.capo) : s.focusChord;
+    highlight = chordToneLabels(soundingName);
+  }
+  const showScale = (inst) => prefs.showScales && inst.scale && pc !== null;
+
+  const active = activeInstruments().filter((i) => i.kind !== 'harmonica');
+  let html = '';
+  if (pc !== null && prefs.showScales && active.some((i) => i.scale)) {
+    html += scaleControlsHtml(s, pc, auto, scale, highlight);
+  }
+  for (const inst of active) {
+    let body = '';
+    if (prefs.showChords && inst.chords) body += `<div class="inst-chords">${chordDiagramsFor(inst, chords, soundOf)}</div>`;
+    if (showScale(inst)) {
+      const map = inst.kind === 'piano'
+        ? pianoScaleSVG(pc, scale.iv, highlight)
+        : scaleDiagramSVG(pc, scale.iv, highlight, inst.tuning);
+      body += `<div class="inst-scale">${map}</div>`;
+    }
+    if (!body) continue;
+    html += `<section class="inst-panel" data-inst="${inst.id}"><div class="inst-head">${escapeHtml(inst.label)}</div>${body}</section>`;
+  }
+  el.instPanels.innerHTML = html ||
+    '<span class="palette-empty">No instrument charts to show — add instruments above, or enable Chords / Scales.</span>';
+  wireInstruments(s);
+}
+
+// Chord diagrams row for one instrument.
+function chordDiagramsFor(inst, chords, soundOf) {
+  let out = '';
+  if (inst.kind === 'guitar') {
+    const store = prefs.voicings[inst.id] || (prefs.voicings[inst.id] = {});
+    for (const c of chords) {
+      const voicings = chordVoicings(c.shape);
+      let idx = store[c.shape];
+      if (idx === undefined) idx = inst.high ? defaultLeadIndex(voicings) : 0;
+      if (idx >= voicings.length) idx = 0;
+      let select = '';
+      if (voicings.length > 1) {
+        const opts = voicings.map((v, i) => `<option value="${i}"${i === idx ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('');
+        select = `<select class="cd-voicing" data-inst="${inst.id}" data-chord="${escapeHtml(c.shape)}">${opts}</select>`;
+      }
+      out += chordDiagramSVG(c.shape, voicings[idx].frets, soundOf(c), select);
+    }
+  } else if (inst.kind === 'piano') {
+    const store = prefs.pianoInv.piano || (prefs.pianoInv.piano = {});
+    for (const c of chords) {
+      const ci = chordIntervals(c.shape);
+      const n = ci ? ci.iv.length : 0;
+      let inv = store[c.shape] || 0;
+      if (inv >= n) inv = 0;
+      let select = '';
+      if (n > 1) {
+        const opts = [];
+        for (let k = 0; k < n; k++) opts.push(`<option value="${k}"${k === inv ? ' selected' : ''}>${PIANO_INV_NAMES[k] || (k + ' inv')}</option>`);
+        select = `<select class="pk-inv" data-chord="${escapeHtml(c.shape)}">${opts.join('')}</select>`;
+      }
+      out += pianoChordSVG(c.shape, inv, soundOf(c), select);
+    }
+  } else { // generic fretted (ukulele, mandolin, …)
+    for (const c of chords) out += inst.diagram(c.shape, inst.voicing(c.shape), soundOf(c), '');
+  }
+  return out;
+}
+
+function wireInstruments(s) {
+  el.instPanels.querySelectorAll('.cd-voicing').forEach((sel) => sel.addEventListener('change', () => {
+    (prefs.voicings[sel.dataset.inst] || (prefs.voicings[sel.dataset.inst] = {}))[sel.dataset.chord] = parseInt(sel.value, 10);
+    savePrefs(); renderInstruments(currentSong());
+  }));
+  el.instPanels.querySelectorAll('.pk-inv').forEach((sel) => sel.addEventListener('change', () => {
+    (prefs.pianoInv.piano || (prefs.pianoInv.piano = {}))[sel.dataset.chord] = parseInt(sel.value, 10);
+    savePrefs(); renderInstruments(currentSong());
+  }));
+  el.instPanels.querySelectorAll('.cd-name').forEach((nm) => {
+    const shape = nm.dataset.chord;
+    if (s.focusChord === shape) nm.classList.add('focused');
+    nm.title = 'Click to highlight this chord’s notes on the scale maps';
+    nm.addEventListener('click', () => {
+      const cur = currentSong();
+      cur.focusChord = cur.focusChord === shape ? null : shape;
+      cur.updated = Date.now();
+      schedulePersist();
+      renderPreview();
+    });
+  });
+  const rootSel = document.getElementById('scale-root');
+  if (rootSel) rootSel.addEventListener('change', (e) => {
+    const cur = currentSong();
+    cur.scaleRoot = e.target.value === 'auto' ? null : parseInt(e.target.value, 10);
+    cur.updated = Date.now(); schedulePersist(); renderInstruments(cur);
+  });
+  const typeSel = document.getElementById('scale-type');
+  if (typeSel) typeSel.addEventListener('change', (e) => { prefs.scaleType = e.target.value; savePrefs(); renderInstruments(currentSong()); });
+  const focusSel = document.getElementById('scale-focus');
+  if (focusSel) focusSel.addEventListener('change', (e) => {
+    const cur = currentSong();
+    cur.focusChord = e.target.value || null;
+    cur.updated = Date.now(); schedulePersist(); renderPreview();
+  });
 }
 
 // First chord's root is our best guess at the tonic.
@@ -690,170 +853,7 @@ function defaultLeadIndex(voicings) {
   return i < 0 ? 0 : i;
 }
 
-function instRow(label, diagramsHtml) {
-  return `<div class="inst-row"><span class="inst-label">${label}</span>` +
-    `<div class="inst-diagrams">${diagramsHtml}</div></div>`;
-}
-
 const PIANO_INV_NAMES = ['root', '1st inv', '2nd inv', '3rd inv'];
-
-// Render a diagram set (setName is 'rhythm' or 'lead') into `container` as one
-// row per enabled instrument (Guitar / Piano / Ukulele). Each set keeps its own
-// guitar voicing selection so rhythm and lead differ.
-function renderChordSet(s, container, setName) {
-  const shapeSh = shapeShift(s), soundSh = soundShift(s);
-  const store = prefs.voicings[setName];
-  const matches = s.body.match(/\[([^\]]*)\]/g) || [];
-  const seen = new Set();
-  const chords = []; // { raw, shape }
-  for (const tok of matches) {
-    const name = tok.slice(1, -1);
-    if (!isChord(name)) continue;
-    const shape = transposeChord(name, shapeSh);
-    if (seen.has(shape)) continue;
-    seen.add(shape);
-    chords.push({ raw: name, shape });
-  }
-  const soundOf = (c) => (s.capo ? transposeChord(c.raw, soundSh) : null);
-  const inst = prefs.instruments;
-  let html = '';
-
-  if (inst.guitar) {
-    let g = '';
-    for (const c of chords) {
-      const voicings = chordVoicings(c.shape);
-      let idx = store[c.shape];
-      if (idx === undefined) idx = setName === 'lead' ? defaultLeadIndex(voicings) : 0;
-      if (idx >= voicings.length) idx = 0;
-      let select = '';
-      if (voicings.length > 1) {
-        const opts = voicings.map((v, i) =>
-          `<option value="${i}"${i === idx ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('');
-        select = `<select class="cd-voicing" data-set="${setName}" data-chord="${escapeHtml(c.shape)}">${opts}</select>`;
-      }
-      g += chordDiagramSVG(c.shape, voicings[idx].frets, soundOf(c), select);
-    }
-    html += instRow('Guitar', g);
-  }
-  // Piano and ukulele appear only in the Rhythm set — the Lead set is a
-  // guitar-only "second guitar" part.
-  const withPianoUke = setName === 'rhythm';
-  if (inst.piano && withPianoUke) {
-    const pstore = prefs.pianoInv[setName];
-    let pi = '';
-    for (const c of chords) {
-      const ci = chordIntervals(c.shape);
-      const n = ci ? ci.iv.length : 0;
-      let inv = pstore[c.shape] || 0;
-      if (inv >= n) inv = 0;
-      let select = '';
-      if (n > 1) {
-        const opts = [];
-        for (let k = 0; k < n; k++) opts.push(`<option value="${k}"${k === inv ? ' selected' : ''}>${PIANO_INV_NAMES[k] || (k + ' inv')}</option>`);
-        select = `<select class="pk-inv" data-set="${setName}" data-chord="${escapeHtml(c.shape)}">${opts.join('')}</select>`;
-      }
-      pi += pianoChordSVG(c.shape, inv, soundOf(c), select);
-    }
-    html += instRow('Piano', pi);
-  }
-  if (inst.ukulele && withPianoUke) {
-    let u = '';
-    for (const c of chords) u += ukeDiagramSVG(c.shape, ukeVoicing(c.shape), soundOf(c), '');
-    html += instRow('Ukulele', u);
-  }
-  container.innerHTML = html || '<span class="palette-empty">No instruments selected — enable one above.</span>';
-
-  container.querySelectorAll('.cd-voicing').forEach((sel) => {
-    sel.addEventListener('change', () => {
-      prefs.voicings[sel.dataset.set][sel.dataset.chord] = parseInt(sel.value, 10);
-      savePrefs();
-      renderChordSet(currentSong(), container, sel.dataset.set);
-    });
-  });
-
-  container.querySelectorAll('.pk-inv').forEach((sel) => {
-    sel.addEventListener('change', () => {
-      prefs.pianoInv[sel.dataset.set][sel.dataset.chord] = parseInt(sel.value, 10);
-      savePrefs();
-      renderChordSet(currentSong(), container, sel.dataset.set);
-    });
-  });
-
-  // Click a chord's name to focus it — its tones highlight on the scale map.
-  container.querySelectorAll('.cd-name').forEach((nm) => {
-    const shape = nm.dataset.chord;
-    if (s.focusChord === shape) nm.classList.add('focused');
-    nm.title = 'Click to highlight this chord’s notes on the scale map';
-    nm.addEventListener('click', () => {
-      const cur = currentSong();
-      cur.focusChord = cur.focusChord === shape ? null : shape;
-      cur.updated = Date.now();
-      schedulePersist();
-      renderPreview();
-    });
-  });
-}
-
-// Scale map for the lead set: root defaults to the song's sounding key.
-function renderScale(s) {
-  const auto = s.scaleRoot === null || s.scaleRoot === undefined;
-  const pc = auto ? soundingKeyPc(s) : s.scaleRoot;
-  if (pc === null) { el.scalePanel.innerHTML = ''; return; }
-  const scale = scaleById(prefs.scaleType);
-
-  let rootOpts = `<option value="auto"${auto ? ' selected' : ''}>Auto (${HARP_NAMES[pc]})</option>`;
-  for (let i = 0; i < 12; i++) {
-    rootOpts += `<option value="${i}"${!auto && s.scaleRoot === i ? ' selected' : ''}>${HARP_NAMES[i]}</option>`;
-  }
-  const scaleOpts = SCALES.map((sc) =>
-    `<option value="${sc.id}"${sc.id === scale.id ? ' selected' : ''}>${sc.name}</option>`).join('');
-
-  // Chord-tone highlight: the focused chord's sounding tones, labelled R/3/5/7.
-  let highlight = null;
-  if (s.focusChord) {
-    const soundingName = s.capo ? transposeChord(s.focusChord, s.capo) : s.focusChord;
-    highlight = chordToneLabels(soundingName);
-  }
-
-  const chordNames = uniqueShapes(s);
-  const focusOpts = `<option value="">none</option>` + chordNames.map((c) =>
-    `<option value="${escapeHtml(c)}"${s.focusChord === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
-  const legendHi = highlight ? ` <span class="sp-dot hi"></span>chord tone` : '';
-
-  // One scale diagram per enabled fretted/keyed instrument.
-  let diagrams = '';
-  if (prefs.instruments.guitar) diagrams += `<div class="scale-inst"><span class="inst-label">Guitar</span>${scaleDiagramSVG(pc, scale.iv, highlight)}</div>`;
-  if (prefs.instruments.piano) diagrams += `<div class="scale-inst"><span class="inst-label">Piano</span>${pianoScaleSVG(pc, scale.iv, highlight)}</div>`;
-
-  el.scalePanel.innerHTML =
-    `<div class="sp-head"><span class="sp-title">${HARP_NAMES[pc]} ${escapeHtml(scale.name)}</span>` +
-    `<span class="muted">Root</span><select id="scale-root">${rootOpts}</select>` +
-    `<select id="scale-type">${scaleOpts}</select>` +
-    `<span class="muted">Chord</span><select id="scale-focus">${focusOpts}</select>` +
-    `<span class="sp-legend"><span class="sp-dot root"></span>root <span class="sp-dot note"></span>scale tone${legendHi}</span>` +
-    `</div>` +
-    diagrams;
-
-  document.getElementById('scale-focus').addEventListener('change', (e) => {
-    const cur = currentSong();
-    cur.focusChord = e.target.value || null;
-    cur.updated = Date.now();
-    schedulePersist();
-    renderPreview();
-  });
-  document.getElementById('scale-root').addEventListener('change', (e) => {
-    const cur = currentSong();
-    cur.scaleRoot = e.target.value === 'auto' ? null : parseInt(e.target.value, 10);
-    cur.updated = Date.now();
-    schedulePersist();
-    renderScale(cur);
-  });
-  document.getElementById('scale-type').addEventListener('change', (e) => {
-    prefs.scaleType = e.target.value;
-    savePrefs();
-    renderScale(currentSong());
-  });
-}
 
 function renderHarmonica(s) {
   const pc = soundingKeyPc(s);
@@ -1550,27 +1550,15 @@ document.getElementById('capo-up').addEventListener('click', () => setCapo(1));
 document.getElementById('capo-down').addEventListener('click', () => setCapo(-1));
 
 function savePrefs() { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); }
-el.toggleDiagrams.addEventListener('change', () => {
-  prefs.diagrams = el.toggleDiagrams.checked;
+el.toggleChords.addEventListener('change', () => {
+  prefs.showChords = el.toggleChords.checked;
   savePrefs();
   renderPreview();
 });
-el.toggleLead.addEventListener('change', () => {
-  prefs.lead = el.toggleLead.checked;
+el.toggleScales.addEventListener('change', () => {
+  prefs.showScales = el.toggleScales.checked;
   savePrefs();
   renderPreview();
-});
-el.toggleHarmonica.addEventListener('change', () => {
-  prefs.harmonica = el.toggleHarmonica.checked;
-  savePrefs();
-  renderPreview();
-});
-[['toggleGuitar', 'guitar'], ['togglePiano', 'piano'], ['toggleUke', 'ukulele']].forEach(([elKey, inst]) => {
-  el[elKey].addEventListener('change', () => {
-    prefs.instruments[inst] = el[elKey].checked;
-    savePrefs();
-    renderPreview();
-  });
 });
 document.getElementById('export-btn').addEventListener('click', exportSong);
 document.getElementById('print-btn').addEventListener('click', () => {
@@ -1928,8 +1916,8 @@ el.editor.addEventListener('blur', () => { if (chordPopup) setTimeout(closeChord
 // for longer songs, toggleable diagram/scale/harmonica panels, and page-turner
 // (arrow / PageUp-Down / Space) navigation that flows into the next song.
 
-const PERF_PANELS = { chords: 'chord-diagrams', lead: 'lead-diagrams', scale: 'scale-panel', harp: 'harmonica-panel' };
-const PERF_LABELS = { chords: 'Chords', lead: 'Lead', scale: 'Scale', harp: 'Harmonica' };
+const PERF_PANELS = { instruments: 'instrument-panels', harp: 'harmonica-panel' };
+const PERF_LABELS = { instruments: 'Instruments', harp: 'Harmonica' };
 const PERF_PADX = 28; // must match .perform-cols left/right padding in CSS
 const PERF_GAP = 36;  // gap between columns, in px
 
@@ -1960,9 +1948,7 @@ function perfSetlist() {
 // Force every panel to render regardless of the app's own view toggles, so the
 // performance toggles control them independently.
 function perfRenderPanels(s) {
-  renderChordSet(s, el.diagrams, 'rhythm');
-  renderChordSet(s, el.leadDiagrams, 'lead');
-  renderScale(s);
+  renderInstruments(s);
   renderHarmonica(s);
 }
 
@@ -2574,12 +2560,8 @@ function renderTunerStrings() {
 
 function boot() {
   initSectionBar();
-  el.toggleDiagrams.checked = prefs.diagrams;
-  el.toggleLead.checked = prefs.lead;
-  el.toggleHarmonica.checked = prefs.harmonica;
-  el.toggleGuitar.checked = prefs.instruments.guitar;
-  el.togglePiano.checked = prefs.instruments.piano;
-  el.toggleUke.checked = prefs.instruments.ukulele;
+  el.toggleChords.checked = prefs.showChords;
+  el.toggleScales.checked = prefs.showScales;
   applyPrintCols();
   // No demo/seed content — start empty and let the user create the first song
   // (or reconnect a folder below).
@@ -2607,9 +2589,8 @@ function showEmptyState() {
   el.trAmount.textContent = '0';
   el.capoAmount.textContent = '0';
   el.previewBody.innerHTML = render('', 0); // the "nothing yet" hint
-  el.diagrams.innerHTML = '';
-  el.leadDiagrams.innerHTML = '';
-  el.scalePanel.innerHTML = '';
+  el.instBar.innerHTML = '';
+  el.instPanels.innerHTML = '';
   el.harmonica.innerHTML = '';
   el.capoBanner.innerHTML = '';
   updatePrintHeader({ title: '', artist: '' });

@@ -222,46 +222,9 @@ function resolveChord(name) {
 // Build a small SVG fretboard diagram for a chord. `soundingName`, when given,
 // is shown beneath as what the shape sounds as with a capo (e.g. "sounds A").
 // `extra` is appended inside the block (used for the voicing dropdown).
+// A 6-string guitar chord diagram (thin wrapper over the shared renderer).
 function chordDiagramSVG(displayName, frets, soundingName, extra) {
-  const sub = soundingName && soundingName !== displayName
-    ? `<div class="cd-sound">sounds ${escapeHtml(soundingName)}</div>` : '';
-  const tail = sub + (extra || '');
-  if (!frets) {
-    return `<div class="chord-diagram"><div class="cd-name" data-chord="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>` +
-      `<div class="cd-na">shape n/a</div>${tail}</div>`;
-  }
-  const S = 6, rows = 4, cellW = 9, cellH = 12, left = 17, top = 18;
-  const fretted = frets.filter((f) => f > 0);
-  const maxF = fretted.length ? Math.max(...fretted) : 0;
-  const minF = fretted.length ? Math.min(...fretted) : 0;
-  const base = maxF > 4 ? minF : 1;
-  const width = left * 2 + (S - 1) * cellW;
-  const height = top + rows * cellH + 4;
-  const x = (i) => left + i * cellW;
-  const y = (k) => top + k * cellH;
-
-  let p = '';
-  for (let k = 0; k <= rows; k++) p += `<line x1="${x(0)}" y1="${y(k)}" x2="${x(S - 1)}" y2="${y(k)}"/>`;
-  for (let i = 0; i < S; i++) p += `<line x1="${x(i)}" y1="${y(0)}" x2="${x(i)}" y2="${y(rows)}"/>`;
-
-  if (base === 1) {
-    p += `<rect class="cd-nut" x="${x(0) - 1}" y="${top - 3}" width="${(S - 1) * cellW + 2}" height="3"/>`;
-  } else {
-    p += `<text class="cd-fretnum" x="0" y="${y(0) + cellH - 1}" text-anchor="start">${base}fr</text>`;
-  }
-
-  for (let i = 0; i < S; i++) {
-    const f = frets[i], cx = x(i);
-    if (f < 0) p += `<text class="cd-mark" x="${cx}" y="${top - 5}" text-anchor="middle">&#215;</text>`;
-    else if (f === 0) p += `<text class="cd-mark" x="${cx}" y="${top - 5}" text-anchor="middle">&#9675;</text>`;
-    else {
-      const cy = y(f - base) + cellH / 2;
-      p += `<circle class="cd-dot" cx="${cx}" cy="${cy}" r="3.4"/>`;
-    }
-  }
-
-  return `<div class="chord-diagram"><div class="cd-name" data-chord="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>` +
-    `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${p}</svg>${tail}</div>`;
+  return fretDiagramSVG(displayName, frets, 6, soundingName, extra, '');
 }
 
 // ---- Scales ----------------------------------------------------------------
@@ -318,27 +281,28 @@ function chordToneLabels(name) {
 // (a Map of pitch class -> interval label) is given, those chord tones get a
 // ring with the interval label (R/3/5/7 …); chord tones that fall outside the
 // scale are drawn as hollow labelled markers so the whole chord is visible.
-function scaleDiagramSVG(rootPc, intervals, highlight) {
+function scaleDiagramSVG(rootPc, intervals, highlight, tuning = STRING_ABS) {
   const set = new Set(intervals.map((i) => (rootPc + i) % 12));
   const hi = highlight && highlight.size ? highlight : null;
+  const N = tuning.length;
   const FR = 15, left = 26, top = 14, rowH = 18, colW = 30;
   const width = left + FR * colW + 12;
-  const height = top + 5 * rowH + 24;
+  const height = top + (N - 1) * rowH + 24;
   const x = (f) => left + f * colW;
-  const y = (i) => top + (5 - i) * rowH; // string 0 (low E) at the bottom
+  const y = (i) => top + (N - 1 - i) * rowH; // string 0 (lowest) at the bottom
   const markers = [3, 5, 7, 9, 12, 15];
 
   let p = '';
-  for (let i = 0; i < 6; i++) p += `<line class="sc-string" x1="${x(0)}" y1="${y(i)}" x2="${x(FR)}" y2="${y(i)}"/>`;
+  for (let i = 0; i < N; i++) p += `<line class="sc-string" x1="${x(0)}" y1="${y(i)}" x2="${x(FR)}" y2="${y(i)}"/>`;
   for (let f = 0; f <= FR; f++) {
     const cls = f === 0 ? 'sc-nut' : 'sc-fret';
-    p += `<line class="${cls}" x1="${x(f)}" y1="${y(5)}" x2="${x(f)}" y2="${y(0)}"/>`;
+    p += `<line class="${cls}" x1="${x(f)}" y1="${y(N - 1)}" x2="${x(f)}" y2="${y(0)}"/>`;
   }
   for (const f of markers) p += `<text class="sc-fretnum" x="${x(f) - colW / 2}" y="${height - 8}" text-anchor="middle">${f}</text>`;
 
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < N; i++) {
     for (let f = 0; f <= FR; f++) {
-      const pc = (STRING_ABS[i] + f) % 12;
+      const pc = (tuning[i] + f) % 12;
       const cx = f === 0 ? left - 12 : x(f) - colW / 2;
       const cy = y(i);
       const inScale = set.has(pc);
@@ -450,31 +414,35 @@ function pianoScaleSVG(rootPc, intervals, highlight) {
   }, 'piano-scale');
 }
 
-// ---- Ukulele ---------------------------------------------------------------
-// Reentrant gCEA tuning; strings drawn left→right as g, C, E, A.
-const UKE_ABS = [55, 48, 52, 57];
+// ---- Other fretted instruments (ukulele, mandolin, bass) -------------------
+// Absolute semitone tunings, low string first (drawn left→right).
+const UKE_ABS = [55, 48, 52, 57];        // reentrant gCEA
+const MANDO_ABS = [55, 62, 69, 76];      // GDAE, tuned in fifths (4 courses)
+const BASS_ABS = [40, 45, 50, 55];       // EADG (used for the bass scale map)
 
-// Best playable voicing (frets per string [g,C,E,A]) that covers every chord
-// tone with the root present, low on the neck. null if none within reach.
-function ukeVoicing(name) {
+// Best playable voicing (frets per string, low→high) that covers every chord
+// tone with the root present, low on the neck. Parameterized by tuning + reach,
+// so it serves ukulele, mandolin, and any other fretted instrument. null if no
+// shape is within reach.
+function fretVoicing(name, tuning, maxF) {
   const labels = chordToneLabels(name);
   const m = name.match(CHORD_RE);
   if (!labels || !m) return null;
   const chordPcs = [...labels.keys()];
   const chordSet = new Set(chordPcs);
   const rootPc = chordRootPc(m[1], m[2]);
-  const MAXF = 4;
-  const cands = UKE_ABS.map((abs) => {
+  const N = tuning.length;
+  const cands = tuning.map((abs) => {
     const list = [];
-    for (let f = 0; f <= MAXF; f++) if (chordSet.has((abs + f) % 12)) list.push(f);
+    for (let f = 0; f <= maxF; f++) if (chordSet.has((abs + f) % 12)) list.push(f);
     return list;
   });
   if (cands.some((c) => !c.length)) return null;
   let best = null;
-  const frets = [0, 0, 0, 0];
+  const frets = new Array(N).fill(0);
   function rec(i) {
-    if (i === 4) {
-      const pcs = new Set(frets.map((f, s) => (UKE_ABS[s] + f) % 12));
+    if (i === N) {
+      const pcs = new Set(frets.map((f, s) => (tuning[s] + f) % 12));
       if (!pcs.has(rootPc)) return;
       for (const t of chordPcs) if (!pcs.has(t)) return;
       const fr = frets.filter((f) => f > 0);
@@ -490,15 +458,19 @@ function ukeVoicing(name) {
   rec(0);
   return best ? best.frets : null;
 }
+function ukeVoicing(name) { return fretVoicing(name, UKE_ABS, 4); }
+function mandoVoicing(name) { return fretVoicing(name, MANDO_ABS, 7); }
 
-// A 4-string ukulele fretboard diagram (same visual style as the guitar one).
-function ukeDiagramSVG(displayName, frets, soundingName, extra) {
+// A fretboard chord diagram for any number of strings. `cls` adds a modifier
+// class (e.g. 'uke-diagram') so per-instrument styling still applies.
+function fretDiagramSVG(displayName, frets, nStrings, soundingName, extra, cls) {
   const sub = soundingName && soundingName !== displayName
     ? `<div class="cd-sound">sounds ${escapeHtml(soundingName)}</div>` : '';
   const tail = sub + (extra || '');
+  const dcls = 'chord-diagram' + (cls ? ' ' + cls : '');
   const head = `<div class="cd-name" data-chord="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>`;
-  if (!frets) return `<div class="chord-diagram uke-diagram">${head}<div class="cd-na">shape n/a</div>${tail}</div>`;
-  const S = 4, rows = 4, cellW = 9, cellH = 12, left = 17, top = 18;
+  if (!frets) return `<div class="${dcls}">${head}<div class="cd-na">shape n/a</div>${tail}</div>`;
+  const S = nStrings, rows = 4, cellW = 9, cellH = 12, left = 17, top = 18;
   const fretted = frets.filter((f) => f > 0);
   const maxF = fretted.length ? Math.max(...fretted) : 0;
   const minF = fretted.length ? Math.min(...fretted) : 0;
@@ -518,7 +490,14 @@ function ukeDiagramSVG(displayName, frets, soundingName, extra) {
     else if (f === 0) p += `<text class="cd-mark" x="${cx}" y="${top - 5}" text-anchor="middle">&#9675;</text>`;
     else { const cy = y(f - base) + cellH / 2; p += `<circle class="cd-dot" cx="${cx}" cy="${cy}" r="3.4"/>`; }
   }
-  return `<div class="chord-diagram uke-diagram">${head}<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${p}</svg>${tail}</div>`;
+  return `<div class="${dcls}">${head}<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${p}</svg>${tail}</div>`;
+}
+// A 4-string ukulele fretboard diagram (same visual style as the guitar one).
+function ukeDiagramSVG(displayName, frets, soundingName, extra) {
+  return fretDiagramSVG(displayName, frets, 4, soundingName, extra, 'uke-diagram');
+}
+function mandoDiagramSVG(displayName, frets, soundingName, extra) {
+  return fretDiagramSVG(displayName, frets, 4, soundingName, extra, 'mando-diagram');
 }
 
 // Harmonica keys the common players' spelling.
