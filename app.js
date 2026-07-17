@@ -1333,7 +1333,34 @@ function renderTreeNode(lib, node, subpath, depth) {
     el.list.appendChild(songItem(s, false, depth));
 }
 
+let songFilter = '';
+function songMatches(s, q) {
+  return (s.title || '').toLowerCase().includes(q) ||
+    (s.artist || '').toLowerCase().includes(q) ||
+    (s.path || '').toLowerCase().includes(q);
+}
+
+// When a search is active, show a flat list of matches across every folder — a
+// jam wants to jump to a called tune, not navigate the tree.
+function renderFiltered(q) {
+  el.list.innerHTML = '';
+  const matches = songs.filter((s) => songMatches(s, q))
+    .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+  el.count.textContent = matches.length + ' / ' + songs.length;
+  if (!matches.length) { el.list.innerHTML = '<li class="search-empty">No matches</li>'; return; }
+  for (const s of matches) {
+    const li = document.createElement('li');
+    li.className = 'song-item' + (s.id === currentId ? ' active' : '');
+    let sub = s.artist || '';
+    if (mode === 'folder') { const lib = libraries.find((l) => l.id === s.libId); sub = (lib ? lib.name + '/' : '') + (s.path || ''); }
+    li.innerHTML = `<span class="st"><b>${escapeHtml(s.title || 'Untitled')}</b><small>${escapeHtml(sub)}</small></span>`;
+    li.querySelector('.st').addEventListener('click', () => selectSong(s.id));
+    el.list.appendChild(li);
+  }
+}
+
 function renderList() {
+  if (songFilter) { renderFiltered(songFilter); return; }
   el.count.textContent = songs.length ? songs.length + '' : '';
   el.list.innerHTML = '';
 
@@ -1737,6 +1764,10 @@ el.toggleScales.addEventListener('change', () => {
   prefs.showScales = el.toggleScales.checked;
   savePrefs();
   renderPreview();
+});
+document.getElementById('song-search').addEventListener('input', (e) => {
+  songFilter = e.target.value.trim().toLowerCase();
+  renderList();
 });
 document.getElementById('export-btn').addEventListener('click', exportSong);
 document.getElementById('add-riff-btn').addEventListener('click', () => {
