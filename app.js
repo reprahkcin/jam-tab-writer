@@ -907,13 +907,16 @@ function renderRiffEditor(s) {
     cont.innerHTML = '<div class="riff-empty">No riffs yet — “+ Add riff” starts a tab that prints on its own page.</div>';
     return;
   }
-  cont.innerHTML = riffs.map((riff, ri) => {
+  const hint = '<div class="riff-hint">Type a fret, then add a technique linking it to the next step: ' +
+    '<b>h</b> hammer · <b>p</b> pull · <b>b</b> bend · <b>/</b> <b>\\</b> slide ' +
+    '(e.g. <code>5h</code> then <code>7</code> → <code>5h7</code>)</div>';
+  cont.innerHTML = hint + riffs.map((riff, ri) => {
     const steps = riff.cols.length;
     let rows = '';
     for (let r = 0; r < 6; r++) {
       let cells = `<span class="rg-str">${RIFF_STRINGS[r]}</span>`;
       for (let c = 0; c < steps; c++) {
-        cells += `<input class="rg-cell" inputmode="numeric" maxlength="2" data-ri="${ri}" data-c="${c}" data-r="${r}" value="${escapeHtml(riff.cols[c][r] || '')}" />`;
+        cells += `<input class="rg-cell" maxlength="3" data-ri="${ri}" data-c="${c}" data-r="${r}" value="${escapeHtml(riff.cols[c][r] || '')}" />`;
       }
       rows += `<div class="rg-row">${cells}</div>`;
     }
@@ -934,7 +937,9 @@ function wireRiffEditor(s) {
   const cont = el.riffEditors;
   cont.querySelectorAll('.rg-cell').forEach((inp) => {
     inp.addEventListener('input', () => {
-      const v = inp.value.replace(/[^0-9]/g, '').slice(0, 2);
+      // fret (0–2 digits) + optional trailing technique (h p b / \)
+      const m = inp.value.match(/^(\d{0,2})([hpb/\\]?)/);
+      const v = m ? m[1] + m[2] : '';
       if (v !== inp.value) inp.value = v;
       s.riffs[+inp.dataset.ri].cols[+inp.dataset.c][+inp.dataset.r] = v;
       s.updated = Date.now(); schedulePersist();
@@ -1510,11 +1515,21 @@ function newRiff(label) {
   return { id: newId(), label: label || 'Riff', cols };
 }
 
+// A cell is a fret plus an optional trailing technique that links it to the next
+// step on the same string: h hammer, p pull-off, b bend, / slide up, \ slide down.
+const RIFF_TECHS = 'hpb/\\';
+function cellFret(cell) { const m = String(cell || '').match(/\d{1,2}/); return m ? m[0] : ''; }
+function cellTech(cell) { const m = String(cell || '').match(/[hpb/\\]$/); return m ? m[0] : ''; }
+
+// Each step is a fixed 3-char field: [link][fret padded to 2, left-aligned],
+// where `link` is the PREVIOUS cell's technique (so "5h" then "7" → "-5-h7-",
+// read 5·h7). Fixed width keeps grid ↔ text lossless, techniques included.
 function riffRowAscii(riff, r) {
   let out = RIFF_STRINGS[r] + '|';
-  for (const col of riff.cols) {
-    const cell = String(col[r] || '').replace(/[^0-9]/g, '').slice(0, 2);
-    out += '-' + (cell ? cell.padStart(2, '-') : '--');
+  for (let c = 0; c < riff.cols.length; c++) {
+    const link = c > 0 ? cellTech(riff.cols[c - 1][r]) : '';
+    const f = cellFret(riff.cols[c][r]);
+    out += (link || '-') + (f ? f.padEnd(2, '-') : '--');
   }
   return out + '|';
 }
@@ -1533,13 +1548,15 @@ function riffFromBlock(label, lines) {
   let steps = 0;
   for (const L of RIFF_STRINGS) if (byLetter[L] != null) steps = Math.max(steps, Math.floor(byLetter[L].length / 3));
   const cols = [];
-  for (let c = 0; c < steps; c++) {
-    const col = [];
-    for (let r = 0; r < 6; r++) {
-      const content = byLetter[RIFF_STRINGS[r]] || '';
-      col.push(content.substr(c * 3, 3).replace(/[^0-9]/g, '').slice(0, 2));
+  for (let c = 0; c < steps; c++) cols.push(['', '', '', '', '', '']);
+  for (let r = 0; r < 6; r++) {
+    const content = byLetter[RIFF_STRINGS[r]] || '';
+    for (let c = 0; c < steps; c++) {
+      const chunk = content.substr(c * 3, 3);
+      cols[c][r] = chunk.slice(1).replace(/[^0-9]/g, '').slice(0, 2); // fret at pos 1–2
+      const link = chunk[0];                                          // technique into this step
+      if (c > 0 && link && RIFF_TECHS.includes(link)) cols[c - 1][r] += link;
     }
-    cols.push(col);
   }
   if (!cols.length) cols.push(['', '', '', '', '', '']);
   return { id: newId(), label: label || 'Riff', cols };

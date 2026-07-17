@@ -211,6 +211,10 @@ down to low E), one column per step. Click a cell and type the fret; two-digit
 frets (10, 12) just work, no dash-alignment to fight. **+ step / − step** grow or
 trim the length, and you can add as many riffs as you like.
 
+Add a **technique** after a fret to link it to the next step: **h** hammer-on,
+**p** pull-off, **b** bend, **/** slide up, **\\** slide down. Type `5h` in one
+cell and `7` in the next and it renders `5h7`.
+
 Each riff renders as clean tab in the preview and — for now — **prints on its own
 page**, after the chart. Riffs are saved with the song as standard ChordPro
 `{start_of_tab: Label}` … `{end_of_tab}` blocks, so they round-trip through your

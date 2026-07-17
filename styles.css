@@ -769,7 +769,7 @@ main { display: flex; flex: 1; min-height: 0; }
   color: var(--muted);
 }
 .rg-cell {
-  width: 20px;
+  width: 28px;
   height: 20px;
   flex-shrink: 0;
   padding: 0;
@@ -782,6 +782,9 @@ main { display: flex; flex: 1; min-height: 0; }
   font-size: 12px;
 }
 .rg-cell:focus { outline: none; border-color: var(--accent); background: #33384c; }
+.riff-hint { color: var(--muted); font-size: 11px; margin-bottom: 8px; }
+.riff-hint code { background: var(--panel-2); padding: 0 3px; border-radius: 3px; color: var(--text); }
+.riff-hint b { color: var(--accent); font-family: var(--mono); }
 
 /* Rendered riff tab in the preview (and print). */
 #riff-panels:empty { display: none; }
