@@ -1016,9 +1016,14 @@ function songItem(s, deletable, depth) {
   li.className = 'song-item' + (deletable ? '' : ' in-lib') + (s.id === currentId ? ' active' : '') + (s.draft ? ' draft' : '');
   if (depth) li.style.paddingLeft = (10 + depth * 14) + 'px';
   // In a folder tree the subfolders convey location, so the leaf shows just its
-  // own filename (not the whole path).
+  // own filename (not the whole path). Hover reveals the path within the open
+  // folder — the browser doesn't expose the absolute on-disk path.
   const sub = s.draft ? 'not saved yet'
     : (mode === 'folder' ? ((s.path || '').split('/').pop() || '') : (s.artist || ''));
+  if (mode === 'folder' && !s.draft) {
+    const lib = libraries.find((l) => l.id === s.libId);
+    li.title = (lib ? lib.name + '/' : '') + (s.path || '');
+  }
   li.innerHTML =
     `<span class="st"><b>${escapeHtml(s.title || 'Untitled')}</b>` +
     `<small>${escapeHtml(sub)}</small></span>` +
@@ -1073,13 +1078,16 @@ function renderTreeNode(lib, node, subpath, depth) {
     row.className = 'subfolder-row' + (isTarget ? ' active-lib' : '');
     row.style.setProperty('--lib-color', lib.color);
     row.style.paddingLeft = (6 + depth * 14) + 'px';
+    row.title = lib.name + '/' + childPath; // path within the open folder
     row.innerHTML =
       `<span class="lib-caret" title="${isCollapsed ? 'Expand' : 'Collapse'}">${isCollapsed ? '▸' : '▾'}</span>` +
       `<span class="sf-name" title="Make this the target for + New / Import">${escapeHtml(name)}</span>` +
       `<span class="lib-count">${countUnder(child)}</span>` +
+      `<button class="lib-btn sf-locate" title="Show this subfolder's location on disk (opens a system dialog)">◎</button>` +
       `<button class="lib-btn sf-add" title="New subfolder inside">+</button>`;
     row.querySelector('.lib-caret').addEventListener('click', (e) => { e.stopPropagation(); toggleCollapse(key); });
     row.querySelector('.sf-name').addEventListener('click', () => setActiveTarget(lib.id, childPath));
+    row.querySelector('.sf-locate').addEventListener('click', (e) => { e.stopPropagation(); revealFolder(lib, childPath); });
     row.querySelector('.sf-add').addEventListener('click', (e) => { e.stopPropagation(); createSubfolder(lib, childPath); });
     el.list.appendChild(row);
     if (!isCollapsed) renderTreeNode(lib, child, childPath, depth + 1);
@@ -1116,11 +1124,13 @@ function renderList() {
       `<span class="lib-dot" title="${kindTitle}"></span>` +
       `<span class="lib-name" title="Make this the target for + New / Import">${escapeHtml(lib.name)}</span>` +
       `<span class="lib-count">${total}</span>` +
+      `<button class="lib-btn lib-locate" title="Show this folder's location on disk (opens a system dialog)">◎</button>` +
       `<button class="lib-btn sf-add" title="New subfolder">+</button>` +
       `<button class="lib-btn lib-reload" title="Reload this folder from disk">↻</button>` +
       `<button class="lib-btn lib-close" title="Close this folder">×</button>`;
     header.querySelector('.lib-caret').addEventListener('click', () => toggleCollapse(lib.id));
     header.querySelector('.lib-name').addEventListener('click', () => setActiveTarget(lib.id, ''));
+    header.querySelector('.lib-locate').addEventListener('click', (e) => { e.stopPropagation(); revealFolder(lib, ''); });
     header.querySelector('.sf-add').addEventListener('click', (e) => { e.stopPropagation(); createSubfolder(lib, ''); });
     header.querySelector('.lib-reload').addEventListener('click', (e) => {
       e.stopPropagation(); reloadLibrary(lib.id);
@@ -1148,6 +1158,19 @@ async function createSubfolder(lib, parentSubpath) {
   if (!lib.subdirs) lib.subdirs = new Set();
   lib.subdirs.add(parentSubpath ? parentSubpath + '/' + clean : clean);
   setActiveTarget(lib.id, parentSubpath ? parentSubpath + '/' + clean : clean);
+}
+
+// Reveal a folder's on-disk location. The browser can't open Finder or hand us
+// the absolute path, but re-opening the system directory picker AT the folder
+// shows where it lives (its full path is visible in the native dialog). The
+// picker's result is ignored and cancelling is a no-op, so nothing changes.
+async function revealFolder(lib, subpath) {
+  if (!window.showDirectoryPicker) { alert('Showing a folder location needs Chrome or Edge.'); return; }
+  let startIn = lib.handle;
+  try { if (subpath) startIn = await resolveDir(lib, subpath, false); }
+  catch { /* subfolder gone from disk — fall back to the library root */ }
+  try { await window.showDirectoryPicker({ startIn }); }
+  catch { /* user dismissed the dialog — nothing to do */ }
 }
 
 function deleteSong(id) {
@@ -2443,9 +2466,9 @@ async function bootFolders() {
 }
 
 async function reconnectLibraries(entries) {
+  const missing = [];
   for (const entry of entries) {
     if (libraries.some((l) => l.id === entry.id)) continue;
-    if (mode === 'local') { mode = 'folder'; songs = []; currentId = null; }
     // Legacy saved folders predate kind/colour — treat them as external and
     // give them a palette colour.
     const kind = entry.kind || 'external';
@@ -2456,11 +2479,32 @@ async function reconnectLibraries(entries) {
       kind,
       color: entry.color || (kind === 'collection' ? COLLECTION_COLOR : nextExternalColor()),
     };
-    const loaded = await loadLibrarySongs(lib);
+    let loaded;
+    // The folder may have been moved or deleted since last session — scanning it
+    // then throws NotFoundError. Skip it rather than wedging the whole app.
+    try { loaded = await loadLibrarySongs(lib); }
+    catch { missing.push(entry); continue; }
+    if (mode === 'local') { mode = 'folder'; songs = []; currentId = null; } // only once a real folder loads
     libraries.push(lib);
     songs.push(...loaded);
   }
-  await persistLibraries();
+
+  // Drop vanished folders from the saved list so they stop erroring next boot.
+  // Non-blocking (no alert on startup): logged, and shown briefly in the status.
+  if (missing.length) {
+    const goneIds = new Set(missing.map((m) => m.id));
+    const saved = (await idbGet('libraries')) || [];
+    await idbSet('libraries', saved.filter((e) => !goneIds.has(e.id)));
+    const names = missing.map((e) => e.name).join(', ');
+    console.warn('Saved folder(s) not found on disk (moved or deleted), removed:', names);
+    if (el.status) el.status.textContent = `Folder not found, removed: ${names}`;
+  }
+
+  if (libraries.length) await persistLibraries();
+  if (mode === 'folder' && !libraries.length && !document.querySelector('#reopen-btn:not([hidden])')) {
+    returnToLocal(); // nothing reconnected and nothing awaiting a permission grant
+    return;
+  }
   updateModeUI();
   if (!songs.some((s) => s.id === currentId)) {
     const want = await idbGet('lastPath');

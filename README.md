@@ -91,6 +91,13 @@ in Documents by default.) It reconnects each session like any other folder.
   selecting a chart points the target at that chart's folder. **+ New**,
   **Import**, and **PDF drop** all create files there.
 - The **+** on any folder row creates a **subfolder on disk** inside it.
+- **Hover** any chart or folder to see its path *within the collection* (e.g.
+  `Collection/verses/hard-sun.cho`). The **◎** button on a folder **shows its
+  location on disk** — browsers can't open Finder or reveal the absolute path, so
+  this re-opens the system folder dialog focused on that folder (its full path is
+  visible there; close the dialog when done).
+- If a remembered folder has been moved or deleted, it's dropped from the sidebar
+  on the next launch (with a brief note) instead of erroring.
 - **+ New** asks for a **file name** — that names the `.cho` file only. The
   song's **title** and **artist** are set separately inside the editor and can
   differ from the file name.
