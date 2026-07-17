@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guitar Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=38" />
+  <link rel="stylesheet" href="styles.css?v=39" />
 </head>
 <body>
   <header>
@@ -51,6 +51,13 @@
           <button id="capo-down" title="Move capo down a fret">&minus;</button>
           <span id="capo-amount">0</span>
           <button id="capo-up" title="Move capo up a fret">+</button>
+        </div>
+        <div class="stepper">
+          <label>Tempo</label>
+          <button id="tempo-down" title="Slower">&minus;</button>
+          <input id="tempo-input" class="tempo-input" type="text" inputmode="numeric" placeholder="—" title="Beats per minute for this song" />
+          <button id="tempo-up" title="Faster">+</button>
+          <button id="count-in-btn" class="inline-btn" title="Count in four beats at this tempo">Count in</button>
         </div>
       </div>
 
@@ -224,8 +231,8 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=38"></script>
-  <script src="pdf2cho.js?v=38"></script>
-  <script src="app.js?v=38"></script>
+  <script src="chords.js?v=39"></script>
+  <script src="pdf2cho.js?v=39"></script>
+  <script src="app.js?v=39"></script>
 </body>
 </html>

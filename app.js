@@ -525,6 +525,7 @@ const el = {
   printHeader: document.getElementById('print-header'),
   trAmount: document.getElementById('tr-amount'),
   capoAmount: document.getElementById('capo-amount'),
+  tempoInput: document.getElementById('tempo-input'),
   status: document.getElementById('save-status'),
   breadcrumb: document.getElementById('save-breadcrumb'),
   capoBanner: document.getElementById('capo-banner'),
@@ -578,7 +579,7 @@ function currentSong() {
 }
 
 function blankSong() {
-  return { id: newId(), title: '', artist: '', body: '', transpose: 0, capo: 0, key: null, scaleRoot: null, focusChord: null, riffs: [], updated: Date.now() };
+  return { id: newId(), title: '', artist: '', body: '', transpose: 0, capo: 0, key: null, scaleRoot: null, focusChord: null, riffs: [], tempo: null, updated: Date.now() };
 }
 
 function selectSong(id) {
@@ -604,6 +605,7 @@ function selectSong(id) {
   el.editor.value = s.body;
   el.trAmount.textContent = (s.transpose > 0 ? '+' : '') + s.transpose;
   el.capoAmount.textContent = s.capo || 0;
+  el.tempoInput.value = s.tempo || '';
   renderPreview();
   renderPalette();
   renderList();
@@ -1538,6 +1540,53 @@ function setCapo(delta) {
   renderPreview();
 }
 
+// ---- Per-song tempo + count-in ---------------------------------------------
+const DEFAULT_TEMPO = 120;
+function setTempo(bpm) {
+  const s = currentSong();
+  if (!s) return;
+  s.tempo = bpm === null ? null : Math.max(30, Math.min(300, bpm));
+  el.tempoInput.value = s.tempo || '';
+  s.updated = Date.now();
+  schedulePersist();
+}
+function bumpTempo(delta) {
+  const s = currentSong();
+  if (!s) return;
+  setTempo((s.tempo || DEFAULT_TEMPO) + delta);
+}
+
+// A short beep at scheduled AudioContext time t.
+function beepAt(ctx, t, accent) {
+  const osc = ctx.createOscillator(), g = ctx.createGain();
+  osc.frequency.value = accent ? 1600 : 1000;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(accent ? 0.4 : 0.25, t + 0.001);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+  osc.connect(g); g.connect(ctx.destination);
+  osc.start(t); osc.stop(t + 0.06);
+}
+
+let countCtx = null;
+function countIn() {
+  const s = currentSong();
+  if (!s) return;
+  const bpm = s.tempo || DEFAULT_TEMPO;
+  const beat = 60 / bpm;
+  const ctx = countCtx || (countCtx = new (window.AudioContext || window.webkitAudioContext)());
+  if (ctx.state === 'suspended') ctx.resume();
+  const t0 = ctx.currentTime + 0.12;
+  let overlay = document.getElementById('count-overlay');
+  if (!overlay) { overlay = document.createElement('div'); overlay.id = 'count-overlay'; overlay.className = 'count-overlay'; document.body.appendChild(overlay); }
+  overlay.hidden = false; overlay.textContent = '';
+  for (let i = 0; i < 4; i++) {
+    beepAt(ctx, t0 + i * beat, i === 0);
+    const ms = Math.max(0, (t0 + i * beat - ctx.currentTime) * 1000);
+    setTimeout(() => { overlay.textContent = String(i + 1); }, ms);
+  }
+  setTimeout(() => { overlay.hidden = true; }, Math.max(0, (t0 + 4 * beat - ctx.currentTime) * 1000));
+}
+
 // ---- Import / Export -------------------------------------------------------
 
 // Note name <-> pitch class, for the {key: G} directive.
@@ -1618,6 +1667,7 @@ function songToCho(s) {
   if (s.key !== null && s.key !== undefined) out += `{key: ${HARP_NAMES[s.key]}}\n`;
   if (s.transpose) out += `{transpose: ${s.transpose}}\n`;
   if (s.capo) out += `{capo: ${s.capo}}\n`;
+  if (s.tempo) out += `{tempo: ${s.tempo}}\n`;
   if (out) out += '\n';
   out += s.body;
   if (s.riffs && s.riffs.length) {
@@ -1645,7 +1695,7 @@ function parseCho(text, fallbackTitle) {
     }
     const sot = line.match(/^\{(?:start_of_tab|sot)\s*:?\s*(.*)\}\s*$/i);
     if (sot) { sawDirective = true; tabLabel = sot[1].trim() || 'Riff'; tabLines = []; continue; }
-    const t = line.match(/^\{(title|artist|transpose|capo|key)\s*:\s*(.*)\}\s*$/i);
+    const t = line.match(/^\{(title|artist|transpose|capo|key|tempo)\s*:\s*(.*)\}\s*$/i);
     if (t) {
       sawDirective = true;
       const key = t[1].toLowerCase();
@@ -1654,6 +1704,7 @@ function parseCho(text, fallbackTitle) {
       else if (key === 'transpose') s.transpose = parseInt(t[2], 10) || 0;
       else if (key === 'capo') s.capo = Math.max(0, Math.min(11, parseInt(t[2], 10) || 0));
       else if (key === 'key') s.key = noteToPc(t[2]);
+      else if (key === 'tempo') s.tempo = Math.max(20, Math.min(400, parseInt(t[2], 10))) || null;
     } else {
       body.push(line);
     }
@@ -1775,6 +1826,13 @@ document.getElementById('tr-up').addEventListener('click', () => setTranspose(1)
 document.getElementById('tr-down').addEventListener('click', () => setTranspose(-1));
 document.getElementById('capo-up').addEventListener('click', () => setCapo(1));
 document.getElementById('capo-down').addEventListener('click', () => setCapo(-1));
+document.getElementById('tempo-up').addEventListener('click', () => bumpTempo(5));
+document.getElementById('tempo-down').addEventListener('click', () => bumpTempo(-5));
+document.getElementById('count-in-btn').addEventListener('click', countIn);
+el.tempoInput.addEventListener('change', () => {
+  const v = parseInt(el.tempoInput.value, 10);
+  setTempo(Number.isFinite(v) && v > 0 ? v : null);
+});
 
 function savePrefs() { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); }
 el.toggleChords.addEventListener('change', () => {
