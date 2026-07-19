@@ -1945,8 +1945,25 @@ async function shareSong() {
   } catch { alert('Could not build a share link in this browser.'); return; }
   const input = document.getElementById('share-url');
   input.value = url;
+  renderShareQr(url);
   document.getElementById('share-modal').hidden = false;
   input.focus(); input.select();
+}
+
+// Draw a scannable QR of the share link, or a note if the song is too big to fit one.
+function renderShareQr(url) {
+  const box = document.getElementById('share-qr');
+  if (!box) return;
+  let svg = null;
+  try { svg = window.QR && window.QR.svg(url); } catch { svg = null; }
+  if (svg) {
+    box.innerHTML = svg;
+    box.classList.remove('share-qr-empty');
+  } else {
+    // Over ~2.9KB the link exceeds QR byte-mode capacity — the copyable link still works.
+    box.innerHTML = 'This song is too detailed for a scannable code — use the link below.';
+    box.classList.add('share-qr-empty');
+  }
 }
 
 // On load, import a song carried in the URL hash (#song=…), then clean the URL.

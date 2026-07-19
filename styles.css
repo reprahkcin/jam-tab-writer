@@ -1234,6 +1234,24 @@ body.performing { overflow: hidden; }
 }
 .share-head { font-size: 16px; font-weight: 700; color: var(--text); }
 .share-sub { font-size: 13px; color: var(--muted); margin: 4px 0 12px; }
+.share-qr {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 12px;
+}
+.share-qr svg {
+  width: min(220px, 60vw);
+  height: auto;
+  background: #fff;
+  padding: 10px;
+  border-radius: 8px;
+}
+.share-qr-empty {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  padding: 8px 4px;
+}
 .share-url {
   width: 100%;
   padding: 7px 9px;
