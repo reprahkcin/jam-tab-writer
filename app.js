@@ -1988,6 +1988,23 @@ document.getElementById('share-copy').addEventListener('click', async () => {
   catch { input.select(); document.execCommand('copy'); document.getElementById('share-copy').textContent = 'Copied ✓'; }
   setTimeout(() => { document.getElementById('share-copy').textContent = 'Copy link'; }, 1500);
 });
+// Collapsible header menu (phones): the ☰ button toggles the action list.
+(function wireHeaderMenu() {
+  const header = document.querySelector('header');
+  const toggle = document.getElementById('menu-toggle');
+  const actions = document.getElementById('header-actions');
+  if (!header || !toggle || !actions) return;
+  const setOpen = (open) => {
+    header.classList.toggle('menu-open', open);
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  toggle.addEventListener('click', (e) => { e.stopPropagation(); setOpen(!header.classList.contains('menu-open')); });
+  // Picking any action collapses the menu again.
+  actions.addEventListener('click', (e) => { if (e.target.closest('button')) setOpen(false); });
+  // Tapping outside the header closes it.
+  document.addEventListener('click', (e) => { if (!header.contains(e.target)) setOpen(false); });
+})();
+
 document.getElementById('add-riff-btn').addEventListener('click', () => {
   ensureSongForTyping(); // create a local song to hold it if none is selected
   const cur = currentSong();

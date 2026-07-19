@@ -4,12 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guitar Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=52" />
+  <link rel="stylesheet" href="styles.css?v=53" />
 </head>
 <body>
   <header>
     <h1>Guitar Tab Writer</h1>
-    <div class="header-actions">
+    <button id="menu-toggle" class="menu-toggle" aria-label="Menu" aria-expanded="false" aria-controls="header-actions">☰ Menu</button>
+    <div class="header-actions" id="header-actions">
       <button id="new-btn" title="Start a new blank song">+ New</button>
       <button id="collection-btn" title="Set up or open your Collection — a GuitarTabWriterCollection folder created inside a location you pick">Collection</button>
       <button id="folder-btn" title="Open a folder of .cho charts and edit them in place">Open folder</button>
@@ -285,9 +286,9 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=52"></script>
-  <script src="pdf2cho.js?v=52"></script>
-  <script src="qr.js?v=52"></script>
-  <script src="app.js?v=52"></script>
+  <script src="chords.js?v=53"></script>
+  <script src="pdf2cho.js?v=53"></script>
+  <script src="qr.js?v=53"></script>
+  <script src="app.js?v=53"></script>
 </body>
 </html>

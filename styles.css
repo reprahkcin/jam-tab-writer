@@ -36,6 +36,9 @@ header h1 { font-size: 18px; margin: 0; letter-spacing: 0.3px; }
 
 .header-actions { display: flex; gap: 8px; }
 
+/* The ☰ toggle only appears on phones (see the max-width block below). */
+.menu-toggle { display: none; }
+
 button {
   background: var(--panel-2);
   color: var(--text);
@@ -988,16 +991,37 @@ main { display: flex; flex: 1; min-height: 0; }
 }
 
 @media (max-width: 760px) {
+  /* A single left/right gutter that every block lines up to. */
+  :root { --gutter: 12px; }
+
   /* Scroll the whole page vertically instead of locking everything to one
      viewport-height screen with tiny internal scroll areas. */
   html, body { height: auto; }
 
-  /* Header: wrap the action buttons onto multiple rows instead of letting
-     them run off the right edge and force a horizontal scroll. */
-  header { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+  /* Header collapses to a title + ☰ menu; the action list drops down. */
+  header { position: relative; padding: 10px var(--gutter); }
   header h1 { font-size: 16px; white-space: nowrap; }
-  .header-actions { flex-wrap: wrap; gap: 6px; width: 100%; }
-  .header-actions button { padding: 6px 10px; font-size: 12px; }
+  .menu-toggle { display: inline-flex; align-items: center; }
+  .header-actions {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: var(--gutter);
+    left: var(--gutter);
+    z-index: 700;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    padding: 8px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    max-height: 76vh;
+    overflow-y: auto;
+  }
+  header.menu-open .header-actions { display: flex; }
+  .header-actions button { text-align: left; padding: 9px 12px; font-size: 14px; }
 
   /* Stack the song list above the workspace so each spans the full width. */
   main { flex-direction: column; }
@@ -1007,13 +1031,22 @@ main { display: flex; flex: 1; min-height: 0; }
     border-right: none;
     border-bottom: 1px solid var(--line);
   }
-  #workspace { padding: 10px; }
+
+  /* Align every block to the same gutter: sidebar internals and the
+     workspace column all start at --gutter. */
+  .sidebar-head { padding: 12px var(--gutter) 6px; }
+  .song-search { margin: 8px var(--gutter); }
+  #song-list { padding: 4px var(--gutter); }
+  #song-list li { padding-left: 8px; padding-right: 8px; }
+  #workspace { padding: var(--gutter); gap: 10px; }
 
   /* Editor and preview stack and take their natural height; the page scrolls. */
   .panes { flex-direction: column; flex: none; }
   .pane { flex: none; }
   #editor { min-height: 220px; }
-  .preview { flex: none; max-height: 70vh; }
+  /* Match the preview's text inset to the editor's so the same song lines up
+     in both (editor padding 14px vs preview 14/16). */
+  .preview { flex: none; max-height: 70vh; padding: 14px; }
 
   /* Keep wide control rows and diagrams from widening the page. */
   .meta-row { gap: 8px; }
