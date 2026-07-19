@@ -2287,8 +2287,55 @@ window.addEventListener('drop', (e) => {
   convertPdfFile(file);
 });
 
+// Replace a range of the editor text (undo-friendly), then fire input.
+function replaceRange(ta, from, to, text) {
+  ta.focus();
+  ta.setSelectionRange(from, to);
+  let ok = false;
+  try { ok = document.execCommand('insertText', false, text); } catch { ok = false; }
+  if (!ok) {
+    ta.value = ta.value.slice(0, from) + text + ta.value.slice(to);
+    ta.dispatchEvent(new Event('input'));
+  }
+}
+
+// Move the current line (or every line the selection touches) up/down, like
+// VSCode's Alt+Up / Alt+Down. Keeps the selection on the moved block.
+function moveEditorLines(dir) {
+  const ta = el.editor;
+  const val = ta.value;
+  const selStart = ta.selectionStart, selEnd = ta.selectionEnd;
+  const lineStart = val.lastIndexOf('\n', selStart - 1) + 1;
+  let lineEnd = val.indexOf('\n', selEnd);
+  if (lineEnd === -1) lineEnd = val.length;
+  const block = val.slice(lineStart, lineEnd);
+  if (dir === -1) {
+    if (lineStart === 0) return; // already the top line
+    const prevStart = val.lastIndexOf('\n', lineStart - 2) + 1;
+    const prevLine = val.slice(prevStart, lineStart - 1);
+    replaceRange(ta, prevStart, lineEnd, block + '\n' + prevLine);
+    const delta = lineStart - prevStart;
+    ta.setSelectionRange(selStart - delta, selEnd - delta);
+  } else {
+    if (lineEnd >= val.length) return; // already the bottom line
+    const nextEnd = val.indexOf('\n', lineEnd + 1);
+    const realNextEnd = nextEnd === -1 ? val.length : nextEnd;
+    const nextLine = val.slice(lineEnd + 1, realNextEnd);
+    replaceRange(ta, lineStart, realNextEnd, nextLine + '\n' + block);
+    const delta = nextLine.length + 1;
+    ta.setSelectionRange(selStart + delta, selEnd + delta);
+  }
+}
+
 // Keyboard chord placement + Tab-inserts-spaces.
 el.editor.addEventListener('keydown', (e) => {
+  // VSCode-style move line up/down: Alt/Option + ↑/↓.
+  if (e.altKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    e.preventDefault();
+    if (chordPopup) closeChordPopup();
+    moveEditorLines(e.key === 'ArrowUp' ? -1 : 1);
+    return;
+  }
   // While the chord popup is open, it owns the arrow / enter / tab / escape keys.
   if (chordPopup) {
     if (e.key === 'ArrowDown') { e.preventDefault(); moveChordActive(1); return; }
