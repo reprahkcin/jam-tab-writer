@@ -811,7 +811,7 @@ main { display: flex; flex: 1; min-height: 0; }
 .riffs-authoring {
   border-top: 1px solid var(--line);
   margin-top: 8px;
-  padding-top: 8px;
+  padding: 8px 12px 10px;
   max-height: 42%;
   overflow-y: auto;
   flex-shrink: 0;
