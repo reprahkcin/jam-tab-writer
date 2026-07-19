@@ -111,6 +111,61 @@ function render(body, semitones, numKey) {
   return body.split('\n').map((l) => renderLine(l, semitones, numKey)).join('');
 }
 
+// ---- Wrapping chord/lyric rendering (phone performance view) ---------------
+// The chart lays chords on their own space-aligned line, which cannot wrap
+// without drifting off the syllable underneath. For a phone we instead attach
+// each chord to the word it lands on and let the words reflow, so a long line
+// wraps down the screen instead of running off the edge.
+function renderLineWrapped(raw, semitones, numKey) {
+  const trimmed = raw.trim();
+  if (trimmed === '') return '<div class="blank"></div>';
+  if (/^\{(page|pagebreak|newpage|page break)\}$/i.test(trimmed)) return '';
+
+  let sectionMatch = trimmed.match(/^\{(.+)\}$/);
+  const loneBracket = trimmed.match(/^\[([^\[\]]+)\]$/);
+  if (!sectionMatch && loneBracket && !isChord(loneBracket[1])) sectionMatch = loneBracket;
+  if (sectionMatch) return `<div class="section">${escapeHtml(sectionMatch[1])}</div>`;
+
+  // Same parse as renderLine: pull out [chords] and note where each lands.
+  const chords = [];
+  let lyric = '';
+  const re = /\[([^\]]*)\]/g;
+  let last = 0, m;
+  while ((m = re.exec(raw)) !== null) {
+    lyric += raw.slice(last, m.index);
+    let text = isChord(m[1]) ? transposeChord(m[1], semitones) : m[1];
+    if (numKey !== null && numKey !== undefined && isChord(m[1])) text = chordToNumber(text, numKey);
+    chords.push({ pos: lyric.length, text });
+    last = m.index + m[0].length;
+  }
+  lyric += raw.slice(last);
+
+  if (!chords.length) return `<div class="wline">${escapeHtml(lyric) || '&nbsp;'}</div>`;
+
+  // One segment per word (leading space kept with its word) so the line can
+  // break between words while each chord stays glued above its syllable.
+  const toks = lyric.match(/\s*\S+|\s+/g) || [];
+  const segs = [];
+  let i = 0;
+  for (const t of toks) {
+    const start = i, end = i + t.length;
+    const hit = chords.filter((c) => c.pos >= start && c.pos < end).map((c) => c.text);
+    segs.push({ chord: hit.join(' '), text: t });
+    i = end;
+  }
+  const tail = chords.filter((c) => c.pos >= lyric.length).map((c) => c.text);
+  if (tail.length) segs.push({ chord: tail.join(' '), text: '' });
+
+  return '<div class="wline">' + segs.map((s) =>
+    `<span class="wseg"><span class="wc">${escapeHtml(s.chord)}</span>` +
+    `<span class="wt">${escapeHtml(s.text)}</span></span>`).join('') + '</div>';
+}
+
+function renderWrapped(body, semitones, numKey) {
+  if (!body.trim()) return '<div class="empty-hint">Nothing yet.</div>';
+  return body.split('\n').map((l) => renderLineWrapped(l, semitones, numKey)).join('');
+}
+
 // Nashville Number System: show chords as scale degrees relative to the tonic,
 // so the band can follow in any key. Transposition-invariant by construction.
 const NASH_DEG = ['1', 'b2', '2', 'b3', '3', '4', 'b5', '5', 'b6', '6', 'b7', '7'];
@@ -554,7 +609,7 @@ function loadPrefs() {
     scaleType: 'majPent',
     voicings: { guitar1: {}, guitar2: {} }, pianoInv: { piano: {} },
     ensemble: Object.assign({}, ENSEMBLE_DEFAULTS),
-    perform: { cols: 4, font: 22, autoSecs: 25, panels: { instruments: true, harp: true } },
+    perform: { cols: 4, font: 22, autoSecs: 25, scrollSpeed: 30, panels: { instruments: true, harp: true } },
     printCols: 1,
     metro: { bpm: 100, steps: 16, click: true, pattern: null },
     tunerPreset: 'standard',
@@ -1899,6 +1954,36 @@ el.toggleScales.addEventListener('change', () => {
   savePrefs();
   renderPreview();
 });
+// Phone preview bar: one switch for every chart (chords + scales at once),
+// mirroring the two desktop checkboxes so both views stay in sync.
+(function wireChartsToggle() {
+  const btn = document.getElementById('charts-toggle');
+  if (!btn) return;
+  const paint = () => {
+    const on = prefs.showChords || prefs.showScales;
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.classList.toggle('is-on', on);
+    // Off means off: hide the instrument chips and panels too, not just the
+    // diagrams inside them, so the phone falls back to a clean lyric sheet.
+    document.body.classList.toggle('charts-off', !on);
+  };
+  btn.addEventListener('click', () => {
+    const on = !(prefs.showChords || prefs.showScales);
+    prefs.showChords = on;
+    prefs.showScales = on;
+    el.toggleChords.checked = on;
+    el.toggleScales.checked = on;
+    savePrefs();
+    renderPreview();
+    paint();
+  });
+  paint();
+  // Keep the switch honest when the desktop checkboxes change.
+  el.toggleChords.addEventListener('change', paint);
+  el.toggleScales.addEventListener('change', paint);
+})();
+document.getElementById('mbar-perform').addEventListener('click', () => openPerform());
+
 el.toggleNumbers.addEventListener('change', () => {
   prefs.nashville = el.toggleNumbers.checked;
   savePrefs();
@@ -2641,10 +2726,15 @@ function openPerform() {
   pf.colNum.textContent = prefs.perform.cols;
   pf.fontNum.textContent = prefs.perform.font;
   document.getElementById('pf-auto-secs').textContent = prefs.perform.autoSecs || 25;
+  document.getElementById('pf-scroll-speed').textContent = prefs.perform.scrollSpeed || 30;
   stopAuto();
+  stopPfScroll();
   syncPerfToggles();
   renderPerformBody();
-  perfAutoFont();     // size text to the saved column count for this song/screen
+  // Auto-fit sizes text to fit N columns across; meaningless for the phone's
+  // single wrapped column, where the reader picks the size instead.
+  if (pfPhone()) { prefs.perform.font = Math.max(16, prefs.perform.font); pf.fontNum.textContent = prefs.perform.font; applyPerfLayout(); }
+  else perfAutoFont();
   applyPerfPanels();
   document.addEventListener('keydown', perfKeydown, true);
   pf.overlay.addEventListener('mousemove', perfActivity);
@@ -2655,6 +2745,7 @@ function openPerform() {
 function closePerform() {
   if (!perf.open) return;
   stopAuto();
+  stopPfScroll();
   perf.setlist = null;
   perf.open = false;
   document.removeEventListener('keydown', perfKeydown, true);
@@ -2678,7 +2769,13 @@ function renderPerformBody() {
   const s = currentSong();
   if (!s) return;
   pf.song.textContent = (s.title || 'Untitled') + (s.artist ? ' · ' + s.artist : '');
-  pf.cols.innerHTML = render(s.body, inlineShift(s), numberKeyFor(s));
+  // Phone: wrapped lines in one scrolling column. Desktop: the paged chart.
+  const phone = pfPhone();
+  pf.cols.innerHTML = phone
+    ? renderWrapped(s.body, inlineShift(s), numberKeyFor(s))
+    : render(s.body, inlineShift(s), numberKeyFor(s));
+  pf.cols.classList.toggle('pf-scroll', phone);
+  if (phone) pf.viewport.scrollTop = 0;
   perf.page = 0;
   applyPerfLayout();
 }
@@ -2737,8 +2834,21 @@ function perfAutoFont() {
   applyPerfLayout();
 }
 
+// On a phone performance mode is a single scrolling column of wrapped lines
+// rather than horizontally paged sheet-music columns.
+function pfPhone() { return window.matchMedia('(max-width: 760px)').matches; }
+
 function applyPerfLayout() {
   if (!perf.open) return;
+  if (pfPhone()) {
+    // One column, no paging: just set the font and let the viewport scroll.
+    pf.cols.style.transform = '';
+    pf.cols.style.columnWidth = 'auto';
+    pf.cols.style.setProperty('--pf-font', prefs.perform.font + 'px');
+    perf.pages = 1;
+    pf.pageLabel.textContent = '';
+    return;
+  }
   const { vw, total } = perfLayoutCore();
   perf.pages = Math.max(1, Math.round(total / vw));
   if (perf.page > perf.pages - 1) perf.page = perf.pages - 1;
@@ -2865,6 +2975,57 @@ function perfFit() {
 }
 
 document.getElementById('perform-btn').addEventListener('click', () => { perf.setlist = null; openPerform(); });
+// ---- Phone performance auto-scroll ----------------------------------------
+// Scrolls the lyric column at a steady px/second so hands stay on the guitar.
+// Fractional pixels are accumulated so slow speeds still move smoothly.
+const pfScroll = { on: false, raf: null, last: 0, carry: 0 };
+
+function paintScrollBtn() {
+  const b = document.getElementById('pf-scroll-play');
+  if (b) b.innerHTML = pfScroll.on ? '&#10074;&#10074;' : '&#9654;'; // pause : play
+}
+
+function stopPfScroll() {
+  pfScroll.on = false;
+  if (pfScroll.raf) cancelAnimationFrame(pfScroll.raf);
+  pfScroll.raf = null;
+  paintScrollBtn();
+}
+
+function startPfScroll() {
+  if (pfScroll.on) return;
+  pfScroll.on = true;
+  pfScroll.last = performance.now();
+  pfScroll.carry = 0;
+  paintScrollBtn();
+  const step = (now) => {
+    if (!pfScroll.on) return;
+    const dt = (now - pfScroll.last) / 1000;
+    pfScroll.last = now;
+    pfScroll.carry += (prefs.perform.scrollSpeed || 30) * dt;
+    const whole = Math.floor(pfScroll.carry);
+    if (whole > 0) {
+      pfScroll.carry -= whole;
+      const v = pf.viewport;
+      v.scrollTop += whole;
+      if (v.scrollTop + v.clientHeight >= v.scrollHeight - 1) { stopPfScroll(); return; } // hit the end
+    }
+    pfScroll.raf = requestAnimationFrame(step);
+  };
+  pfScroll.raf = requestAnimationFrame(step);
+}
+
+function setScrollSpeed(d) {
+  const cur = prefs.perform.scrollSpeed || 30;
+  prefs.perform.scrollSpeed = Math.max(5, Math.min(200, cur + d));
+  document.getElementById('pf-scroll-speed').textContent = prefs.perform.scrollSpeed;
+  savePrefs();
+}
+
+document.getElementById('pf-scroll-play').addEventListener('click', () => (pfScroll.on ? stopPfScroll() : startPfScroll()));
+document.getElementById('pf-scroll-slower').addEventListener('click', () => setScrollSpeed(-5));
+document.getElementById('pf-scroll-faster').addEventListener('click', () => setScrollSpeed(5));
+
 document.getElementById('pf-exit').addEventListener('click', closePerform);
 document.getElementById('pf-auto').addEventListener('click', () => (perf.auto ? stopAuto() : startAuto()));
 document.getElementById('pf-auto-slower').addEventListener('click', () => setAutoSecs(5));

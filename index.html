@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guitar Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=54" />
+  <link rel="stylesheet" href="styles.css?v=61" />
 </head>
 <body>
   <header>
@@ -122,6 +122,13 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
               <span id="save-status" class="muted"></span>
             </span>
           </div>
+          <!-- Phone-only preview controls: one big charts switch + Perform. -->
+          <div id="preview-mbar" class="preview-mbar">
+            <button id="charts-toggle" class="mbar-btn" aria-pressed="true" title="Show or hide all chord and scale charts">
+              <span class="mbar-dot"></span>Charts
+            </button>
+            <button id="mbar-perform" class="mbar-btn mbar-perform" title="Full-screen scrolling lyrics">&#9654; Perform</button>
+          </div>
           <div id="preview" class="preview">
             <div id="print-header"></div>
             <div id="tuning-banner" class="tuning-banner"></div>
@@ -208,11 +215,19 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
   <div id="perform-overlay" class="perform-overlay" hidden>
     <div id="perform-bar" class="perform-bar">
       <span class="pf-song" id="pf-song"></span>
-      <div class="pf-group">
+      <div class="pf-group pf-desk-only">
         <label>Columns</label>
         <button id="pf-col-down" title="Fewer columns">&minus;</button>
         <span id="pf-cols" class="pf-num">4</span>
         <button id="pf-col-up" title="More columns">+</button>
+      </div>
+      <!-- Phone: auto-scroll speed instead of page auto-advance. -->
+      <div class="pf-group pf-phone-only">
+        <button id="pf-scroll-play" title="Start or stop scrolling">&#9654;</button>
+        <label>Speed</label>
+        <button id="pf-scroll-slower" title="Scroll slower">&minus;</button>
+        <span id="pf-scroll-speed" class="pf-num">30</span>
+        <button id="pf-scroll-faster" title="Scroll faster">+</button>
       </div>
       <div class="pf-group">
         <label>Size</label>
@@ -221,14 +236,14 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
         <button id="pf-font-up" title="Larger text">+</button>
         <button id="pf-fit" title="Shrink text to fit one screen">Fit</button>
       </div>
-      <div class="pf-group">
+      <div class="pf-group pf-desk-only">
         <label>Auto</label>
         <button id="pf-auto" title="Auto-advance pages hands-free (play/pause)">&#9654;</button>
         <button id="pf-auto-slower" title="Slower auto-advance">&minus;</button>
         <span id="pf-auto-secs" class="pf-num">25</span>
         <button id="pf-auto-faster" title="Faster auto-advance">+</button>
       </div>
-      <div class="pf-group pf-toggles">
+      <div class="pf-group pf-toggles pf-desk-only">
         <label>Show</label>
         <button class="pf-toggle" data-panel="instruments">Instruments</button>
         <button class="pf-toggle" data-panel="harp">Harmonica</button>
@@ -286,9 +301,9 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=54"></script>
-  <script src="pdf2cho.js?v=54"></script>
-  <script src="qr.js?v=54"></script>
-  <script src="app.js?v=54"></script>
+  <script src="chords.js?v=61"></script>
+  <script src="pdf2cho.js?v=61"></script>
+  <script src="qr.js?v=61"></script>
+  <script src="app.js?v=61"></script>
 </body>
 </html>

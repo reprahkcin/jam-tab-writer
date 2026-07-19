@@ -36,8 +36,12 @@ header h1 { font-size: 18px; margin: 0; letter-spacing: 0.3px; }
 
 .header-actions { display: flex; gap: 8px; }
 
-/* The ☰ toggle only appears on phones (see the max-width block below). */
+/* Phone-only chrome — revealed in the max-width block below. Declared here,
+   ahead of that block, so the media query wins on source order. */
 .menu-toggle { display: none; }
+.preview-mbar { display: none; }
+/* Scoped, so it outranks the later `.pf-group { display: flex }` it sits on. */
+.perform-bar .pf-phone-only { display: none; }
 
 button {
   background: var(--panel-2);
@@ -1071,10 +1075,55 @@ main { display: flex; flex: 1; min-height: 0; }
      in both (editor padding 14px vs preview 14/16). */
   .preview { flex: none; max-height: 70vh; padding: 14px; }
 
-  /* Keep wide control rows and diagrams from widening the page. */
+  /* Song meta stacks in tidy full-width rows instead of ragged wrapping.
+     (Desktop right-aligns the steppers with margin-left:auto; that shoves
+     them into a weird indent once they wrap.) */
   .meta-row { gap: 8px; }
-  .view-toggles { flex-wrap: wrap; }
+  .meta-row .title-input,
+  .meta-row .artist-input,
+  .meta-row .tuning-ctl { flex: 1 1 100%; min-width: 0; }
+  .meta-row .stepper,
+  .meta-row .stepper:first-of-type {
+    margin-left: 0;
+    flex: 1 1 auto;
+    justify-content: space-between;
+  }
+  .tuning-ctl select { flex: 1; min-width: 0; }
   #instrument-panels, #harmonica-panel, #riff-panels, #roadmap { overflow-x: auto; }
+
+  /* One big Charts switch + Perform replace the fiddly desktop checkboxes. */
+  .view-toggles { display: none; }
+  .preview-mbar {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .mbar-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 11px 12px;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 8px;
+  }
+  .mbar-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: var(--muted);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  }
+  .mbar-btn.is-on { border-color: var(--accent); color: var(--accent); }
+  .mbar-btn.is-on .mbar-dot { background: var(--accent); }
+  .mbar-perform { background: var(--accent); border-color: var(--accent); color: #23180c; }
+  body.charts-off #instrument-bar,
+  body.charts-off #instrument-panels,
+  body.charts-off #harmonica-panel { display: none; }
+
 }
 
 /* ---- Performance mode ----------------------------------------------------- */
@@ -1294,6 +1343,60 @@ body.performing { overflow: hidden; }
 }
 .tuner-needle.in-tune { background: var(--section); }
 .tuner-cents { text-align: center; color: var(--muted); font-size: 12px; min-height: 16px; }
+
+/* ---- Wrapped chord/lyric lines (phone performance view) ------------------- */
+/* Each word is its own inline-block carrying the chord that lands on it, so a
+   long line breaks between words instead of running off the screen. */
+.wline { margin-bottom: 8px; line-height: 1.2; }
+.wseg { display: inline-block; vertical-align: bottom; }
+.wc {
+  display: block;
+  min-height: 1.15em;
+  line-height: 1.15;
+  color: var(--chord);
+  font-weight: 700;
+  white-space: pre;
+}
+.wt { display: block; white-space: pre; }
+
+/* Phone performance mode: one scrolling column instead of paged sheets. */
+/* Phone performance mode: one vertically scrolling column of wrapped lines.
+   Placed after the .perform-cols base rules so it wins on source order.
+   The desktop chart is an absolutely-positioned multicol box with
+   column-fill:auto, so overflow spills into new columns to the RIGHT; that
+   has to be fully unwound for the text to flow downward instead. */
+@media (max-width: 760px) {
+  .perform-cols.pf-scroll {
+    position: static;
+    inset: auto;
+    height: auto;
+    column-count: initial;
+    column-width: initial;
+    column-fill: initial;
+    transform: none !important;
+    transition: none;
+    padding: 10px 14px 70vh;  /* trailing room so the last line reaches the top */
+  }
+  .perform-viewport { overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .pf-desk-only { display: none !important; }
+  .perform-bar .pf-phone-only { display: flex; }
+  /* Compact bar: exit pinned top-right so it never claims a whole row, and
+     "Fit" dropped since it sizes text to fit columns we no longer use. */
+  .perform-bar { position: relative; gap: 8px 12px; padding: 8px 46px 8px 12px; }
+  .pf-song { max-width: calc(100% - 10px); font-size: 14px; }
+  .pf-exit { position: absolute; top: 6px; right: 8px; }
+  #pf-fit { display: none; }
+  /* Wrapped lines carry the performance font size. */
+  .perform-cols .wline { font-size: var(--pf-font, 22px); }
+
+  /* The idle fade only comes back on mousemove, which a touch screen never
+     sends — that would strand the reader with no controls. Keep the bar up. */
+  .perform-overlay.immersive .perform-bar { opacity: 1; }
+  .perform-overlay.immersive { cursor: auto; }
+
+  /* This is a lyric view: give the words the whole screen. */
+  #perform-panels { display: none; }
+}
 
 @media print { .tool-panel { display: none !important; } }
 
