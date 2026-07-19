@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guitar Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=65" />
+  <link rel="stylesheet" href="styles.css?v=66" />
 </head>
 <body>
   <header>
@@ -70,6 +70,15 @@
 
       <!-- Where the current chart is saved: system colour + folder path + state. -->
       <div id="save-breadcrumb" class="save-breadcrumb" hidden></div>
+
+      <!-- Desktop layout switch: side-by-side, or a single column showing one
+           pane at a time. -->
+      <div id="view-switch" class="view-switch" role="group" aria-label="Layout">
+        <span class="vs-label">View</span>
+        <button class="vs-btn" data-view="split" aria-pressed="true" title="Editor and preview side by side">Split</button>
+        <button class="vs-btn" data-view="editor" aria-pressed="false" title="Editor only, full width">Editor</button>
+        <button class="vs-btn" data-view="preview" aria-pressed="false" title="Preview only, full width">Preview</button>
+      </div>
 
       <div class="panes">
         <div class="pane editor-pane">
@@ -301,9 +310,9 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=65"></script>
-  <script src="pdf2cho.js?v=65"></script>
-  <script src="qr.js?v=65"></script>
-  <script src="app.js?v=65"></script>
+  <script src="chords.js?v=66"></script>
+  <script src="pdf2cho.js?v=66"></script>
+  <script src="qr.js?v=66"></script>
+  <script src="app.js?v=66"></script>
 </body>
 </html>

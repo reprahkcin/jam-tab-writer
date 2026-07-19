@@ -610,6 +610,7 @@ function loadPrefs() {
     voicings: { guitar1: {}, guitar2: {} }, pianoInv: { piano: {} },
     ensemble: Object.assign({}, ENSEMBLE_DEFAULTS),
     perform: { cols: 4, font: 22, autoSecs: 25, scrollSpeed: 30, panels: { instruments: true, harp: true } },
+    layout: 'split',   // 'split' | 'editor' | 'preview' (desktop only)
     printCols: 1,
     metro: { bpm: 100, steps: 16, click: true, pattern: null },
     tunerPreset: 'standard',
@@ -1964,6 +1965,27 @@ el.toggleScales.addEventListener('change', () => {
   savePrefs();
   renderPreview();
 });
+// Desktop layout: side-by-side panes, or a single column showing one pane at
+// a time. Phones ignore this and always stack (the switch is hidden there).
+function applyLayout() {
+  const mode = prefs.layout || 'split';
+  document.body.classList.toggle('view-editor', mode === 'editor');
+  document.body.classList.toggle('view-preview', mode === 'preview');
+  document.querySelectorAll('#view-switch .vs-btn').forEach((b) => {
+    b.setAttribute('aria-pressed', b.dataset.view === mode ? 'true' : 'false');
+  });
+}
+document.querySelectorAll('#view-switch .vs-btn').forEach((b) => {
+  b.addEventListener('click', () => {
+    prefs.layout = b.dataset.view;
+    savePrefs();
+    applyLayout();
+    // The preview measures itself for print column sizing; re-render so a
+    // freshly revealed pane lays out at its new width.
+    renderPreview();
+  });
+});
+
 // Phone preview bar: one switch for every chart (chords + scales at once),
 // mirroring the two desktop checkboxes so both views stay in sync.
 (function wireChartsToggle() {
@@ -3460,6 +3482,7 @@ function boot() {
   el.toggleChords.checked = prefs.showChords;
   el.toggleScales.checked = prefs.showScales;
   el.toggleNumbers.checked = prefs.nashville;
+  applyLayout();
   applyPrintCols();
   // No demo/seed content — start empty and let the user create the first song
   // (or reconnect a folder below).
