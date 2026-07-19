@@ -1365,7 +1365,10 @@ body.performing { overflow: hidden; }
   font-weight: 700;
   white-space: pre;
 }
-.wt { display: block; white-space: pre; }
+/* Reserve a text row even when a segment carries only a trailing chord with
+   no lyric under it — otherwise the empty slot collapses and vertical-align
+   drops that chord down onto the lyric row. */
+.wt { display: block; white-space: pre; min-height: 1.2em; }
 
 /* Phone performance mode: one scrolling column instead of paged sheets. */
 /* Phone performance mode: one vertically scrolling column of wrapped lines.
