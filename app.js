@@ -2493,6 +2493,47 @@ function performSetlist(sl) {
   openPerform();
 }
 
+// ---- Keyboard shortcuts cheatsheet -----------------------------------------
+function renderHelp() {
+  const A = ALT_LABEL, C = IS_MAC ? '⌘' : 'Ctrl+', S = IS_MAC ? '⇧' : 'Shift+';
+  const groups = [
+    ['Editor', [
+      [['[', C + 'K'], 'Search & insert a chord'],
+      [[A + '1–9'], 'Insert the numbered palette chord'],
+      [[A + '↑', A + '↓'], 'Move line(s) up / down'],
+      [[S + A + '↑', S + A + '↓'], 'Duplicate line(s) up / down'],
+      [['Tab'], 'Insert two spaces'],
+      [[C + 'S'], 'Save to file (folder mode)'],
+    ]],
+    ['Chord search popup', [
+      [['↑', '↓'], 'Move selection'],
+      [['Enter', 'Tab'], 'Insert chord'],
+      [['Esc'], 'Cancel'],
+    ]],
+    ['Performance mode', [
+      [['→', '↓', 'Space', 'PgDn'], 'Next page / song'],
+      [['←', '↑', 'PgUp'], 'Previous page / song'],
+      [['Esc'], 'Exit'],
+    ]],
+  ];
+  document.getElementById('help-body').innerHTML = groups.map(([title, rows]) =>
+    `<div class="help-group"><div class="help-group-title">${title}</div>` +
+    rows.map(([keys, desc]) =>
+      `<div class="help-row"><span class="help-keys">${keys.map((k) => `<kbd>${escapeHtml(k)}</kbd>`).join('<span class="help-or">or</span>')}</span>` +
+      `<span class="help-desc">${escapeHtml(desc)}</span></div>`).join('') + '</div>').join('');
+}
+function openHelp() { renderHelp(); document.getElementById('help-modal').hidden = false; }
+function closeHelp() { document.getElementById('help-modal').hidden = true; }
+document.getElementById('help-btn').addEventListener('click', openHelp);
+document.getElementById('help-close').addEventListener('click', closeHelp);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !document.getElementById('help-modal').hidden) { closeHelp(); return; }
+  // "?" opens the cheatsheet — but not while typing in a field.
+  if (e.key === '?' && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '')) {
+    e.preventDefault(); openHelp();
+  }
+});
+
 document.getElementById('setlist-btn').addEventListener('click', openSetlistModal);
 document.getElementById('setlist-close').addEventListener('click', () => { document.getElementById('setlist-modal').hidden = true; });
 document.getElementById('setlist-new').addEventListener('click', () => {

@@ -1247,6 +1247,32 @@ body.performing { overflow: hidden; }
 .share-actions { display: flex; gap: 8px; margin-top: 14px; }
 .share-actions button { padding: 6px 14px; border-radius: 6px; cursor: pointer; }
 
+/* Keyboard shortcuts cheatsheet. */
+.help-card { width: min(92vw, 480px); }
+.help-body { margin-top: 10px; max-height: 70vh; overflow-y: auto; }
+.help-group { margin-bottom: 14px; }
+.help-group-title {
+  font: 700 11px system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--section);
+  margin-bottom: 6px;
+}
+.help-row { display: flex; align-items: center; gap: 10px; padding: 3px 0; font-size: 13px; }
+.help-keys { flex: 0 0 150px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.help-desc { color: var(--muted); }
+.help-or { color: var(--muted); font-size: 11px; }
+.help-body kbd {
+  font: 600 11px var(--mono);
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
 /* Setlist builder. */
 .setlist-card { width: min(92vw, 640px); }
 .setlist-body { display: flex; gap: 14px; margin-top: 12px; min-height: 260px; }
