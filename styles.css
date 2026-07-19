@@ -988,8 +988,37 @@ main { display: flex; flex: 1; min-height: 0; }
 }
 
 @media (max-width: 760px) {
-  .panes { flex-direction: column; }
-  #sidebar { width: 180px; }
+  /* Scroll the whole page vertically instead of locking everything to one
+     viewport-height screen with tiny internal scroll areas. */
+  html, body { height: auto; }
+
+  /* Header: wrap the action buttons onto multiple rows instead of letting
+     them run off the right edge and force a horizontal scroll. */
+  header { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+  header h1 { font-size: 16px; white-space: nowrap; }
+  .header-actions { flex-wrap: wrap; gap: 6px; width: 100%; }
+  .header-actions button { padding: 6px 10px; font-size: 12px; }
+
+  /* Stack the song list above the workspace so each spans the full width. */
+  main { flex-direction: column; }
+  #sidebar {
+    width: 100%;
+    max-height: 30vh;
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+  #workspace { padding: 10px; }
+
+  /* Editor and preview stack and take their natural height; the page scrolls. */
+  .panes { flex-direction: column; flex: none; }
+  .pane { flex: none; }
+  #editor { min-height: 220px; }
+  .preview { flex: none; max-height: 70vh; }
+
+  /* Keep wide control rows and diagrams from widening the page. */
+  .meta-row { gap: 8px; }
+  .view-toggles { flex-wrap: wrap; }
+  #instrument-panels, #harmonica-panel, #riff-panels, #roadmap { overflow-x: auto; }
 }
 
 /* ---- Performance mode ----------------------------------------------------- */
@@ -1211,6 +1240,20 @@ body.performing { overflow: hidden; }
 .tuner-cents { text-align: center; color: var(--muted); font-size: 12px; min-height: 16px; }
 
 @media print { .tool-panel { display: none !important; } }
+
+/* On phones the floating metronome/tuner panels span the width instead of
+   overflowing off-screen from their fixed 300–400px widths. Placed after the
+   base .tool-panel rules so it wins on source order (media queries add no
+   specificity). */
+@media (max-width: 760px) {
+  .tool-panel, .tool-panel-wide, #tuner-panel {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+  }
+  .dm-grid { overflow-x: auto; }
+}
 
 /* Share-a-song dialog. */
 .share-modal {
