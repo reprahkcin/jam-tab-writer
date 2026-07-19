@@ -2308,9 +2308,10 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     saveCurrentNow();
   }
-  // Cmd/Ctrl+1/2/3 switch the desktop layout (Split / Editor / Preview).
-  // e.code stays Digit1-3 even when a modifier remaps e.key, so it is robust.
-  if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && /^Digit[123]$/.test(e.code)
+  // Cmd/Ctrl+Alt+1/2/3 switch the desktop layout (Split / Editor / Preview).
+  // Alt is included so this doesn't collide with the browser's own Cmd/Ctrl+
+  // number tab-switching. e.code stays Digit1-3 even when Alt remaps e.key.
+  if ((e.metaKey || e.ctrlKey) && e.altKey && !e.shiftKey && /^Digit[123]$/.test(e.code)
       && window.matchMedia('(min-width: 761px)').matches) {
     e.preventDefault();
     const view = { Digit1: 'split', Digit2: 'editor', Digit3: 'preview' }[e.code];
@@ -2712,9 +2713,9 @@ function renderHelp() {
       [['Esc'], 'Cancel'],
     ]],
     ['Layout', [
-      [[C + '1'], 'Split view'],
-      [[C + '2'], 'Editor only'],
-      [[C + '3'], 'Preview only'],
+      [[C + A + '1'], 'Split view'],
+      [[C + A + '2'], 'Editor only'],
+      [[C + A + '3'], 'Preview only'],
     ]],
     ['Performance mode', [
       [['→', '↓', 'Space', 'PgDn'], 'Next page / song'],
