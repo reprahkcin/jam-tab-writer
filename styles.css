@@ -1394,12 +1394,13 @@ body.performing { overflow: hidden; }
      happened to establish, and never let a segment outgrow the screen. */
   .perform-overlay { max-width: 100vw; overflow-x: hidden; }
   .perform-bar { max-width: 100vw; }
-  .perform-cols.pf-scroll .wseg { max-width: 100%; }
-  .perform-cols.pf-scroll .wt { white-space: pre-wrap; overflow-wrap: break-word; }
-  .perform-cols.pf-scroll .wc { white-space: pre-wrap; }
+  /* Unscoped: the preview uses the same wrapped lines on phones. */
+  .wseg { max-width: 100%; }
+  .wt { white-space: pre-wrap; overflow-wrap: break-word; }
+  .wc { white-space: pre-wrap; }
   /* Last resort for a word longer than the screen (also covers chord-less
      lines, which are plain text rather than segments). */
-  .perform-cols.pf-scroll .wline { overflow-wrap: anywhere; }
+  .wline { overflow-wrap: anywhere; }
   .pf-desk-only { display: none !important; }
   .perform-bar .pf-phone-only { display: flex; }
   /* Compact bar: exit pinned top-right so it never claims a whole row, and

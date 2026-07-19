@@ -688,10 +688,20 @@ function inlineShift(s) {
   return prefs.chordMode === 'sounding' ? soundShift(s) : shapeShift(s);
 }
 
+// The chart is space-aligned and cannot wrap without the chords drifting off
+// their syllables, so on a phone screen the preview uses the wrapping renderer
+// instead. Printing always wants the aligned chart (see the print swap below).
+let forceAlignedChart = false;
+function chartHtml(body, semitones, numKey) {
+  return (!forceAlignedChart && window.matchMedia('(max-width: 760px)').matches)
+    ? renderWrapped(body, semitones, numKey)
+    : render(body, semitones, numKey);
+}
+
 function renderPreview() {
   const s = currentSong();
   if (!s) return;
-  el.previewBody.innerHTML = render(s.body, inlineShift(s), numberKeyFor(s));
+  el.previewBody.innerHTML = chartHtml(s.body, inlineShift(s), numberKeyFor(s));
   updatePrintHeader(s);
   renderTuningBanner(s);
   renderCapoBanner(s);
@@ -1908,7 +1918,7 @@ let auxTimer = null;
 el.editor.addEventListener('input', () => {
   ensureSongForTyping();
   const s = currentSong();
-  if (s) el.previewBody.innerHTML = render(el.editor.value, inlineShift(s), numberKeyFor(s)); // instant lyric preview
+  if (s) el.previewBody.innerHTML = chartHtml(el.editor.value, inlineShift(s), numberKeyFor(s)); // instant lyric preview
   renderPalette();
   commit();
   // Refresh diagrams / harmonica / scale shortly after typing stops so newly
@@ -2121,10 +2131,30 @@ document.getElementById('add-riff-btn').addEventListener('click', () => {
   renderRiffs(cur);
 });
 document.getElementById('print-btn').addEventListener('click', () => {
+  // Swap to the aligned chart first: computePrintFont measures line widths,
+  // and the phone's wrapped lines would give it the wrong answer.
+  if (window.matchMedia('(max-width: 760px)').matches) { forceAlignedChart = true; renderPreview(); }
   computePrintFont();      // size the font to the column width before printing
   updateMetaBreak();       // put the reference panels on their own page when shown
   window.print();
 });
+
+// Paper always gets the space-aligned chart, even when the phone screen is
+// showing wrapped lines. Covers Cmd+P as well as the Print button.
+window.addEventListener('beforeprint', () => {
+  if (!window.matchMedia('(max-width: 760px)').matches) return;
+  forceAlignedChart = true;
+  renderPreview();
+});
+window.addEventListener('afterprint', () => {
+  if (!forceAlignedChart) return;
+  forceAlignedChart = false;
+  renderPreview();
+});
+
+// Rotating the phone (or crossing the breakpoint on a desktop resize) switches
+// which renderer the chart needs.
+window.matchMedia('(max-width: 760px)').addEventListener('change', () => renderPreview());
 
 // When the reference panels (diagrams / scale / harmonica) have content, give
 // them page 1 to themselves so the chart starts clean at the top of page 2
