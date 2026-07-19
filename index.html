@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Guitar Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=53" />
+  <link rel="stylesheet" href="styles.css?v=54" />
 </head>
 <body>
   <header>
@@ -31,8 +31,8 @@
 
   <main>
     <aside id="sidebar">
-      <div class="sidebar-head">
-        <span>Songs</span>
+      <div class="sidebar-head" id="sidebar-head" role="button" tabindex="0" aria-expanded="false" aria-controls="song-list">
+        <span>Songs<span class="drawer-caret" aria-hidden="true"></span></span>
         <span id="song-count" class="muted"></span>
       </div>
       <input id="song-search" class="song-search" type="search" placeholder="Search songs…" spellcheck="false" />
@@ -286,9 +286,9 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=53"></script>
-  <script src="pdf2cho.js?v=53"></script>
-  <script src="qr.js?v=53"></script>
-  <script src="app.js?v=53"></script>
+  <script src="chords.js?v=54"></script>
+  <script src="pdf2cho.js?v=54"></script>
+  <script src="qr.js?v=54"></script>
+  <script src="app.js?v=54"></script>
 </body>
 </html>

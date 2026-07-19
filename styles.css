@@ -74,6 +74,9 @@ main { display: flex; flex: 1; min-height: 0; }
   border-bottom: 1px solid var(--line);
 }
 
+/* The drawer caret only appears on phones (see the max-width block). */
+.drawer-caret { display: none; }
+
 .song-search {
   margin: 8px 10px;
   padding: 5px 9px;
@@ -1027,14 +1030,34 @@ main { display: flex; flex: 1; min-height: 0; }
   main { flex-direction: column; }
   #sidebar {
     width: 100%;
-    max-height: 30vh;
     border-right: none;
     border-bottom: 1px solid var(--line);
   }
 
+  /* Song list is a drawer: the "Songs" header toggles it, and it starts
+     collapsed so the editor is front and centre. */
+  .sidebar-head { cursor: pointer; user-select: none; align-items: center; }
+  .drawer-caret {
+    display: inline-block;
+    width: 0;
+    height: 0;
+    margin-left: 7px;
+    vertical-align: middle;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid currentColor;
+    opacity: 0.7;
+    transition: transform 0.15s ease;
+  }
+  #sidebar.drawer-open .drawer-caret { transform: rotate(180deg); }
+  #sidebar:not(.drawer-open) .song-search,
+  #sidebar:not(.drawer-open) #song-list,
+  #sidebar:not(.drawer-open) .folder-bar { display: none; }
+  #sidebar.drawer-open #song-list { max-height: 46vh; }
+
   /* Align every block to the same gutter: sidebar internals and the
      workspace column all start at --gutter. */
-  .sidebar-head { padding: 12px var(--gutter) 6px; }
+  .sidebar-head { padding: 12px var(--gutter); }
   .song-search { margin: 8px var(--gutter); }
   #song-list { padding: 4px var(--gutter); }
   #song-list li { padding-left: 8px; padding-right: 8px; }

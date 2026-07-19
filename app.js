@@ -2005,6 +2005,25 @@ document.getElementById('share-copy').addEventListener('click', async () => {
   document.addEventListener('click', (e) => { if (!header.contains(e.target)) setOpen(false); });
 })();
 
+// Collapsible song drawer (phones): tap the "Songs" header to show/hide the
+// list. Below the breakpoint it starts collapsed so the editor is front and
+// centre; picking a song closes it again. On desktop the CSS ignores the
+// class, so the list is always shown.
+(function wireSongDrawer() {
+  const head = document.getElementById('sidebar-head');
+  const sidebar = document.getElementById('sidebar');
+  const list = document.getElementById('song-list');
+  if (!head || !sidebar || !list) return;
+  const isPhone = () => window.matchMedia('(max-width: 760px)').matches;
+  const setOpen = (open) => {
+    sidebar.classList.toggle('drawer-open', open);
+    head.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  head.addEventListener('click', () => { if (isPhone()) setOpen(!sidebar.classList.contains('drawer-open')); });
+  head.addEventListener('keydown', (e) => { if (isPhone() && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setOpen(!sidebar.classList.contains('drawer-open')); } });
+  list.addEventListener('click', (e) => { if (isPhone() && e.target.closest('li')) setOpen(false); });
+})();
+
 document.getElementById('add-riff-btn').addEventListener('click', () => {
   ensureSongForTyping(); // create a local song to hold it if none is selected
   const cur = currentSong();
