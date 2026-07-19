@@ -2308,6 +2308,17 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     saveCurrentNow();
   }
+  // Cmd/Ctrl+1/2/3 switch the desktop layout (Split / Editor / Preview).
+  // e.code stays Digit1-3 even when a modifier remaps e.key, so it is robust.
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && /^Digit[123]$/.test(e.code)
+      && window.matchMedia('(min-width: 761px)').matches) {
+    e.preventDefault();
+    const view = { Digit1: 'split', Digit2: 'editor', Digit3: 'preview' }[e.code];
+    prefs.layout = view;
+    savePrefs();
+    applyLayout();
+    renderPreview();
+  }
 });
 
 document.getElementById('pagebreak-btn').addEventListener('click', () => {
@@ -2699,6 +2710,11 @@ function renderHelp() {
       [['↑', '↓'], 'Move selection'],
       [['Enter', 'Tab'], 'Insert chord'],
       [['Esc'], 'Cancel'],
+    ]],
+    ['Layout', [
+      [[C + '1'], 'Split view'],
+      [[C + '2'], 'Editor only'],
+      [[C + '3'], 'Preview only'],
     ]],
     ['Performance mode', [
       [['→', '↓', 'Space', 'PgDn'], 'Next page / song'],
