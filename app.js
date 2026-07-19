@@ -2327,13 +2327,29 @@ function moveEditorLines(dir) {
   }
 }
 
+// Duplicate the current line (or the selected block). dir 1 = put the caret on
+// the lower copy (Shift+Alt+Down), -1 = keep it on the upper copy (Shift+Alt+Up).
+function duplicateEditorLines(dir) {
+  const ta = el.editor;
+  const val = ta.value;
+  const selStart = ta.selectionStart, selEnd = ta.selectionEnd;
+  const lineStart = val.lastIndexOf('\n', selStart - 1) + 1;
+  let lineEnd = val.indexOf('\n', selEnd);
+  if (lineEnd === -1) lineEnd = val.length;
+  const block = val.slice(lineStart, lineEnd);
+  replaceRange(ta, lineStart, lineEnd, block + '\n' + block);
+  if (dir === 1) { const d = block.length + 1; ta.setSelectionRange(selStart + d, selEnd + d); }
+  else ta.setSelectionRange(selStart, selEnd);
+}
+
 // Keyboard chord placement + Tab-inserts-spaces.
 el.editor.addEventListener('keydown', (e) => {
-  // VSCode-style move line up/down: Alt/Option + ↑/↓.
+  // VSCode-style line ops on Alt/Option + ↑/↓ — Shift duplicates, else moves.
   if (e.altKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
     e.preventDefault();
     if (chordPopup) closeChordPopup();
-    moveEditorLines(e.key === 'ArrowUp' ? -1 : 1);
+    if (e.shiftKey) duplicateEditorLines(e.key === 'ArrowDown' ? 1 : -1);
+    else moveEditorLines(e.key === 'ArrowUp' ? -1 : 1);
     return;
   }
   // While the chord popup is open, it owns the arrow / enter / tab / escape keys.
