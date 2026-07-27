@@ -1417,7 +1417,7 @@ body.performing { overflow: hidden; }
   .pf-desk-only { display: none !important; }
   .perform-bar .pf-phone-only { display: flex; }
   /* Compact bar: exit pinned top-right so it never claims a whole row, and
-     "Fit" dropped since it sizes text to fit columns we no longer use. */
+     "Fit" dropped since it sizes text to columns we no longer use. */
   .perform-bar { position: relative; gap: 8px 12px; padding: 8px 46px 8px 12px; }
   .pf-song { max-width: calc(100% - 10px); font-size: 14px; }
   .pf-exit { position: absolute; top: 6px; right: 8px; }

@@ -609,7 +609,7 @@ function loadPrefs() {
     scaleType: 'majPent',
     voicings: { guitar1: {}, guitar2: {} }, pianoInv: { piano: {} },
     ensemble: Object.assign({}, ENSEMBLE_DEFAULTS),
-    perform: { cols: 4, font: 22, autoSecs: 25, scrollSpeed: 30, panels: { instruments: true, harp: true } },
+    perform: { cols: 4, font: 22, autoSecs: 25, scrollSpeed: 30, autoFit: true, panels: { instruments: true, harp: true } },
     layout: 'split',   // 'split' | 'editor' | 'preview' (desktop only)
     printCols: 1,
     metro: { bpm: 100, steps: 16, click: true, pattern: null },
@@ -626,7 +626,7 @@ function loadPrefs() {
   p.ensemble = Object.assign({}, ENSEMBLE_DEFAULTS, p.ensemble);
   if (typeof p.showChords !== 'boolean') p.showChords = p.diagrams !== false;  // old 'diagrams' toggle
   if (typeof p.showScales !== 'boolean') p.showScales = p.lead !== false;      // old 'lead' carried the scale
-  p.perform = Object.assign({ cols: 4, font: 22, autoSecs: 25, panels: {} }, p.perform);
+  p.perform = Object.assign({ cols: 4, font: 22, autoSecs: 25, autoFit: true, panels: {} }, p.perform);
   p.perform.panels = Object.assign({ instruments: true, harp: true }, p.perform.panels);
   p.metro = Object.assign({ bpm: 100, steps: 16, click: true, pattern: null }, p.metro);
   return p;
@@ -2607,7 +2607,12 @@ const PERF_LABELS = { instruments: 'Instruments', harp: 'Harmonica' };
 const PERF_PADX = 28; // must match .perform-cols left/right padding in CSS
 const PERF_GAP = 36;  // gap between columns, in px
 
-const perf = { open: false, page: 0, pages: 1, orig: {}, idleTimer: null, auto: false, autoTimer: null, setlist: null };
+const PF_FONT_MIN = 10, PF_FONT_MAX = 60;
+const PF_FIT_MAX_COLS = 8; // most columns auto-fit will consider
+
+// `bodyVer` bumps whenever the chart HTML changes, so cached measurements know
+// they're stale.
+const perf = { open: false, page: 0, pages: 1, bodyVer: 0, orig: {}, idleTimer: null, auto: false, autoTimer: null, setlist: null };
 const pf = {
   overlay: document.getElementById('perform-overlay'),
   bar: document.getElementById('perform-bar'),
@@ -2800,11 +2805,13 @@ function openPerform() {
   stopPfScroll();
   syncPerfToggles();
   renderPerformBody();
-  // Auto-fit sizes text to fit N columns across; meaningless for the phone's
-  // single wrapped column, where the reader picks the size instead.
-  if (pfPhone()) { prefs.perform.font = Math.max(16, prefs.perform.font); pf.fontNum.textContent = prefs.perform.font; applyPerfLayout(); }
-  else perfAutoFont();
+  // Panels first: they eat vertical room, which the fit has to size around.
   applyPerfPanels();
+  // Auto-fit sizes text to the screen; meaningless for the phone's single
+  // wrapped column, where the reader picks the size instead.
+  if (pfPhone()) { prefs.perform.font = Math.max(16, prefs.perform.font); pf.fontNum.textContent = prefs.perform.font; applyPerfLayout(); }
+  else if (prefs.perform.autoFit) perfAutoFit();
+  else perfAutoFont();
   document.addEventListener('keydown', perfKeydown, true);
   pf.overlay.addEventListener('mousemove', perfActivity);
   perfActivity();
@@ -2846,6 +2853,7 @@ function renderPerformBody() {
   pf.cols.classList.toggle('pf-scroll', phone);
   if (phone) pf.viewport.scrollTop = 0;
   perf.page = 0;
+  perf.bodyVer++;
   applyPerfLayout();
 }
 
@@ -2858,7 +2866,11 @@ function targetColW(cols, vw) {
 // (never wrap — wrapping would misalign chords over syllables), so a column can
 // be no narrower than this without lines overlapping the next column. Measured
 // in an offscreen shrink-to-fit clone so multicol/{page} don't skew the result.
+// The auto-fit search asks for many fonts in a row, so the clone is only re-filled
+// when the chart itself changed and each font's width is remembered.
 let pfMeasure = null;
+let pfMeasureVer = -1;
+const pfWidthCache = new Map();
 function widestLinePx(font) {
   if (!pfMeasure) {
     pfMeasure = document.createElement('div');
@@ -2867,9 +2879,16 @@ function widestLinePx(font) {
       'position:absolute; left:-99999px; top:0; visibility:hidden; display:inline-block; white-space:pre; padding:0; overflow:visible;';
     document.body.appendChild(pfMeasure);
   }
+  if (pfMeasureVer !== perf.bodyVer) {
+    pfMeasure.innerHTML = pf.cols.innerHTML;
+    pfMeasureVer = perf.bodyVer;
+    pfWidthCache.clear();
+  }
+  if (pfWidthCache.has(font)) return pfWidthCache.get(font);
   pfMeasure.style.fontSize = font + 'px';
-  pfMeasure.innerHTML = pf.cols.innerHTML;
-  return pfMeasure.scrollWidth;
+  const w = pfMeasure.scrollWidth;
+  pfWidthCache.set(font, w);
+  return w;
 }
 
 // Largest font at which `cols` columns of the widest line still fit the screen.
@@ -2879,17 +2898,17 @@ function fontForCols(cols) {
   const wref = widestLinePx(ref);
   if (wref <= 0) return prefs.perform.font;
   const f = Math.floor(targetColW(cols, vw) * ref / wref);
-  return Math.max(10, Math.min(60, f));
+  return Math.max(PF_FONT_MIN, Math.min(PF_FONT_MAX, f));
 }
 
 // Lay out columns. A column is never narrower than the widest line, so lines
 // never overlap; if the chosen font makes them too wide for `cols` per screen,
 // columns widen and the extra ones page horizontally instead. Returns metrics.
-function perfLayoutCore() {
+function perfLayoutCore(cols = prefs.perform.cols, font = prefs.perform.font) {
   const vw = pf.viewport.clientWidth;
-  const wline = widestLinePx(prefs.perform.font);
-  const colW = Math.max(80, Math.floor(Math.max(targetColW(prefs.perform.cols, vw), wline)));
-  pf.cols.style.setProperty('--pf-font', prefs.perform.font + 'px');
+  const wline = widestLinePx(font);
+  const colW = Math.max(80, Math.floor(Math.max(targetColW(cols, vw), wline)));
+  pf.cols.style.setProperty('--pf-font', font + 'px');
   pf.cols.style.columnGap = PERF_GAP + 'px';
   pf.cols.style.columnWidth = colW + 'px';
   return { vw, total: pf.cols.scrollWidth }; // reading scrollWidth forces reflow
@@ -2901,6 +2920,64 @@ function perfAutoFont() {
   pf.fontNum.textContent = prefs.perform.font;
   savePrefs();
   applyPerfLayout();
+}
+
+// ---- Auto-fit --------------------------------------------------------------
+// Sizes each song to exactly one screen, as large as it will go, so a set can be
+// pedalled through without anyone stopping to fiddle with the ± steppers.
+
+// Biggest font in [lo, hi] whose layout still lands on one screen; 0 if even
+// `lo` spills over. Taller text needs more columns and so a wider total, and
+// within this range a column is exactly one screen-share wide, so "fits" only
+// flips once as the font grows — safe to bisect.
+function largestFittingFont(cols, lo, hi) {
+  let best = 0;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const { vw, total } = perfLayoutCore(cols, mid);
+    if (total <= vw + 2) { best = mid; lo = mid + 1; }
+    else hi = mid - 1;
+  }
+  return best;
+}
+
+// Pick the column count and font that show the whole song on one screen at the
+// biggest readable size. Fewer columns are wider, so lines can carry a bigger
+// font before they'd clip; more columns buy vertical room. Which wins depends on
+// the song's shape, so try each count and keep the roomiest result.
+function perfBestFit() {
+  if (pf.viewport.clientWidth <= 0) return null;
+  let best = null;
+  for (let cols = 1; cols <= PF_FIT_MAX_COLS; cols++) {
+    // The widest line caps the font for this count, and that cap only shrinks as
+    // columns narrow — once it can't beat the incumbent, no later count can.
+    const cap = fontForCols(cols);
+    if (best && cap <= best.font) break;
+    const f = largestFittingFont(cols, best ? best.font + 1 : PF_FONT_MIN, cap);
+    if (f) best = { cols, font: f };
+  }
+  return best;
+}
+
+// Fit the current song to the screen. A song too long to fit at even the
+// smallest font falls back to the old width-only sizing, and pages sideways.
+function perfAutoFit() {
+  if (!perf.open || pfPhone()) return;
+  const best = perfBestFit();
+  if (!best) { perfAutoFont(); return; }
+  prefs.perform.cols = best.cols;
+  prefs.perform.font = best.font;
+  pf.colNum.textContent = best.cols;
+  pf.fontNum.textContent = best.font;
+  savePrefs();
+  applyPerfLayout();
+}
+
+function setPerfAutoFit(on) {
+  prefs.perform.autoFit = on;
+  savePrefs();
+  document.getElementById('pf-fit').classList.toggle('on', on);
+  if (on) perfAutoFit();
 }
 
 // On a phone performance mode is a single scrolling column of wrapped lines
@@ -2948,6 +3025,7 @@ function perfChangeSong(dir) {
   selectSong(list[j].id);
   perfRenderPanels(currentSong());
   renderPerformBody();
+  if (prefs.perform.autoFit) perfAutoFit(); // every song gets its own best size
 }
 
 // ---- Auto-advance (hands-free) ---------------------------------------------
@@ -3001,9 +3079,10 @@ function perfActivity() {
 }
 
 function syncPerfToggles() {
-  pf.bar.querySelectorAll('.pf-toggle').forEach((b) => {
+  pf.bar.querySelectorAll('.pf-toggle[data-panel]').forEach((b) => {
     b.classList.toggle('on', !!prefs.perform.panels[b.dataset.panel]);
   });
+  document.getElementById('pf-fit').classList.toggle('on', !!prefs.perform.autoFit);
 }
 
 function applyPerfPanels() {
@@ -3017,28 +3096,18 @@ function applyPerfPanels() {
   applyPerfLayout(); // panels change the body height → re-measure pages
 }
 
+// Reaching for a stepper is an explicit override, so it drops out of auto-fit
+// rather than having the next song silently undo the adjustment.
 function setPerfCols(d) {
+  if (prefs.perform.autoFit) setPerfAutoFit(false);
   prefs.perform.cols = Math.max(1, Math.min(10, prefs.perform.cols + d));
   pf.colNum.textContent = prefs.perform.cols;
   perfAutoFont(); // size the text to the new column count (also saves + re-lays)
 }
 function setPerfFont(d) {
-  prefs.perform.font = Math.max(10, Math.min(80, prefs.perform.font + d));
+  if (prefs.perform.autoFit) setPerfAutoFit(false);
+  prefs.perform.font = Math.max(PF_FONT_MIN, Math.min(80, prefs.perform.font + d));
   pf.fontNum.textContent = prefs.perform.font;
-  savePrefs();
-  applyPerfLayout();
-}
-// Shrink the font until the whole song fits one screen (no horizontal paging).
-function perfFit() {
-  const vw = pf.viewport.clientWidth;
-  let f = prefs.perform.font;
-  while (f > 10) {
-    prefs.perform.font = f;
-    if (perfLayoutCore().total <= vw + 2) break;
-    f -= 1;
-  }
-  prefs.perform.font = f;
-  pf.fontNum.textContent = f;
   savePrefs();
   applyPerfLayout();
 }
@@ -3103,17 +3172,26 @@ document.getElementById('pf-col-up').addEventListener('click', () => setPerfCols
 document.getElementById('pf-col-down').addEventListener('click', () => setPerfCols(-1));
 document.getElementById('pf-font-up').addEventListener('click', () => setPerfFont(1));
 document.getElementById('pf-font-down').addEventListener('click', () => setPerfFont(-1));
-document.getElementById('pf-fit').addEventListener('click', perfFit);
+document.getElementById('pf-fit').addEventListener('click', () => setPerfAutoFit(!prefs.perform.autoFit));
 document.getElementById('pf-prev-song').addEventListener('click', () => perfChangeSong(-1));
 document.getElementById('pf-next-song').addEventListener('click', () => perfChangeSong(1));
-pf.bar.querySelectorAll('.pf-toggle').forEach((b) => b.addEventListener('click', () => {
+pf.bar.querySelectorAll('.pf-toggle[data-panel]').forEach((b) => b.addEventListener('click', () => {
   const k = b.dataset.panel;
   prefs.perform.panels[k] = !prefs.perform.panels[k];
   savePrefs();
   syncPerfToggles();
   applyPerfPanels();
+  if (prefs.perform.autoFit) perfAutoFit(); // panels changed the room to fit into
 }));
-window.addEventListener('resize', () => { if (perf.open) applyPerfLayout(); });
+// Re-fitting is a burst of measurements, so let a drag settle before redoing it.
+let pfResizeTimer = null;
+window.addEventListener('resize', () => {
+  if (!perf.open) return;
+  applyPerfLayout();
+  if (!prefs.perform.autoFit || pfPhone()) return;
+  clearTimeout(pfResizeTimer);
+  pfResizeTimer = setTimeout(() => { if (perf.open) perfAutoFit(); }, 150);
+});
 
 // ---- Metronome -------------------------------------------------------------
 // Clicks are scheduled a little ahead on the Web Audio clock so the tempo stays

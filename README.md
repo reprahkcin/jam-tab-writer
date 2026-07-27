@@ -185,12 +185,16 @@ Two utilities open as small floating panels from the header:
 
 Click **Perform** (top bar) for a full-screen stage view of the current song:
 
-- **Newspaper columns** — the song flows across a configurable number of columns
-  (**Columns** ±). The font **auto-sizes** so the chosen number of columns fits
-  without the chord/lyric lines overlapping; on a wide monitor you can fit the
-  whole song across several columns with no scrolling. **Size** ± overrides the
-  font (bigger text may reduce the columns that fit and add pages); **Fit**
-  shrinks the font until everything fits one screen.
+- **Auto-fit** (on by default) — **Fit** lights up and every song sizes itself to
+  exactly one screen at the largest text that will fit, picking both the column
+  count and the font. It re-fits on each song change, when a panel is toggled,
+  and when the window resizes, so pedalling through a set never means stopping to
+  work the ± steppers. A song too long to fit even at the smallest size falls
+  back to paging.
+- **Newspaper columns** — the song flows across a number of columns (**Columns**
+  ±). Touching **Columns** or **Size** ± turns auto-fit off so your choice sticks;
+  click **Fit** to hand sizing back. With auto-fit off the font still auto-sizes
+  to whatever column count you pick, so chord/lyric lines never overlap.
 - **Page turning** — <kbd>→</kbd>/<kbd>PageDown</kbd>/<kbd>Space</kbd> go
   forward, <kbd>←</kbd>/<kbd>PageUp</kbd> back. Long songs page sideways one
   screenful at a time; pedalling past the end flows into the **next song in the
@@ -201,7 +205,7 @@ Click **Perform** (top bar) for a full-screen stage view of the current song:
 - **Toggleable panels** — **Chords**, **Lead**, **Scale**, and **Harp** each
   show/hide independently (all off by default) so lyrics and chord changes get
   the whole screen when you want.
-- **Esc** exits. Column count, size, and panel choices are remembered.
+- **Esc** exits. Auto-fit, column count, size, and panel choices are remembered.
 
 ## Riffs & solos
 
