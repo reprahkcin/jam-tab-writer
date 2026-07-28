@@ -1370,11 +1370,34 @@ body.performing { overflow: hidden; }
 }
 .dict-bar[hidden] { display: none; }
 .dict-live { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: #d97a6b; white-space: nowrap; }
+/* A class selector outranks the UA [hidden] rule, so display:none has to be
+   restated or setting .hidden silently does nothing. */
+.dict-live[hidden] { display: none; }
 .dict-dot { width: 8px; height: 8px; border-radius: 50%; background: #d97a6b; animation: cap-blink 1.1s ease-in-out infinite; }
 /* Words the engine hasn't committed yet. */
 .dict-interim { flex: 1; min-width: 0; color: var(--muted); font-style: italic; }
 .dict-interim.has-text::after { content: "…"; }
 .dict-status { color: var(--muted); }
+/* Indeterminate: the speech API gives no byte counts, so a sliding band plus
+   elapsed time shows it's working without faking a percentage. */
+.dict-progress { display: inline-flex; align-items: center; gap: 7px; }
+.dict-progress[hidden] { display: none; }
+.dict-progress-track {
+  position: relative; width: 120px; height: 5px; border-radius: 3px;
+  background: var(--line); overflow: hidden;
+}
+.dict-progress-bar {
+  position: absolute; top: 0; bottom: 0; width: 40%; border-radius: 3px;
+  background: var(--accent); animation: dict-slide 1.3s ease-in-out infinite;
+}
+@keyframes dict-slide {
+  0% { left: -40%; }
+  100% { left: 100%; }
+}
+.dict-progress-label { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11px; }
+@media (prefers-reduced-motion: reduce) {
+  .dict-progress-bar { animation: none; left: 0; width: 100%; opacity: 0.5; }
+}
 
 /* Capture */
 #capture-panel { bottom: 16px; width: 400px; }

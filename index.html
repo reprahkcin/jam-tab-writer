@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Jam Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=77" />
+  <link rel="stylesheet" href="styles.css?v=78" />
 </head>
 <body>
   <header>
@@ -107,6 +107,12 @@
             <span class="dict-live"><span class="dict-dot"></span>Listening</span>
             <span id="dict-interim" class="dict-interim"></span>
             <span id="dict-status" class="dict-status"></span>
+            <!-- Indeterminate on purpose: the speech API reports no byte
+                 progress, only downloadable/downloading/available. -->
+            <span id="dict-progress" class="dict-progress" hidden>
+              <span class="dict-progress-track"><span class="dict-progress-bar"></span></span>
+              <span id="dict-progress-label" class="dict-progress-label"></span>
+            </span>
             <button id="dict-install" class="inline-btn" hidden></button>
           </div>
           <div id="section-bar" class="section-bar"></div>
@@ -380,9 +386,9 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=77"></script>
-  <script src="pdf2cho.js?v=77"></script>
-  <script src="qr.js?v=77"></script>
-  <script src="app.js?v=77"></script>
+  <script src="chords.js?v=78"></script>
+  <script src="pdf2cho.js?v=78"></script>
+  <script src="qr.js?v=78"></script>
+  <script src="app.js?v=78"></script>
 </body>
 </html>

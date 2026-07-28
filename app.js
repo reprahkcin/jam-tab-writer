@@ -4129,7 +4129,10 @@ async function renderTakes() {
 
 const SRec = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-const dict = { on: false, rec: null, lang: 'en-US', modelState: 'unknown', installing: false, showInstall: false };
+const dict = {
+  on: false, rec: null, lang: 'en-US', modelState: 'unknown',
+  installing: false, showInstall: false, installStarted: 0, watchTimer: null,
+};
 
 // Whole-utterance commands only. "chorus" on its own is a section marker; "the
 // chorus of angels" is a lyric, and matching on substrings would wreck it.
@@ -4235,12 +4238,48 @@ async function dictRefreshModel() {
 async function dictInstallModel() {
   if (dict.installing || !SRec || !SRec.install) return;
   dict.installing = true;
+  dict.installStarted = Date.now();
   dictPaint();
+  dictWatchInstall();
   try {
     await SRec.install({ langs: [dict.lang], processLocally: true });
   } catch { /* surfaced by the state below */ }
   dict.installing = false;
+  dictStopWatch();
   await dictRefreshModel();
+  if (dict.modelState === 'available') dictSetStatus('Voice model ready — press D or hit Dictate.');
+}
+
+// The install exposes no byte progress: it takes no monitor callback and emits
+// no downloadprogress events (checked against a language that genuinely needed
+// downloading). The only observable is the coarse state, so poll that and pair
+// an indeterminate bar with elapsed time — enough to show it's alive without
+// inventing a percentage that would be a lie.
+function dictWatchInstall() {
+  dictStopWatch();
+  dict.watchTimer = setInterval(async () => {
+    try {
+      dict.modelState = await SRec.available({ langs: [dict.lang], processLocally: true });
+    } catch { /* keep the last known state */ }
+    if (dict.modelState === 'available') { dict.installing = false; dictStopWatch(); dictRefreshModel(); return; }
+    dictPaintProgress();
+  }, 1000);
+  dictPaintProgress();
+}
+function dictStopWatch() {
+  if (dict.watchTimer) clearInterval(dict.watchTimer);
+  dict.watchTimer = null;
+}
+
+function dictPaintProgress() {
+  const wrap = document.getElementById('dict-progress');
+  const label = document.getElementById('dict-progress-label');
+  if (!wrap) return;
+  const busy = dict.installing || dict.modelState === 'downloading';
+  wrap.hidden = !busy;
+  if (!busy || !label) return;
+  const secs = Math.floor((Date.now() - (dict.installStarted || Date.now())) / 1000);
+  label.textContent = Math.floor(secs / 60) + ':' + String(secs % 60).padStart(2, '0');
 }
 
 function dictStart() {
@@ -4336,9 +4375,10 @@ function dictPaint() {
   }
   const live = bar && bar.querySelector('.dict-live');
   if (live) live.hidden = !dict.on;
+  dictPaintProgress();
   if (!ready && dict.showInstall) {
     dictSetStatus(busy
-      ? 'Downloading the on-device model — this happens once, then dictation works offline.'
+      ? 'Downloading the voice model — once only, then dictation works offline.'
       : 'Dictation runs entirely on your machine. Install the voice model once to use it.');
   }
 }
