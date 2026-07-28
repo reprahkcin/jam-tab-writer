@@ -2157,7 +2157,6 @@ document.getElementById('print-btn').addEventListener('click', () => {
   // and the phone's wrapped lines would give it the wrong answer.
   if (window.matchMedia('(max-width: 760px)').matches) { forceAlignedChart = true; renderPreview(); }
   computePrintFont();      // size the font to the column width before printing
-  updateMetaBreak();       // put the reference panels on their own page when shown
   window.print();
 });
 
@@ -2177,15 +2176,6 @@ window.addEventListener('afterprint', () => {
 // Rotating the phone (or crossing the breakpoint on a desktop resize) switches
 // which renderer the chart needs.
 window.matchMedia('(max-width: 760px)').addEventListener('change', () => renderPreview());
-
-// When the reference panels (diagrams / scale / harmonica) have content, give
-// them page 1 to themselves so the chart starts clean at the top of page 2
-// (rather than crammed onto the bottom of page 1).
-function updateMetaBreak() {
-  const hasMeta = ['chord-diagrams', 'lead-diagrams', 'scale-panel', 'harmonica-panel']
-    .some((id) => ((document.getElementById(id) || {}).innerHTML || '').trim() !== '');
-  el.preview.classList.toggle('meta-first', hasMeta);
-}
 
 // Print column count (applied only in @media print via the --print-cols var).
 const printColsSel = document.getElementById('print-cols');

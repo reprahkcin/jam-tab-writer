@@ -911,7 +911,11 @@ main { display: flex; flex: 1; min-height: 0; }
   .riff-tab .line { font-size: var(--print-font, 10pt); }
 
   header, #sidebar, .meta-row, .editor-pane, .pane-head,
-  .save-breadcrumb, .view-switch, .preview-mbar { display: none !important; }
+  .save-breadcrumb, .view-switch, .preview-mbar,
+  /* Which instruments are on is a screen control, and each panel below carries
+     its own heading anyway. .palette-empty goes too — it points at controls that
+     aren't on the page. */
+  .instrument-bar, .palette-empty { display: none !important; }
   html, body { background: #fff; color: #000; height: auto; display: block; }
   main, #workspace, .panes, .preview-pane, .pane {
     display: block; border: none; background: #fff; padding: 0; margin: 0; min-height: 0;
@@ -1003,9 +1007,11 @@ main { display: flex; flex: 1; min-height: 0; }
   #preview-body .lyricline { break-before: avoid; }
   #preview-body .section { break-inside: avoid; }
 
-  /* Reference panels (diagrams/scale/harmonica) get page 1; the chart starts on
-     a fresh page. Only when there's meta content (class set before printing). */
-  .preview.meta-first #preview-body { break-before: page; page-break-before: always; }
+  /* The chords and lyrics always start a fresh page, so the title, capo banner
+     and reference panels keep page 1 to themselves and the chart is never
+     crammed onto whatever space they left. Unconditional on purpose: it used to
+     be gated on a class set by the Print button, which meant ⌘P skipped it. */
+  #preview-body { break-before: page; page-break-before: always; }
 
   /* Real page breaks. Keep chord+lyric pairs together. */
   .preview .page-break { break-before: page; page-break-before: always; border: none; height: 0; margin: 0; }
