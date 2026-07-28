@@ -2191,12 +2191,18 @@ printColsSel.addEventListener('change', () => {
 });
 
 // The widest rendered chart line, in px, at the current on-screen font. Chart
-// lines are white-space:pre so their scrollWidth is their true content width
-// (chord rows included — positioned with spaces).
+// lines are white-space:pre, but they're block elements, so scrollWidth floors
+// at the container width — it measured the preview pane rather than the text,
+// which made the print size depend on how wide the browser window was (a wide
+// monitor shrank the type). A Range over the contents gives the text's own
+// extent, chord rows included since those are positioned with spaces.
 function widestBodyLinePx() {
   let m = 1;
+  const range = document.createRange();
   document.querySelectorAll('#preview-body .line, #riff-panels .line').forEach((l) => {
-    if (l.scrollWidth > m) m = l.scrollWidth;
+    range.selectNodeContents(l);
+    const w = range.getBoundingClientRect().width;
+    if (w > m) m = w;
   });
   return m;
 }
@@ -2217,7 +2223,7 @@ function computePrintFont() {
   const ratio = widestBodyLinePx() / screenFontPx; // line width per unit font
   const SAFETY = 0.94;           // leave headroom so the last char never clips
   let fit = (colPt * SAFETY) / ratio;
-  fit = Math.min(12, Math.max(6, fit)); // 6–12pt
+  fit = Math.min(14, Math.max(6, fit)); // 6–14pt; wide songs still shrink to fit
   document.documentElement.style.setProperty('--print-font', fit.toFixed(1) + 'pt');
 }
 
