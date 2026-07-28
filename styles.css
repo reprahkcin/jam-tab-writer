@@ -930,7 +930,10 @@ main { display: flex; flex: 1; min-height: 0; }
   .cb-toggle { display: none; }
   .chord-diagram, .cd-name { color: #000; }
   .cd-sound { color: #333; }
-  .cd-voicing { border: none; color: #333; padding: 0; margin-top: 2px; -webkit-appearance: none; appearance: none; }
+  /* Voicing / inversion pickers: dropdowns for choosing which shape to show.
+     The shape they picked is drawn right above them, so on paper the label is
+     just a control's current value ("Default"). */
+  .cd-voicing, .pk-inv { display: none; }
   .chord-diagram svg line { stroke: #333; }
   .chord-diagram svg .cd-nut, .chord-diagram svg .cd-dot { fill: #000; }
   .chord-diagram svg .cd-mark, .chord-diagram svg .cd-fretnum { fill: #333; }
