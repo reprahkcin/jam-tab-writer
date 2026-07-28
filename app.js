@@ -780,10 +780,16 @@ function scaleControlsHtml(s, pc, auto, scale, highlight) {
   const focusOpts = `<option value="">none</option>` + uniqueShapes(s).map((c) =>
     `<option value="${escapeHtml(c)}"${s.focusChord === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('');
   const legendHi = highlight ? ` <span class="sp-dot hi"></span>chord tone` : '';
+  // Paper drops the pickers (the title already names the root and the scale)
+  // but keeps the focus chord as text: the highlighted tones on the diagram
+  // mean nothing unless you know which chord they belong to.
+  const focusPrint = s.focusChord
+    ? `<span class="sp-focus-print">Chord ${escapeHtml(s.focusChord)}</span>` : '';
   return `<div class="sp-head"><span class="sp-title">${HARP_NAMES[pc]} ${escapeHtml(scale.name)}</span>` +
-    `<span class="muted">Root</span><select id="scale-root">${rootOpts}</select>` +
+    `<span class="muted sp-ctl">Root</span><select id="scale-root">${rootOpts}</select>` +
     `<select id="scale-type">${scaleOpts}</select>` +
-    `<span class="muted">Chord</span><select id="scale-focus">${focusOpts}</select>` +
+    `<span class="muted sp-ctl">Chord</span><select id="scale-focus">${focusOpts}</select>` +
+    focusPrint +
     `<span class="sp-legend"><span class="sp-dot root"></span>root <span class="sp-dot note"></span>scale tone${legendHi}</span></div>`;
 }
 

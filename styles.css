@@ -764,6 +764,8 @@ main { display: flex; flex: 1; min-height: 0; }
   font-size: 12px;
 }
 .sp-legend { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11px; margin-left: auto; }
+/* Print-only echo of the focus chord; on screen the picker already shows it. */
+.sp-focus-print { display: none; }
 .sp-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; }
 .sp-dot.root { background: var(--accent); }
 .sp-dot.note { background: var(--section); }
@@ -968,6 +970,11 @@ main { display: flex; flex: 1; min-height: 0; }
   #lead-section { border-top: 1px dashed #999; }
   .scale-panel:not(:empty) { background: #fff; border: 1px solid #999; }
   .sp-title { color: #000; }
+  /* Scale pickers: the title beside them already names the root and the scale,
+     so on paper they only restate it. The focus chord isn't stated anywhere
+     else, so it prints as text instead. */
+  #scale-root, #scale-type, #scale-focus, .sp-ctl { display: none; }
+  .sp-focus-print { display: inline; color: #333; }
   .scale-panel select { display: none; }
   .scale-svg .sc-string, .scale-svg .sc-fret { stroke: #999; }
   .scale-svg .sc-nut { stroke: #333; }
