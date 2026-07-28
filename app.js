@@ -2742,8 +2742,10 @@ function renderHelp() {
       [['←', '↑', 'PgUp'], 'Previous page / song'],
       [['Esc'], 'Exit'],
     ]],
-    ['Recording', [
+    ['Recording & dictation', [
       [['R'], 'Start / stop a take (works anywhere, including performance mode)'],
+      [['D'], 'Start dictating lyrics'],
+      [['Esc'], 'Stop dictating'],
     ]],
   ];
   document.getElementById('help-body').innerHTML = groups.map(([title, rows]) =>
@@ -2767,6 +2769,20 @@ document.addEventListener('keydown', (e) => {
   if ((e.key === 'r' || e.key === 'R') && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
     e.preventDefault();
     captureToggle();
+  }
+  // "D" starts dictation. Only a start: once it's running your caret is in the
+  // editor, so stopping goes through Esc or the button instead of a bare letter.
+  if ((e.key === 'd' || e.key === 'D') && !typing && !dict.on && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    e.preventDefault();
+    dictStart();
+  }
+  // Esc stops dictation from anywhere, the editor included.
+  if (e.key === 'Escape' && (dict.on || dict.showInstall)) {
+    e.preventDefault();
+    dictStop();
+    dict.showInstall = false;
+    dictSetStatus('');
+    dictPaint();
   }
 });
 
@@ -4100,6 +4116,225 @@ async function renderTakes() {
   }));
 }
 
+// ---- Dictation (speak lyrics into the editor) ------------------------------
+// Strictly on-device: processLocally is never relaxed, so audio doesn't leave
+// the machine and this keeps the app's "everything runs locally" promise. The
+// cost is that the feature only exists where the local model does.
+// Note the API offers no input selection at all — no deviceId, no stream — so
+// it always listens to the system default input, not the Record panel's choice.
+
+const SRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+const dict = { on: false, rec: null, lang: 'en-US', modelState: 'unknown', installing: false, showInstall: false };
+
+// Whole-utterance commands only. "chorus" on its own is a section marker; "the
+// chorus of angels" is a lyric, and matching on substrings would wreck it.
+const DICT_SECTIONS = [
+  [/^(new |next )?verse$/, 'verse'],
+  [/^(new )?chorus$/, 'Chorus'],
+  [/^(new )?bridge$/, 'Bridge'],
+  [/^(new )?intro$/, 'Intro'],
+  [/^(new )?outro$/, 'Outro'],
+  [/^(new )?(pre.?chorus)$/, 'Pre-Chorus'],
+  [/^(new )?solo$/, 'Solo'],
+  [/^(new )?refrain$/, 'Refrain'],
+];
+const DICT_BREAKS = [
+  [/^(new line|line break|next line)$/, '\n'],
+  [/^(new paragraph|blank line|new section)$/, '\n\n'],
+];
+
+function dictNormalize(s) {
+  return s.toLowerCase().replace(/[.,!?;:"'’]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+// Verses number themselves off what's already written, so "new verse" three
+// times running gives 1, 2, 3 rather than three identical labels.
+function dictNextVerse() {
+  const body = el.editor.value;
+  let max = 0;
+  for (const m of body.matchAll(/[{[]\s*verse\s*(\d+)\s*[}\]]/gi)) max = Math.max(max, +m[1]);
+  return max + 1;
+}
+
+function dictCommandFor(text) {
+  const n = dictNormalize(text);
+  for (const [re, label] of DICT_SECTIONS) {
+    if (re.test(n)) return { kind: 'section', text: label === 'verse' ? `{Verse ${dictNextVerse()}}` : `{${label}}` };
+  }
+  for (const [re, out] of DICT_BREAKS) if (re.test(n)) return { kind: 'break', text: out };
+  return null;
+}
+
+// execCommand keeps the textarea's native undo stack alive, so Cmd+Z still
+// steps back through dictated text like anything else typed.
+function dictInsert(text) {
+  const ta = el.editor;
+  ta.focus();
+  let ok = false;
+  try { ok = document.execCommand('insertText', false, text); } catch { ok = false; }
+  if (!ok) {
+    const a = ta.selectionStart, b = ta.selectionEnd;
+    ta.value = ta.value.slice(0, a) + text + ta.value.slice(b);
+    ta.selectionStart = ta.selectionEnd = a + text.length;
+  }
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// A spoken line becomes its own lyric line; sections get a blank line above.
+function dictCommit(raw) {
+  const cmd = dictCommandFor(raw);
+  const ta = el.editor;
+  const before = ta.value.slice(0, ta.selectionStart);
+  const atLineStart = before === '' || before.endsWith('\n');
+  if (cmd) {
+    if (cmd.kind === 'break') { dictInsert(cmd.text); return; }
+    let pre = '';
+    if (!atLineStart) pre = '\n';
+    if (!/\n\n$/.test(before + pre) && before !== '') pre += '\n';
+    dictInsert(pre + cmd.text + '\n');
+    return;
+  }
+  const words = raw.trim();
+  if (!words) return;
+  dictInsert((atLineStart ? '' : '\n') + words);
+}
+
+// Bias the recognizer toward this song's own vocabulary — names and coinages
+// are exactly what a general model gets wrong, and they're already on screen.
+function dictPhrases() {
+  const s = currentSong();
+  if (!s) return [];
+  const seen = new Set(), out = [];
+  const add = (t, boost) => {
+    const k = t.toLowerCase();
+    if (!t || k.length < 3 || seen.has(k) || out.length >= 60) return;
+    seen.add(k);
+    try { out.push(new SpeechRecognitionPhrase(t, boost)); } catch { /* older build */ }
+  };
+  if (s.title) { add(s.title, 3.0); s.title.split(/\s+/).forEach((w) => add(w, 2.0)); }
+  if (s.artist) s.artist.split(/\s+/).forEach((w) => add(w, 2.0));
+  // Uncommon words already in the lyrics: capitalised or simply rare-looking.
+  const body = s.body.replace(/\[[^\]]*\]/g, ' ').replace(/\{[^}]*\}/g, ' ');
+  for (const w of body.match(/\b[A-Z][a-z']{2,}\b/g) || []) add(w, 2.0);
+  return out;
+}
+
+async function dictRefreshModel() {
+  if (!SRec || !SRec.available) { dict.modelState = 'unsupported'; dictPaint(); return; }
+  try {
+    dict.modelState = await SRec.available({ langs: [dict.lang], processLocally: true });
+  } catch { dict.modelState = 'unavailable'; }
+  dictPaint();
+}
+
+async function dictInstallModel() {
+  if (dict.installing || !SRec || !SRec.install) return;
+  dict.installing = true;
+  dictPaint();
+  try {
+    await SRec.install({ langs: [dict.lang], processLocally: true });
+  } catch { /* surfaced by the state below */ }
+  dict.installing = false;
+  await dictRefreshModel();
+}
+
+function dictStart() {
+  if (dict.on || !SRec) return;
+  // Not installed yet: reveal the offer rather than silently doing nothing. The
+  // prompt only appears once you've asked for dictation, so it isn't clutter
+  // for anyone who never uses it.
+  if (dict.modelState !== 'available') {
+    dict.showInstall = true;
+    dictPaint();
+    dictRefreshModel();
+    return;
+  }
+  dict.showInstall = false;
+  const rec = new SRec();
+  rec.lang = dict.lang;
+  rec.continuous = true;
+  rec.interimResults = true;
+  try { rec.processLocally = true; } catch { /* older build: dictStart is gated above */ }
+  try { rec.phrases = dictPhrases(); } catch { /* biasing is a bonus, not required */ }
+
+  rec.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) dictCommit(r[0].transcript);
+      else interim += r[0].transcript;
+    }
+    dictSetInterim(interim);
+  };
+  rec.onerror = (e) => {
+    // "no-speech" just means a quiet stretch; keep listening.
+    if (e.error === 'no-speech' || e.error === 'aborted') return;
+    dictSetStatus(e.error === 'not-allowed' ? 'Microphone access was denied.' : 'Dictation error: ' + e.error);
+    dictStop();
+  };
+  // continuous still ends on long silence in some builds — restart while armed.
+  rec.onend = () => { if (dict.on) { try { rec.start(); } catch { dictStop(); } } };
+
+  dict.rec = rec;
+  dict.on = true;
+  try { rec.start(); } catch { dict.on = false; dict.rec = null; }
+  dictPaint();
+  dictSetStatus('Listening — speak a line, pause, then the next.');
+}
+
+function dictStop() {
+  if (!dict.on) return;
+  dict.on = false;
+  const rec = dict.rec;
+  dict.rec = null;
+  if (rec) { rec.onend = null; try { rec.stop(); } catch { /* already gone */ } }
+  dictSetInterim('');
+  dictPaint();
+}
+
+function dictToggle() { return dict.on ? dictStop() : dictStart(); }
+
+function dictSetInterim(text) {
+  const box = document.getElementById('dict-interim');
+  if (!box) return;
+  box.textContent = text;
+  box.classList.toggle('has-text', !!text);
+}
+function dictSetStatus(msg) {
+  const s = document.getElementById('dict-status');
+  if (s) s.textContent = msg || '';
+}
+
+function dictPaint() {
+  const btn = document.getElementById('dictate-btn');
+  const bar = document.getElementById('dict-bar');
+  const install = document.getElementById('dict-install');
+  if (!btn) return;
+  // 'unknown' is the pre-probe state — keep the button up rather than flashing
+  // it away and back while availability resolves.
+  const supported = !!SRec && dict.modelState !== 'unsupported' && dict.modelState !== 'unavailable';
+  btn.hidden = !supported;
+  if (!supported) { if (bar) bar.hidden = true; return; }
+  btn.classList.toggle('on', dict.on);
+  btn.textContent = dict.on ? '● Listening' : '🎤 Dictate';
+  const ready = dict.modelState === 'available';
+  const busy = dict.installing || dict.modelState === 'downloading';
+  if (bar) bar.hidden = !dict.on && !dict.showInstall;
+  if (install) {
+    install.hidden = ready;
+    install.disabled = busy;
+    install.textContent = busy ? 'Installing…' : 'Install voice model';
+  }
+  const live = bar && bar.querySelector('.dict-live');
+  if (live) live.hidden = !dict.on;
+  if (!ready && dict.showInstall) {
+    dictSetStatus(busy
+      ? 'Downloading the on-device model — this happens once, then dictation works offline.'
+      : 'Dictation runs entirely on your machine. Install the voice model once to use it.');
+  }
+}
+
 // ---- Tool panel wiring ----
 function toggleTool(name) {
   const panel = document.getElementById(name + '-panel');
@@ -4112,6 +4347,11 @@ function toggleTool(name) {
 document.getElementById('metro-btn').addEventListener('click', () => toggleTool('metro'));
 document.getElementById('tuner-btn').addEventListener('click', () => toggleTool('tuner'));
 document.getElementById('capture-btn').addEventListener('click', () => toggleTool('capture'));
+document.getElementById('dictate-btn').addEventListener('click', dictToggle);
+document.getElementById('dict-install').addEventListener('click', dictInstallModel);
+// Ask once at startup whether the local model is here, so the button can hide
+// itself entirely where dictation can't run.
+dictRefreshModel();
 document.getElementById('cap-toggle').addEventListener('click', captureToggle);
 document.getElementById('cap-device').addEventListener('change', (e) => {
   prefs.capture.deviceId = e.target.value || null;

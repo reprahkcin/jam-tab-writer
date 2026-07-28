@@ -191,6 +191,27 @@ more than one keystroke.
   it's a real file in the folder you already sync or commit — no export step.
 - Each take has inline playback, a download, and delete.
 
+## Dictating lyrics
+
+Press **D** (or hit **Dictate** above the editor) and speak; words land at the
+cursor, one spoken line per pause. **Esc** stops. Words still being decided show
+in a strip above the editor until the engine commits them.
+
+- **Runs entirely on your machine.** Recognition is pinned to on-device
+  processing, so audio never leaves the computer and it works with no internet.
+  The first use offers a one-time voice-model install; the button only appears
+  where the local model can run, and there is no cloud fallback.
+- **Spoken structure** — say **"new verse"**, **"chorus"**, **"bridge"**,
+  **"pre-chorus"**, **"intro"**, **"outro"**, **"solo"** or **"refrain"** to drop
+  a section label; verses number themselves off what's already written. Say
+  **"new line"** or **"blank line"** to break. Only a whole utterance counts as a
+  command, so the lyric *"the chorus of angels sang"* stays a lyric.
+- **It knows your song** — the title, artist and capitalised words already in the
+  chart are fed to the recognizer as hints, so names and coinages come out right.
+- **Cmd/Ctrl+Z** steps back through dictated text like anything you typed.
+- Note the speech API offers **no input selection** — unlike Record, it always
+  uses your *system default* input, so set that to the mic you're speaking into.
+
 ## Metronome & tuner
 
 Two utilities open as small floating panels from the header:

@@ -1360,6 +1360,22 @@ body.performing { overflow: hidden; }
 }
 #dm-clear:hover { background: #343a4e; }
 
+/* Dictation */
+.dict-btn.on { background: #d97a6b; border-color: #d97a6b; color: #fff; }
+.dict-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 6px 10px; margin: 0 0 6px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px;
+  font-family: system-ui, sans-serif; font-size: 12px;
+}
+.dict-bar[hidden] { display: none; }
+.dict-live { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: #d97a6b; white-space: nowrap; }
+.dict-dot { width: 8px; height: 8px; border-radius: 50%; background: #d97a6b; animation: cap-blink 1.1s ease-in-out infinite; }
+/* Words the engine hasn't committed yet. */
+.dict-interim { flex: 1; min-width: 0; color: var(--muted); font-style: italic; }
+.dict-interim.has-text::after { content: "…"; }
+.dict-status { color: var(--muted); }
+
 /* Capture */
 #capture-panel { bottom: 16px; width: 400px; }
 /* Stack clear of whichever panels are already open (source order: metro, tuner,
