@@ -2772,7 +2772,9 @@ document.addEventListener('keydown', (e) => {
   }
   // "D" starts dictation. Only a start: once it's running your caret is in the
   // editor, so stopping goes through Esc or the button instead of a bare letter.
-  if ((e.key === 'd' || e.key === 'D') && !typing && !dict.on && !e.metaKey && !e.ctrlKey && !e.altKey) {
+  // Unlike R, it's a writing tool, so it stays out of performance mode.
+  if ((e.key === 'd' || e.key === 'D') && !typing && !dict.on && !perf.open
+      && !e.metaKey && !e.ctrlKey && !e.altKey) {
     e.preventDefault();
     dictStart();
   }
@@ -2834,6 +2836,8 @@ function openPerform() {
     wrap.appendChild(node);
     pf.panels.appendChild(wrap);
   }
+  // Anything still listening would type into a chart you can no longer see.
+  if (typeof dict !== 'undefined' && dict.on) dictStop();
   perf.open = true;
   pf.overlay.hidden = false;
   document.body.classList.add('performing');
@@ -4241,6 +4245,10 @@ async function dictInstallModel() {
 
 function dictStart() {
   if (dict.on || !SRec) return;
+  // Dictation writes at the caret in the editor, which isn't on screen during
+  // performance mode — starting there would quietly edit the song you're playing
+  // from, with no visible sign of it.
+  if (typeof perf !== 'undefined' && perf.open) return;
   // Not installed yet: reveal the offer rather than silently doing nothing. The
   // prompt only appears once you've asked for dictation, so it isn't clutter
   // for anyone who never uses it.
