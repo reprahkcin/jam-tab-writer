@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Jam Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=74" />
+  <link rel="stylesheet" href="styles.css?v=75" />
 </head>
 <body>
   <header>
@@ -21,6 +21,7 @@
       <button id="share-btn" title="Share this song as a link">Share</button>
       <button id="metro-btn" title="Metronome">Metronome</button>
       <button id="tuner-btn" title="Instrument tuner (uses your microphone)">Tuner</button>
+      <button id="capture-btn" title="Record takes from your audio interface (R)">Record</button>
       <button id="setlist-btn" title="Build and perform setlists">Setlists</button>
       <button id="perform-btn" title="Full-screen performance view">Perform</button>
       <button id="print-btn" title="Print / save as PDF">Print</button>
@@ -236,6 +237,39 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
     </div>
   </div>
 
+  <!-- Capture (floating panel). Records takes from a chosen audio interface. -->
+  <div id="capture-panel" class="tool-panel tool-panel-wide" hidden>
+    <div class="tool-head"><span>Record</span><button class="tool-close" data-tool="capture" title="Close">&#10005;</button></div>
+    <div class="tool-body">
+      <div id="cap-arm" class="cap-arm">
+        <label class="cap-row">Input
+          <select id="cap-device"><option value="">Default input</option></select>
+        </label>
+        <label class="cap-row">Format
+          <select id="cap-format">
+            <option value="wav">WAV &mdash; drops into a DAW</option>
+            <option value="opus">Opus &mdash; small, for reference</option>
+          </select>
+        </label>
+      </div>
+      <!-- Signal present before you commit to a take. -->
+      <div class="cap-meter"><div id="cap-meter-fill" class="cap-meter-fill"></div></div>
+      <div class="cap-transport">
+        <button id="cap-toggle" class="tool-start">&#9679; Record</button>
+        <span id="cap-time" class="cap-time">0:00</span>
+      </div>
+      <div id="cap-status" class="cap-status">Pick your interface, then hit Record (or press R).</div>
+      <div class="cap-takes-head"><span>Takes</span><span id="cap-takes-count" class="cap-count"></span></div>
+      <div id="cap-takes" class="cap-takes"></div>
+    </div>
+  </div>
+
+  <!-- Recording indicator. Fixed, above everything including the perform
+       overlay, so you always know you're rolling. -->
+  <div id="cap-indicator" class="cap-indicator" hidden>
+    <span class="cap-dot"></span><span id="cap-indicator-time">0:00</span>
+  </div>
+
   <!-- PDF drop / conversion overlay. Doubles as the drag hint and the OCR
        progress display; script wiring lives in app.js (convertPdfFile). -->
   <div id="pdf-overlay" class="pdf-overlay" hidden>
@@ -337,9 +371,9 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=74"></script>
-  <script src="pdf2cho.js?v=74"></script>
-  <script src="qr.js?v=74"></script>
-  <script src="app.js?v=74"></script>
+  <script src="chords.js?v=75"></script>
+  <script src="pdf2cho.js?v=75"></script>
+  <script src="qr.js?v=75"></script>
+  <script src="app.js?v=75"></script>
 </body>
 </html>

@@ -612,6 +612,7 @@ function loadPrefs() {
     perform: { cols: 4, font: 22, autoSecs: 25, scrollSpeed: 30, autoFit: true, panels: { instruments: true, harp: true } },
     layout: 'split',   // 'split' | 'editor' | 'preview' (desktop only)
     printCols: 1,
+    capture: { deviceId: null, deviceLabel: '', format: 'wav' },
     metro: { bpm: 100, steps: 16, click: true, pattern: null },
     tunerPreset: 'standard',
   };
@@ -629,6 +630,7 @@ function loadPrefs() {
   p.perform = Object.assign({ cols: 4, font: 22, autoSecs: 25, autoFit: true, panels: {} }, p.perform);
   p.perform.panels = Object.assign({ instruments: true, harp: true }, p.perform.panels);
   p.metro = Object.assign({ bpm: 100, steps: 16, click: true, pattern: null }, p.metro);
+  p.capture = Object.assign({ deviceId: null, deviceLabel: '', format: 'wav' }, p.capture);
   return p;
 }
 let prefs = loadPrefs();
@@ -2740,6 +2742,9 @@ function renderHelp() {
       [['←', '↑', 'PgUp'], 'Previous page / song'],
       [['Esc'], 'Exit'],
     ]],
+    ['Recording', [
+      [['R'], 'Start / stop a take (works anywhere, including performance mode)'],
+    ]],
   ];
   document.getElementById('help-body').innerHTML = groups.map(([title, rows]) =>
     `<div class="help-group"><div class="help-group-title">${title}</div>` +
@@ -2753,9 +2758,15 @@ document.getElementById('help-btn').addEventListener('click', openHelp);
 document.getElementById('help-close').addEventListener('click', closeHelp);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !document.getElementById('help-modal').hidden) { closeHelp(); return; }
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '');
   // "?" opens the cheatsheet — but not while typing in a field.
-  if (e.key === '?' && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '')) {
-    e.preventDefault(); openHelp();
+  if (e.key === '?' && !typing) { e.preventDefault(); openHelp(); }
+  // "R" starts and stops a take from anywhere, performance mode included, so an
+  // idea can be caught without leaving the chart. Bare key only: Cmd/Ctrl+R is
+  // reload, and a modifier means you meant something else.
+  if ((e.key === 'r' || e.key === 'R') && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    e.preventDefault();
+    captureToggle();
   }
 });
 
@@ -3666,14 +3677,456 @@ function tunerStop() {
   paintTunerStrings();
 }
 
+// ---- Capture (record takes from an audio interface) ------------------------
+// A jam throws off ideas faster than anyone writes them down, so recording has
+// to be one key away and must never stop to ask a question. Takes land on the
+// song that's open; with nothing open they go to an unfiled bin to sort later.
+
+// Takes live in their own database rather than the `gtw` kv store, so adding
+// this can't disturb the schema that holds the folder handles.
+const TAKES_IDB = { name: 'gtw-takes', store: 'takes' };
+function takesReq(fn) {
+  return new Promise((resolve) => {
+    const open = indexedDB.open(TAKES_IDB.name, 1);
+    open.onupgradeneeded = () => open.result.createObjectStore(TAKES_IDB.store, { keyPath: 'id' });
+    open.onerror = () => resolve(null);
+    open.onsuccess = () => { try { fn(open.result, resolve); } catch { resolve(null); } };
+  });
+}
+function takesPut(rec) {
+  return takesReq((db, resolve) => {
+    const tx = db.transaction(TAKES_IDB.store, 'readwrite');
+    tx.objectStore(TAKES_IDB.store).put(rec);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => resolve(false);
+  });
+}
+function takesAll() {
+  return takesReq((db, resolve) => {
+    const r = db.transaction(TAKES_IDB.store).objectStore(TAKES_IDB.store).getAll();
+    r.onsuccess = () => resolve(r.result || []);
+    r.onerror = () => resolve([]);
+  });
+}
+function takesDelete(id) {
+  return takesReq((db, resolve) => {
+    const tx = db.transaction(TAKES_IDB.store, 'readwrite');
+    tx.objectStore(TAKES_IDB.store).delete(id);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => resolve(false);
+  });
+}
+
+// The recorder runs off an AudioWorklet rather than MediaRecorder for WAV,
+// because MediaRecorder has no uncompressed format. The worklet just hands
+// every block to the main thread — the input buffers are recycled the moment
+// process() returns, so they have to be copied.
+const CAPTURE_WORKLET_SRC = `
+class CaptureProcessor extends AudioWorkletProcessor {
+  process(inputs) {
+    const input = inputs[0];
+    if (input && input.length) {
+      const copy = [];
+      for (let c = 0; c < input.length; c++) copy.push(new Float32Array(input[c]));
+      this.port.postMessage(copy);
+    }
+    return true;
+  }
+}
+registerProcessor('capture-processor', CaptureProcessor);
+`;
+
+const cap = {
+  on: false, stream: null, ctx: null, src: null, node: null, analyser: null,
+  recorder: null, chunks: [], pcm: [], frames: 0, channels: 2, rate: 48000,
+  startedAt: 0, timer: null, levelRaf: null, songKey: null, songTitle: '',
+  workletUrl: null, devicesLoaded: false,
+};
+
+function capEl(id) { return document.getElementById(id); }
+
+// Interleave to 16-bit as blocks arrive: half the memory of keeping float32,
+// and the conversion has to happen anyway.
+function capPushPcm(chans) {
+  const n = chans[0].length, ch = chans.length;
+  const out = new Int16Array(n * ch);
+  for (let i = 0; i < n; i++) {
+    for (let c = 0; c < ch; c++) {
+      let v = chans[c][i];
+      v = v < -1 ? -1 : v > 1 ? 1 : v;
+      out[i * ch + c] = v < 0 ? v * 0x8000 : v * 0x7fff;
+    }
+  }
+  cap.pcm.push(out);
+  cap.frames += n;
+}
+
+// Standard 44-byte canonical WAV header, then the interleaved PCM.
+function encodeWav(chunks, frames, channels, sampleRate) {
+  const dataBytes = frames * channels * 2;
+  const buf = new ArrayBuffer(44 + dataBytes);
+  const view = new DataView(buf);
+  const str = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+  str(0, 'RIFF');
+  view.setUint32(4, 36 + dataBytes, true);
+  str(8, 'WAVE');
+  str(12, 'fmt ');
+  view.setUint32(16, 16, true);        // PCM fmt chunk size
+  view.setUint16(20, 1, true);         // format = PCM
+  view.setUint16(22, channels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * channels * 2, true); // byte rate
+  view.setUint16(32, channels * 2, true);              // block align
+  view.setUint16(34, 16, true);        // bits per sample
+  str(36, 'data');
+  view.setUint32(40, dataBytes, true);
+  let off = 44;
+  for (const c of chunks) {
+    new Int16Array(buf, off, c.length).set(c);
+    off += c.length * 2;
+  }
+  return new Blob([buf], { type: 'audio/wav' });
+}
+
+// Device labels stay blank until mic permission has been granted once, so the
+// list is only meaningful after the first successful getUserMedia.
+async function capLoadDevices() {
+  const sel = capEl('cap-device');
+  if (!sel || !navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+  let devs = [];
+  try { devs = await navigator.mediaDevices.enumerateDevices(); } catch { return; }
+  const inputs = devs.filter((d) => d.kind === 'audioinput');
+  const named = inputs.some((d) => d.label);
+  cap.devicesLoaded = named;
+  const want = prefs.capture.deviceId || '';
+  sel.innerHTML = '<option value="">Default input</option>' + inputs.map((d, i) =>
+    `<option value="${escapeHtml(d.deviceId)}">${escapeHtml(d.label || 'Input ' + (i + 1))}</option>`).join('');
+  // Keep the remembered choice selected if that interface is still plugged in.
+  if (want && inputs.some((d) => d.deviceId === want)) sel.value = want;
+  else if (want) capSetStatus(`${prefs.capture.deviceLabel || 'Saved input'} isn't connected — using the default.`);
+  if (!named) capSetStatus('Allow microphone access once and your interfaces will be listed by name.');
+}
+
+function capSetStatus(msg) {
+  const el2 = capEl('cap-status');
+  if (el2) el2.textContent = msg;
+}
+
+function capFmtTime(ms) {
+  const s = Math.floor(ms / 1000);
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+async function captureStart() {
+  if (cap.on) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    capSetStatus('This browser can’t record audio.');
+    return;
+  }
+  const audio = {
+    // An instrument is not a voice: every "helpful" processing stage would
+    // wreck the take. Same reasoning as the tuner.
+    echoCancellation: false, noiseSuppression: false, autoGainControl: false,
+    channelCount: 2,
+  };
+  const wanted = prefs.capture.deviceId;
+  try {
+    cap.stream = await navigator.mediaDevices.getUserMedia({
+      audio: wanted ? Object.assign({ deviceId: { exact: wanted } }, audio) : audio,
+    });
+  } catch (e) {
+    // An unplugged interface makes the exact-deviceId request fail outright;
+    // fall back to the default input rather than dropping the take.
+    if (wanted) {
+      try { cap.stream = await navigator.mediaDevices.getUserMedia({ audio }); }
+      catch { capSetStatus('Couldn’t open an input — check the interface and permissions.'); return; }
+      capSetStatus('Saved input unavailable — recording from the default input.');
+    } else {
+      capSetStatus('Microphone access was denied.');
+      return;
+    }
+  }
+
+  const track = cap.stream.getAudioTracks()[0];
+  const settings = track ? track.getSettings() : {};
+  cap.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  cap.rate = cap.ctx.sampleRate;
+  cap.channels = Math.max(1, Math.min(2, settings.channelCount || 2));
+  cap.src = cap.ctx.createMediaStreamSource(cap.stream);
+  cap.analyser = cap.ctx.createAnalyser();
+  cap.analyser.fftSize = 1024;
+  cap.src.connect(cap.analyser);
+
+  cap.pcm = [];
+  cap.chunks = [];
+  cap.frames = 0;
+
+  if (prefs.capture.format === 'wav') {
+    try {
+      if (!cap.workletUrl) {
+        cap.workletUrl = URL.createObjectURL(new Blob([CAPTURE_WORKLET_SRC], { type: 'application/javascript' }));
+      }
+      await cap.ctx.audioWorklet.addModule(cap.workletUrl);
+      cap.node = new AudioWorkletNode(cap.ctx, 'capture-processor', { numberOfInputs: 1, numberOfOutputs: 0 });
+      cap.node.port.onmessage = (e) => { if (cap.on) capPushPcm(e.data); };
+      cap.src.connect(cap.node);
+    } catch {
+      capSetStatus('Uncompressed capture isn’t available here — recording Opus instead.');
+      prefs.capture.format = 'opus';
+      capEl('cap-format').value = 'opus';
+      savePrefs();
+    }
+  }
+  if (prefs.capture.format === 'opus') {
+    const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((t) => MediaRecorder.isTypeSupported(t));
+    cap.recorder = new MediaRecorder(cap.stream, mime ? { mimeType: mime } : undefined);
+    cap.recorder.ondataavailable = (e) => { if (e.data && e.data.size) cap.chunks.push(e.data); };
+    cap.recorder.start(1000);
+  }
+
+  // Which song this belongs to is fixed at the downbeat, so switching songs
+  // while it rolls can't re-file the take underneath you.
+  const s = currentSong();
+  cap.songKey = s ? songKey(s) : null;
+  cap.songTitle = s ? (s.title || 'Untitled') : '';
+  cap.on = true;
+  cap.startedAt = Date.now();
+  capPaintTransport();
+  capSetStatus(s ? `Recording to “${cap.songTitle}”…` : 'Recording — this take will be unfiled.');
+  cap.timer = setInterval(capTick, 200);
+  capLevelLoop();
+  // Names only appear once permission exists; the first take unlocks the list.
+  if (!cap.devicesLoaded) capLoadDevices();
+}
+
+function capTick() {
+  if (!cap.on) return;
+  const t = capFmtTime(Date.now() - cap.startedAt);
+  const a = capEl('cap-time'), b = capEl('cap-indicator-time');
+  if (a) a.textContent = t;
+  if (b) b.textContent = t;
+}
+
+function capLevelLoop() {
+  if (!cap.analyser) return;
+  const buf = new Float32Array(cap.analyser.fftSize);
+  const step = () => {
+    if (!cap.analyser) return;
+    cap.analyser.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+    const rms = Math.sqrt(sum / buf.length);
+    // Roughly -60dB..0dB across the bar, so quiet playing still moves it.
+    const pct = Math.max(0, Math.min(100, (20 * Math.log10(rms || 1e-8) + 60) / 60 * 100));
+    const fill = capEl('cap-meter-fill');
+    if (fill) fill.style.width = pct.toFixed(1) + '%';
+    cap.levelRaf = requestAnimationFrame(step);
+  };
+  step();
+}
+
+async function captureStop() {
+  if (!cap.on) return;
+  cap.on = false;
+  clearInterval(cap.timer);
+  if (cap.levelRaf) cancelAnimationFrame(cap.levelRaf);
+  const durMs = Date.now() - cap.startedAt;
+
+  let blob = null, ext = 'wav';
+  if (cap.recorder) {
+    const rec = cap.recorder;
+    blob = await new Promise((resolve) => {
+      rec.onstop = () => resolve(new Blob(cap.chunks, { type: rec.mimeType || 'audio/webm' }));
+      rec.stop();
+    });
+    ext = (rec.mimeType || '').includes('mp4') ? 'm4a' : 'webm';
+  } else {
+    blob = encodeWav(cap.pcm, cap.frames, cap.channels, cap.rate);
+    ext = 'wav';
+  }
+
+  const songKeyAtStart = cap.songKey, songTitleAtStart = cap.songTitle;
+  capTeardown();
+  capPaintTransport();
+
+  if (!blob || blob.size < 1024) { capSetStatus('Nothing was captured — check the input level.'); return; }
+
+  const take = {
+    id: 't' + Date.now().toString(36) + Math.floor(performance.now() % 1000).toString(36),
+    songKey: songKeyAtStart,
+    songTitle: songTitleAtStart,
+    ts: Date.now(),
+    durMs,
+    ext,
+    mime: blob.type,
+    name: capTakeName(songTitleAtStart, ext),
+    blob,
+  };
+  await takesPut(take);
+  const wrote = await capWriteToDisk(take);
+  capSetStatus(wrote
+    ? `Saved ${take.name} — also written next to the chart.`
+    : `Saved ${take.name}.`);
+  renderTakes();
+}
+
+function capTeardown() {
+  if (cap.node) { try { cap.node.port.onmessage = null; cap.node.disconnect(); } catch { /* gone */ } }
+  if (cap.src) { try { cap.src.disconnect(); } catch { /* gone */ } }
+  if (cap.stream) cap.stream.getTracks().forEach((t) => t.stop());
+  if (cap.ctx) { try { cap.ctx.close(); } catch { /* already closed */ } }
+  cap.node = cap.src = cap.analyser = cap.ctx = cap.stream = cap.recorder = null;
+  cap.pcm = []; cap.chunks = []; cap.frames = 0;
+  const fill = capEl('cap-meter-fill');
+  if (fill) fill.style.width = '0%';
+}
+
+function capTakeName(title, ext) {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  const stamp = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+  const base = (title || 'unfiled').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'take';
+  return `${base}-${stamp}.${ext}`;
+}
+
+// In folder mode the take is also written beside the chart, so it's a real file
+// in the same folder you already sync or commit — no export step to remember.
+async function capWriteToDisk(take) {
+  if (mode !== 'folder' || !take.songKey || !take.songKey.startsWith('lib:')) return false;
+  const s = resolveKey(take.songKey);
+  if (!s || !s.libId) return false;
+  const lib = libraries.find((l) => l.id === s.libId);
+  if (!lib || !lib.handle) return false;
+  try {
+    const sub = (s.path || '').split('/').slice(0, -1).join('/');
+    const dir = await resolveDir(lib, sub, true);
+    const fh = await dir.getFileHandle(take.name, { create: true });
+    const w = await fh.createWritable();
+    await w.write(take.blob);
+    await w.close();
+    return true;
+  } catch {
+    return false; // permission lapsed or the folder moved — the app copy stands
+  }
+}
+
+// Fullscreen paints only the fullscreen element's own subtree, so while
+// performance mode is up the indicator has to live inside the overlay or it
+// isn't drawn at all — z-index can't reach across that boundary.
+function capReparentIndicator() {
+  const ind = capEl('cap-indicator');
+  if (!ind) return;
+  const host = document.fullscreenElement || document.body;
+  if (ind.parentElement !== host) host.appendChild(ind);
+}
+document.addEventListener('fullscreenchange', capReparentIndicator);
+
+function capPaintTransport() {
+  capReparentIndicator();
+  const b = capEl('cap-toggle');
+  if (b) {
+    b.innerHTML = cap.on ? '&#9632; Stop' : '&#9679; Record';
+    b.classList.toggle('on', cap.on);
+  }
+  const ind = capEl('cap-indicator');
+  if (ind) ind.hidden = !cap.on;
+  const btn = document.getElementById('capture-btn');
+  if (btn) btn.classList.toggle('recording', cap.on);
+  if (!cap.on) {
+    const t = capEl('cap-time');
+    if (t) t.textContent = '0:00';
+  }
+}
+
+function captureToggle() { return cap.on ? captureStop() : captureStart(); }
+
+// ---- Takes list ------------------------------------------------------------
+let takeUrls = [];   // object URLs to revoke on the next render
+
+async function renderTakes() {
+  const box = capEl('cap-takes');
+  if (!box) return;
+  takeUrls.forEach((u) => URL.revokeObjectURL(u));
+  takeUrls = [];
+  const all = (await takesAll()).sort((a, b) => b.ts - a.ts);
+  const cur = currentSong();
+  const curKey = cur ? songKey(cur) : null;
+  const mine = all.filter((t) => t.songKey && t.songKey === curKey);
+  const unfiled = all.filter((t) => !t.songKey);
+  const countEl = capEl('cap-takes-count');
+  if (countEl) countEl.textContent = all.length ? `${all.length} total` : '';
+
+  const row = (t) => {
+    const url = URL.createObjectURL(t.blob);
+    takeUrls.push(url);
+    const when = new Date(t.ts);
+    const clock = String(when.getHours()).padStart(2, '0') + ':' + String(when.getMinutes()).padStart(2, '0');
+    return `<div class="cap-take" data-id="${t.id}">` +
+      `<audio controls preload="none" src="${url}"></audio>` +
+      `<div class="cap-take-meta"><span class="cap-take-name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span>` +
+      `<span class="cap-take-sub">${capFmtTime(t.durMs)} · ${clock} · ${(t.blob.size / 1048576).toFixed(1)} MB</span></div>` +
+      `<div class="cap-take-tools">` +
+      (t.songKey ? '' : `<button class="cap-file" data-id="${t.id}" title="File this take under the current song"${cur ? '' : ' disabled'}>File</button>`) +
+      `<a class="cap-dl" href="${url}" download="${escapeHtml(t.name)}" title="Download">&#8595;</a>` +
+      `<button class="cap-del" data-id="${t.id}" title="Delete this take">&#10005;</button></div></div>`;
+  };
+
+  let html = '';
+  if (cur) {
+    html += `<div class="cap-group">${escapeHtml(cur.title || 'Untitled')}</div>`;
+    html += mine.length ? mine.map(row).join('') : '<div class="cap-empty">No takes for this song yet.</div>';
+  }
+  if (unfiled.length) {
+    html += `<div class="cap-group">Unfiled</div>` + unfiled.map(row).join('');
+  }
+  if (!cur && !unfiled.length) html = '<div class="cap-empty">No takes yet. Hit Record.</div>';
+  box.innerHTML = html;
+
+  box.querySelectorAll('.cap-del').forEach((b) => b.addEventListener('click', async () => {
+    await takesDelete(b.dataset.id);
+    renderTakes();
+  }));
+  box.querySelectorAll('.cap-file').forEach((b) => b.addEventListener('click', async () => {
+    const s = currentSong();
+    if (!s) return;
+    const all2 = await takesAll();
+    const t = all2.find((x) => x.id === b.dataset.id);
+    if (!t) return;
+    t.songKey = songKey(s);
+    t.songTitle = s.title || 'Untitled';
+    await takesPut(t);
+    await capWriteToDisk(t);
+    renderTakes();
+  }));
+}
+
 // ---- Tool panel wiring ----
 function toggleTool(name) {
   const panel = document.getElementById(name + '-panel');
   panel.hidden = !panel.hidden;
+  // Closing the panel must never drop a take in progress — recording is deliberately
+  // independent of whether you're looking at it.
   if (panel.hidden) { if (name === 'metro') metroStop(); if (name === 'tuner') tunerStop(); }
+  if (name === 'capture' && !panel.hidden) { capLoadDevices(); renderTakes(); }
 }
 document.getElementById('metro-btn').addEventListener('click', () => toggleTool('metro'));
 document.getElementById('tuner-btn').addEventListener('click', () => toggleTool('tuner'));
+document.getElementById('capture-btn').addEventListener('click', () => toggleTool('capture'));
+document.getElementById('cap-toggle').addEventListener('click', captureToggle);
+document.getElementById('cap-device').addEventListener('change', (e) => {
+  prefs.capture.deviceId = e.target.value || null;
+  prefs.capture.deviceLabel = e.target.selectedOptions[0] ? e.target.selectedOptions[0].textContent : '';
+  savePrefs();
+  capSetStatus(prefs.capture.deviceId ? `Armed: ${prefs.capture.deviceLabel}` : 'Armed: default input');
+});
+document.getElementById('cap-format').addEventListener('change', (e) => {
+  prefs.capture.format = e.target.value === 'opus' ? 'opus' : 'wav';
+  savePrefs();
+});
+// Inputs come and go — the interface gets plugged in after the app is open.
+if (navigator.mediaDevices && 'ondevicechange' in navigator.mediaDevices) {
+  navigator.mediaDevices.addEventListener('devicechange', () => capLoadDevices());
+}
 document.querySelectorAll('.tool-close').forEach((b) => b.addEventListener('click', () => toggleTool(b.dataset.tool)));
 document.getElementById('metro-up').addEventListener('click', () => setBpm(metro.bpm + 1));
 document.getElementById('metro-down').addEventListener('click', () => setBpm(metro.bpm - 1));

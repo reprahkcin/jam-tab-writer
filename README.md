@@ -169,6 +169,28 @@ into the active folder).
   On screen it shows as a labelled dashed divider; when you print, the page
   breaks there. `{pagebreak}` and `{newpage}` also work.
 
+## Recording takes
+
+Press **R** — anywhere, performance mode included — to start and stop a take.
+A red timer sits on screen the whole time it's rolling, so you can't be
+recording without knowing it. The point is that catching an idea never costs you
+more than one keystroke.
+
+- **Your interface** — open **Record** and pick your input (a Focusrite or any
+  other interface shows up by name once you've allowed microphone access once).
+  The choice is remembered. Echo cancellation, noise suppression and auto-gain
+  are all **off**: they're built for voices and would wreck an instrument.
+  If the interface is unplugged, recording falls back to the default input
+  rather than losing the take.
+- **Format** — **WAV** (16-bit, drops straight into a DAW, ~10 MB/min stereo) or
+  **Opus** (~1 MB/min, for reference listening). Set it per session.
+- **Where takes go** — onto whichever song is open. With no song open they land
+  in an **Unfiled** bin, and **File** moves one onto the current song later.
+  Recording never stops to ask.
+- **In folder mode** the take is also written **next to the chart on disk**, so
+  it's a real file in the folder you already sync or commit — no export step.
+- Each take has inline playback, a download, and delete.
+
 ## Metronome & tuner
 
 Two utilities open as small floating panels from the header:
