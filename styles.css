@@ -1348,26 +1348,93 @@ body.performing { overflow: hidden; }
   flex: 1; background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
   border-radius: 5px; padding: 3px 6px; font-size: 12px;
 }
-.tuner-strings { display: flex; justify-content: center; gap: 6px; }
+/* One chip per string: name over the pitch it's aiming at. */
+.tuner-strings { display: flex; justify-content: center; gap: 4px; }
 .tstr {
-  min-width: 20px; text-align: center; padding: 2px 5px; border-radius: 4px;
-  font-size: 12px; font-weight: 700; font-family: var(--mono);
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 3px 2px; border-radius: 5px; cursor: pointer;
   background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
+  position: relative;
 }
+.tstr:hover { border-color: var(--muted); }
+.tstr-name { font: 700 13px var(--mono); line-height: 1; }
+.tstr-hz { font-size: 9px; opacity: 0.75; font-variant-numeric: tabular-nums; }
+/* The string being read right now. */
 .tstr.active { background: var(--accent); border-color: var(--accent); color: #1c1e26; }
-.tuner-note { font-size: 44px; font-weight: 700; text-align: center; line-height: 1.1; }
+.tstr.active.is-in-tune { background: var(--section); border-color: var(--section); }
+/* Locked on by a click — outlined so it reads as a deliberate choice. */
+.tstr.pinned { border-color: var(--accent); color: var(--text); }
+.tstr.pinned.active { color: #1c1e26; }
+/* Brought in tune at some point since Start. */
+.tstr.done::after {
+  content: "✓"; position: absolute; top: -5px; right: -3px;
+  font-size: 9px; font-weight: 700; line-height: 1;
+  color: #1c1e26; background: var(--section); border-radius: 50%; padding: 1px 2px;
+}
+
+.tuner-readout { text-align: center; transition: opacity 0.3s ease; }
+.tuner-readout.idle { opacity: 0.4; }
+.tuner-note { font-size: 34px; font-weight: 700; line-height: 1.1; }
 .tuner-note.in-tune { color: var(--section); }
+.tuner-freq { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.tuner-freq b { color: var(--text); font-weight: 700; }
+.tf-arrow { opacity: 0.6; }
+.tf-sweet { color: var(--accent); }
+
+/* Flat side left, sharp side right. The scale is fixed at ±100¢ and the target
+   never moves, so the needle's distance from centre is the distance still to
+   go. .tuner-zone is the ±5¢ that counts as in tune, drawn to that scale. */
 .tuner-meter {
-  position: relative; height: 26px; border-radius: 6px;
-  background: linear-gradient(90deg, #d97a6b 0%, var(--panel-2) 45%, var(--section) 50%, var(--panel-2) 55%, #d97a6b 100%);
+  position: relative; height: 30px; border-radius: 6px;
+  background: linear-gradient(90deg, #d97a6b 0%, var(--panel-2) 34%, var(--panel-2) 66%, #d97a6b 100%);
   border: 1px solid var(--line); overflow: hidden;
 }
+.tuner-zone {
+  position: absolute; top: 0; bottom: 0; left: 47.5%; width: 5%;
+  background: var(--section); opacity: 0.4;
+  border-left: 1px solid var(--section); border-right: 1px solid var(--section);
+}
+.tuner-tick {
+  position: absolute; top: 0; bottom: 0; width: 1px;
+  background: var(--line); opacity: 0.9;
+}
+.tuner-tick.minor { top: auto; height: 6px; bottom: 0; opacity: 0.6; }
 .tuner-needle {
-  position: absolute; top: -2px; left: 50%; width: 3px; height: 30px;
+  position: absolute; top: -2px; left: 50%; width: 3px; height: 34px;
   background: var(--text); transform: translateX(-50%); transition: left 0.08s linear;
 }
-.tuner-needle.in-tune { background: var(--section); }
-.tuner-cents { text-align: center; color: var(--muted); font-size: 12px; min-height: 16px; }
+.tuner-needle.in-tune { background: var(--section); box-shadow: 0 0 6px var(--section); }
+/* Further out than a semitone: the needle pegs, so point the way instead. */
+.tuner-off {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  font-size: 13px; color: #23180c; display: none;
+  animation: tuner-off-pulse 0.7s ease-in-out infinite;
+}
+.tuner-off.show { display: block; }
+.tuner-off.flat { left: 3px; }
+.tuner-off.sharp { right: 3px; }
+@keyframes tuner-off-pulse { 50% { opacity: 0.25; } }
+
+/* Cent labels, positioned to line up with the ticks on the meter above. */
+.tuner-nums {
+  position: relative; height: 11px; margin-top: -7px;
+  font-size: 9px; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.tuner-nums span { position: absolute; transform: translateX(-50%); }
+.tuner-scale {
+  display: flex; justify-content: space-between;
+  font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px;
+  margin-top: -4px;
+}
+.tuner-scale span:nth-child(2) { color: var(--section); }
+
+/* The instruction line: what to do about the reading above it. */
+.tuner-advice {
+  text-align: center; font-size: 14px; font-weight: 700; min-height: 20px;
+  color: var(--muted);
+}
+.tuner-advice.is-in-tune { color: var(--section); }
+.tuner-advice.is-flat, .tuner-advice.is-sharp { color: var(--accent); }
 
 /* ---- Wrapped chord/lyric lines (phone performance view) ------------------- */
 /* Each word is its own inline-block carrying the chord that lands on it, so a

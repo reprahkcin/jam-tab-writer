@@ -3380,7 +3380,27 @@ function setBpm(v) {
 }
 
 // ---- Tuner (microphone + autocorrelation) ----------------------------------
-const tuner = { ctx: null, stream: null, analyser: null, buf: null, raf: null, on: false, preset: 'standard' };
+// Readings are measured against the strings of the chosen tuning, not against
+// the nearest chromatic note: half a semitone flat on the low E is "tighten the
+// 6th string", not "you played a D#, which is nicely in tune".
+const tuner = {
+  ctx: null, stream: null, analyser: null, buf: null, raf: null, on: false, preset: 'standard',
+  pinned: null,    // string index the user picked by hand, or null to auto-pick
+  hist: [],        // recent cent readings, for the median smoother
+  lastTarget: null,// which string those readings belong to
+  done: new Set(), // strings brought in tune since Start, for the ✓ marks
+  lastHeard: 0,    // timestamp of the last usable pitch
+};
+
+// The green band on the meter covers exactly this, so "needle in the green" and
+// the words underneath always agree.
+const TUNE_IN_CENTS = 5;
+const CENTS_WINDOW = 5;      // frames in the median smoother
+const IDLE_MS = 1500;        // silence before the readout dims and asks for a note
+const WRONG_STRING_CENTS = 250; // past this, a pinned string is hearing a different one
+// The meter spans a full semitone either way, so a string that's badly out looks
+// badly out instead of pegging at the end of a ±50¢ scale.
+const METER_RANGE = 100;
 
 // Tuning presets: each is a list of target strings, low → high, as
 // [note+octave, cent offset]. The offset sweetens the target away from equal
@@ -3429,18 +3449,103 @@ function freqToNote(freq) {
   };
 }
 
+// "E2" → 82.41 Hz.
+function noteToFreq(spec) {
+  const m = /^([A-G]#?)(-?\d+)$/.exec(spec);
+  if (!m) return 0;
+  const midi = NOTE_NAMES_SHARP.indexOf(m[1]) + 12 * (Number(m[2]) + 1);
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+// The current tuning's target pitches, low → high, with any sweetening applied.
+// Strings are numbered the way a player counts them: the low string is the 6th.
+let tunerTargetCache = { preset: null, list: [] };
+function tunerTargets() {
+  if (tunerTargetCache.preset !== tuner.preset) {
+    const strings = TUNER_PRESETS[tuner.preset].strings;
+    tunerTargetCache = {
+      preset: tuner.preset,
+      list: strings.map(([note, offset], i) => ({
+        i,
+        note,
+        label: note.replace(/[0-9]/g, ''),
+        number: strings.length - i,
+        offset,
+        hz: noteToFreq(note) * Math.pow(2, offset / 1200),
+      })),
+    };
+  }
+  return tunerTargetCache.list;
+}
+
+function centsFrom(freq, targetHz) { return 1200 * Math.log2(freq / targetHz); }
+
+// The string this reading is measured against: the pinned one if you've picked
+// one, else whichever target is closest right now. Re-read every frame, so the
+// tuner always follows whatever you're actually playing.
+function tunerTargetFor(freq) {
+  const list = tunerTargets();
+  if (tuner.pinned != null && list[tuner.pinned]) {
+    const t = list[tuner.pinned];
+    return { t, cents: centsFrom(freq, t.hz) };
+  }
+  let best = null;
+  for (const t of list) {
+    const cents = centsFrom(freq, t.hz);
+    if (!best || Math.abs(cents) < Math.abs(best.cents)) best = { t, cents };
+  }
+  return best;
+}
+
+// Where a reading sits on the meter, as a percentage across it.
+function meterPos(cents) {
+  return 50 + Math.max(-METER_RANGE, Math.min(METER_RANGE, cents)) / METER_RANGE * 50;
+}
+
+// Forget the current reading, so the next note heard starts a fresh average.
+function resetTunerReading() {
+  tuner.hist.length = 0;
+  tuner.lastTarget = null;
+}
+
+// A median over the last few frames: one bad autocorrelation frame can't yank
+// the reading, and the number stops flickering between neighbouring values.
+function smoothCents(c) {
+  tuner.hist.push(c);
+  if (tuner.hist.length > CENTS_WINDOW) tuner.hist.shift();
+  return [...tuner.hist].sort((a, b) => a - b)[tuner.hist.length >> 1];
+}
+
+// The single source of the verdict: the number, the flat/sharp word and the
+// instruction all come from here, so they can never contradict each other.
+function tuneAdvice(cents) {
+  const off = Math.round(cents);
+  if (Math.abs(off) <= TUNE_IN_CENTS) return { inTune: true, text: 'In tune — hold it' };
+  const flat = off < 0;
+  const amount = Math.abs(off);
+  const how = amount > 40 ? ' a lot' : amount > 15 ? '' : ' a touch';
+  return {
+    inTune: false,
+    text: `${flat ? 'Tighten' : 'Loosen'}${how} — ${amount}¢ ${flat ? 'flat' : 'sharp'}`,
+  };
+}
+
 async function tunerStart() {
-  const centsEl = document.getElementById('tuner-cents');
+  const adviceEl = document.getElementById('tuner-advice');
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    centsEl.textContent = 'Microphone not available in this browser.';
+    adviceEl.textContent = 'Microphone not available in this browser.';
     return;
   }
+  // The permission prompt can sit there for a while; say what we're waiting on
+  // rather than leaving the last reading up as if it were live.
+  adviceEl.textContent = 'Waiting for the microphone…';
+  adviceEl.className = 'tuner-advice';
   try {
     tuner.stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
     });
   } catch {
-    centsEl.textContent = 'Microphone access was denied.';
+    adviceEl.textContent = 'Microphone access was denied.';
     return;
   }
   tuner.ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -3450,9 +3555,14 @@ async function tunerStart() {
   tuner.buf = new Float32Array(tuner.analyser.fftSize);
   src.connect(tuner.analyser);
   tuner.on = true;
+  resetTunerReading();
+  tuner.done.clear();
+  tuner.lastHeard = 0;
   const b = document.getElementById('tuner-toggle');
   b.textContent = 'Stop'; b.classList.add('on');
-  centsEl.textContent = 'Listening…';
+  adviceEl.textContent = 'Play one string';
+  adviceEl.className = 'tuner-advice';
+  paintTunerStrings();
   tunerLoop();
 }
 function tunerLoop() {
@@ -3463,33 +3573,62 @@ function tunerLoop() {
 }
 function updateTuner(freq) {
   const noteEl = document.getElementById('tuner-note');
-  const centsEl = document.getElementById('tuner-cents');
+  const freqEl = document.getElementById('tuner-freq');
+  const adviceEl = document.getElementById('tuner-advice');
+  const readout = document.getElementById('tuner-readout');
   const needle = document.getElementById('tuner-needle');
+
   if (freq < 25 || freq > 5000) {
-    needle.style.left = '50%'; needle.classList.remove('in-tune'); noteEl.classList.remove('in-tune');
-    document.querySelectorAll('#tuner-strings .tstr').forEach((s) => s.classList.remove('active'));
+    // Notes decay, so hold the last reading for a moment — you need to look at
+    // the peg, not the screen — then fall back to the prompt.
+    if (performance.now() - tuner.lastHeard > IDLE_MS) {
+      readout.classList.add('idle');
+      resetTunerReading();
+      adviceEl.textContent = tuner.pinned != null
+        ? `Play the ${tunerTargets()[tuner.pinned].number}${ordSuffix(tunerTargets()[tuner.pinned].number)} string`
+        : 'Play one string';
+      adviceEl.className = 'tuner-advice';
+      setMeterOffscale(0);
+    }
     return;
   }
-  const { name, octave, cents } = freqToNote(freq);
-  // Match the played note to a string in the current tuning and measure against
-  // its (possibly sweetened) target pitch.
-  const key = name + octave;
-  const preset = TUNER_PRESETS[tuner.preset];
-  const str = preset && preset.strings.find(([n]) => n === key);
-  let offLabel = '';
-  let cts = cents;
-  if (str) {
-    cts = cents - str[1];
-    if (str[1] !== 0) offLabel = ` · target ${str[1] > 0 ? '+' : ''}${str[1]}¢`;
-  }
-  document.querySelectorAll('#tuner-strings .tstr').forEach((s) => s.classList.toggle('active', s.dataset.note === key));
-  noteEl.textContent = name + octave;
-  const inTune = Math.abs(cts) <= 5;
-  centsEl.textContent = (cts > 0 ? '+' : '') + cts + ' cents' + (inTune ? ' · in tune' : cts > 0 ? ' · sharp' : ' · flat') + offLabel;
-  needle.style.left = (50 + Math.max(-50, Math.min(50, cts))) + '%';
-  needle.classList.toggle('in-tune', inTune);
-  noteEl.classList.toggle('in-tune', inTune);
+
+  tuner.lastHeard = performance.now();
+  readout.classList.remove('idle');
+  const { t, cents } = tunerTargetFor(freq);
+  // A new string starts a new average — otherwise the old string's readings drag
+  // the first frames of the new one.
+  if (tuner.lastTarget !== t.i) { tuner.hist.length = 0; tuner.lastTarget = t.i; }
+  const smoothed = smoothCents(cents);
+  // Pinned to one string but hearing a different one: "502¢ sharp" is a true
+  // number and useless advice. Name the string to play instead.
+  const wrongString = tuner.pinned != null && Math.abs(smoothed) > WRONG_STRING_CENTS;
+  const advice = wrongString
+    ? { inTune: false, text: `Play the ${t.number}${ordSuffix(t.number)} string` }
+    : tuneAdvice(smoothed);
+  if (advice.inTune) tuner.done.add(t.i);
+
+  noteEl.textContent = t.label + ' · ' + t.number + ordSuffix(t.number);
+  freqEl.innerHTML = `${freq.toFixed(1)} Hz <span class="tf-arrow">→</span> <b>${t.hz.toFixed(2)} Hz</b>` +
+    (t.offset ? ` <span class="tf-sweet">(${t.offset > 0 ? '+' : ''}${t.offset}¢ sweetened)</span>` : '');
+  adviceEl.textContent = advice.text;
+  adviceEl.className = 'tuner-advice ' +
+    (wrongString ? '' : advice.inTune ? 'is-in-tune' : smoothed < 0 ? 'is-flat' : 'is-sharp');
+  needle.style.left = meterPos(smoothed) + '%';
+  needle.classList.toggle('in-tune', advice.inTune);
+  noteEl.classList.toggle('in-tune', advice.inTune);
+  // Further out than the meter can draw: point the way rather than just pegging.
+  setMeterOffscale(Math.abs(smoothed) > METER_RANGE ? Math.sign(smoothed) : 0);
+  paintTunerStrings(t.i, advice.inTune);
 }
+
+// -1 = off the flat end, +1 = off the sharp end, 0 = on the scale.
+function setMeterOffscale(dir) {
+  document.getElementById('tuner-off-flat').classList.toggle('show', dir < 0);
+  document.getElementById('tuner-off-sharp').classList.toggle('show', dir > 0);
+}
+
+function ordSuffix(n) { return n === 1 ? 'st' : n === 2 ? 'nd' : n === 3 ? 'rd' : 'th'; }
 function tunerStop() {
   tuner.on = false;
   if (tuner.raf) cancelAnimationFrame(tuner.raf);
@@ -3498,11 +3637,20 @@ function tunerStop() {
   tuner.ctx = null;
   const b = document.getElementById('tuner-toggle');
   b.textContent = 'Start'; b.classList.remove('on');
-  document.getElementById('tuner-note').textContent = '—';
-  document.getElementById('tuner-note').classList.remove('in-tune');
-  document.getElementById('tuner-cents').textContent = 'Start, then play a single note.';
+  resetTunerReading();
+  tuner.done.clear();
+  const noteEl = document.getElementById('tuner-note');
+  noteEl.textContent = '—';
+  noteEl.classList.remove('in-tune');
+  document.getElementById('tuner-freq').textContent = 'Play one string';
+  document.getElementById('tuner-readout').classList.remove('idle');
+  const adviceEl = document.getElementById('tuner-advice');
+  adviceEl.textContent = 'Press Start, then play one string.';
+  adviceEl.className = 'tuner-advice';
   document.getElementById('tuner-needle').style.left = '50%';
   document.getElementById('tuner-needle').classList.remove('in-tune');
+  setMeterOffscale(0);
+  paintTunerStrings();
 }
 
 // ---- Tool panel wiring ----
@@ -3535,12 +3683,32 @@ document.getElementById('metro-tap').addEventListener('click', () => {
 });
 document.getElementById('metro-toggle').addEventListener('click', () => (metro.on ? metroStop() : metroStart()));
 document.getElementById('tuner-toggle').addEventListener('click', () => (tuner.on ? tunerStop() : tunerStart()));
-// Show the target strings for the current tuning (low → high) as a reference;
-// the string nearest the played note is highlighted during tuning.
+// The current tuning's targets, low → high: note name over the pitch you're
+// aiming at. The one being tuned lights up; each string keeps a ✓ once you've
+// brought it in. Clicking one locks the tuner to it.
 function renderTunerStrings() {
   const box = document.getElementById('tuner-strings');
-  box.innerHTML = TUNER_PRESETS[tuner.preset].strings
-    .map(([n]) => `<span class="tstr" data-note="${n}">${n.replace(/[0-9]/g, '')}</span>`).join('');
+  box.innerHTML = tunerTargets().map((t) =>
+    `<button class="tstr" data-i="${t.i}" title="Lock the tuner to the ${t.number}${ordSuffix(t.number)} string (${t.hz.toFixed(2)} Hz)">` +
+    `<span class="tstr-name">${t.label}</span><span class="tstr-hz">${t.hz.toFixed(1)}</span></button>`).join('');
+  box.querySelectorAll('.tstr').forEach((b) => b.addEventListener('click', () => {
+    const i = +b.dataset.i;
+    tuner.pinned = tuner.pinned === i ? null : i;
+    resetTunerReading();
+    paintTunerStrings();
+  }));
+  paintTunerStrings();
+}
+
+// `active` is the string currently being read; the pinned one always shows.
+function paintTunerStrings(active, inTune) {
+  document.querySelectorAll('#tuner-strings .tstr').forEach((b) => {
+    const i = +b.dataset.i;
+    b.classList.toggle('pinned', tuner.pinned === i);
+    b.classList.toggle('active', active === i);
+    b.classList.toggle('is-in-tune', active === i && !!inTune);
+    b.classList.toggle('done', tuner.done.has(i));
+  });
 }
 (function initTunerPreset() {
   const tp = document.getElementById('tuner-preset');
@@ -3551,6 +3719,10 @@ function renderTunerStrings() {
     tuner.preset = tp.value;
     prefs.tunerPreset = tp.value;
     savePrefs();
+    // New targets: nothing carried over from the old tuning is still true.
+    tuner.pinned = null;
+    tuner.done.clear();
+    resetTunerReading();
     renderTunerStrings();
   });
 })();

@@ -176,10 +176,25 @@ Two utilities open as small floating panels from the header:
 - **Metronome** — set the tempo (BPM stepper + slider, or **Tap** the beat),
   pick the beats per measure (2/3/4/6, with an accented downbeat), and **Start**.
   A row of dots pulses on the beat. Uses the Web Audio clock for steady timing.
-- **Tuner** — click **Start** and allow microphone access, then play a single
-  note: it shows the detected note and a cents meter (needle centers and turns
-  green when you're in tune). Works for any instrument (chromatic). Needs the
-  HTTPS site or localhost for mic access.
+- **Tuner** — pick a tuning, click **Start**, allow microphone access, then play
+  one string. Readings are measured against the strings of the chosen tuning
+  rather than the nearest chromatic note, so half a semitone flat on the low E
+  reads as *"tighten the 6th"*, not *"that's a nicely tuned D#"*.
+  - **String row** — each chip shows a string over the pitch it's aiming at in
+    Hz. The one you're playing lights up; it earns a **✓** once you've brought it
+    in tune, so you can see at a glance which strings are still to do.
+    **Click a chip** to lock the tuner to that string (click again to unlock);
+    while locked, playing anything else says which string to play instead.
+  - **Meter** — a fixed scale spanning a full semitone either way (±100 cents),
+    labelled at −100/−50/0/+50/+100 so you can read the remaining distance off
+    it rather than watching the needle peg. Past a semitone it pegs anyway and an
+    arrow points the way. The green band *is* the in-tune window (±5 cents), so
+    the needle sitting in the green and the words underneath can never disagree.
+    Flat is to the left (tighten), sharp to the right (loosen).
+  - **What to do** — under the meter, in words: *"Tighten a touch — 8¢ flat"*,
+    *"Loosen a lot — 47¢ sharp"*, *"In tune — hold it"*.
+  - Readings are median-smoothed over several frames, so the number settles
+    instead of flickering. Needs the HTTPS site or localhost for mic access.
 
 ## Performance mode
 

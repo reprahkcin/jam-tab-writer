@@ -198,13 +198,40 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
           <option value="jamesTaylor">James Taylor (sweetened)</option>
         </select>
       </label>
+      <!-- One chip per string: name over its target pitch. Click to lock the
+           tuner to that string; click again to go back to picking the nearest. -->
       <div id="tuner-strings" class="tuner-strings"></div>
-      <div id="tuner-note" class="tuner-note">&mdash;</div>
-      <div class="tuner-meter">
-        <div class="tuner-ticks"></div>
-        <div id="tuner-needle" class="tuner-needle"></div>
+      <div id="tuner-readout" class="tuner-readout">
+        <div id="tuner-note" class="tuner-note">&mdash;</div>
+        <div id="tuner-freq" class="tuner-freq">Play one string</div>
       </div>
-      <div id="tuner-cents" class="tuner-cents">Start, then play a single note.</div>
+      <!-- A fixed scale spanning a semitone either way: the target holds still
+           and only the needle moves, so distance from the goal is what you see.
+           The green band IS the in-tune window, so needle-in-green and the words
+           below can never disagree. -->
+      <div class="tuner-meter">
+        <div class="tuner-zone"></div>
+        <div class="tuner-tick" style="left: 25%"></div>
+        <div class="tuner-tick minor" style="left: 45%"></div>
+        <div class="tuner-tick minor" style="left: 55%"></div>
+        <div class="tuner-tick" style="left: 75%"></div>
+        <div id="tuner-needle" class="tuner-needle"></div>
+        <div id="tuner-off-flat" class="tuner-off flat">&#9664;</div>
+        <div id="tuner-off-sharp" class="tuner-off sharp">&#9654;</div>
+      </div>
+      <div class="tuner-nums">
+        <span style="left: 0%">&minus;100</span>
+        <span style="left: 25%">&minus;50</span>
+        <span style="left: 50%">0</span>
+        <span style="left: 75%">+50</span>
+        <span style="left: 100%">+100</span>
+      </div>
+      <div class="tuner-scale">
+        <span>&#9837; flat &middot; tighten</span>
+        <span>in tune</span>
+        <span>loosen &middot; sharp &#9839;</span>
+      </div>
+      <div id="tuner-advice" class="tuner-advice">Press Start, then play one string.</div>
       <button id="tuner-toggle" class="tool-start">Start</button>
     </div>
   </div>
