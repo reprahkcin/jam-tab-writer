@@ -715,6 +715,17 @@ function renderPreview() {
   // In performance mode the panels are relocated into the overlay and shown
   // independently of the app's own toggles, so keep them all populated.
   if (typeof perf !== 'undefined' && perf.open) perfRenderPanels(s);
+  updateFrontMatter();
+}
+
+// Is there anything above the chart worth giving page 1 to? Reference panels
+// fill a page; the title and capo banner alone don't, and reading them stranded
+// on their own sheet is worse than having them head the chart. Set on every
+// render rather than at print time, so it's already right however you print.
+function updateFrontMatter() {
+  const panels = el.instPanels.querySelector('.inst-panel, .sp-head') !== null;
+  const harp = (el.harmonica.innerHTML || '').trim() !== '';
+  el.preview.classList.toggle('has-front-matter', panels || harp);
 }
 
 // ---- The jam: instruments, their chords, and their scales ------------------

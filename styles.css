@@ -1010,11 +1010,13 @@ main { display: flex; flex: 1; min-height: 0; }
   #preview-body .lyricline { break-before: avoid; }
   #preview-body .section { break-inside: avoid; }
 
-  /* The chords and lyrics always start a fresh page, so the title, capo banner
-     and reference panels keep page 1 to themselves and the chart is never
-     crammed onto whatever space they left. Unconditional on purpose: it used to
-     be gated on a class set by the Print button, which meant ⌘P skipped it. */
-  #preview-body { break-before: page; page-break-before: always; }
+  /* The chords and lyrics start a fresh page whenever reference panels are
+     there to fill page 1, so the chart is never crammed into the space they
+     left. With no instruments switched on there's only the title and capo
+     banner above it, which head the chart instead of taking a sheet of their
+     own. updateFrontMatter sets the class on every render — an earlier version
+     set it from the Print button, so ⌘P silently skipped the break. */
+  .preview.has-front-matter #preview-body { break-before: page; page-break-before: always; }
 
   /* Real page breaks. Keep chord+lyric pairs together. */
   .preview .page-break { break-before: page; page-break-before: always; border: none; height: 0; margin: 0; }
