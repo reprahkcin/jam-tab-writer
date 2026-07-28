@@ -1,10 +1,10 @@
-# Guitar Tab Writer
+# Jam Tab Writer
 
 A no-frills, single-page web app for writing **chords-over-lyrics** song sheets.
 Paste in your verses, drop chords into brackets, and see them positioned above
 the lyrics in real time. No accounts, no server, no build step.
 
-**Live:** https://reprahkcin.github.io/guitar-tab-writer/
+**Live:** https://reprahkcin.github.io/jam-tab-writer/
 
 ## Running it
 

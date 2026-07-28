@@ -1,4 +1,4 @@
-/* Guitar Tab Writer — chords-over-lyrics editor.
+/* Jam Tab Writer — chords-over-lyrics editor.
    No build step, no dependencies. State lives in localStorage; songs
    can also be exported to / imported from plain text files. */
 
