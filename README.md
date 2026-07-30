@@ -27,6 +27,27 @@ instead, since the browser only allows file access from `http://`/`https://`:
 
 then open that URL in Chrome or Edge.
 
+## The toolbar
+
+The top row is grouped by job, with a hairline between clusters, so it can be
+scanned instead of read end to end:
+
+| Cluster | Buttons |
+| --- | --- |
+| This chart | **New** |
+| Where charts live | **Collection** (green), **Open folder**, and — in folder mode — **Reconnect folder** and **Save** |
+| In & out | **Import**, **Export**, **Share** |
+| Session tools | **Metronome**, **Tuner**, **Record** — icons only; the button lights up while its panel is open, and Record turns red while a take is rolling |
+| Play | **Perform** (filled, the one you hit mid-song) and the **?** shortcuts sheet |
+
+Two controls live with the thing they act on rather than in the toolbar:
+**Print** is in the Preview pane header next to its column setting, and
+**Setlists** sits in the Songs sidebar header, above the list it draws from.
+
+Below about 1200px wide the labels drop away and the row becomes icons (hover for
+the name) rather than wrapping onto two lines. On a phone the whole row collapses
+into the **☰ Menu** dropdown, where everything is labelled again.
+
 ## Folder mode — edit folders of charts on disk
 
 The app starts in **browser mode** (songs in localStorage), so you can jot
@@ -225,7 +246,8 @@ in a strip above the editor until the engine commits them.
 
 ## Metronome & tuner
 
-Two utilities open as small floating panels from the header:
+Two utilities open as small floating panels from the toolbar's icon trio (their
+button lights up while the panel is open):
 
 - **Metronome** — set the tempo (BPM stepper + slider, or **Tap** the beat),
   pick the beats per measure (2/3/4/6, with an accented downbeat), and **Start**.
@@ -295,14 +317,16 @@ page**, after the chart. Riffs are saved with the song as standard ChordPro
 
 ## Printing
 
-Click **Print** (top right) to open your browser's print dialog — from there you
-can print on paper or "Save as PDF". The printout is a clean black-on-white
-chord sheet with the song title and artist at the top; the editor, sidebar, and
-toolbar are hidden. Chord lines stay glued to the lyric line below them, and
-`{page}` markers force a new page.
+Click **Print** in the Preview pane header — it sits next to the column setting
+it obeys — to open your browser's print dialog; from there you can print on paper
+or "Save as PDF". Cmd/Ctrl+P does the same thing from anywhere, including
+Editor-only view where the preview (and so the button) is hidden. The printout is
+a clean black-on-white chord sheet with the song title and artist at the top; the
+editor, sidebar, and toolbar are hidden. Chord lines stay glued to the lyric line
+below them, and `{page}` markers force a new page.
 
-Use the **Print** control in the preview header to lay the chart out in **1 or
-2 columns** (2 is handy for fitting a long song on one page). Chord + lyric
+Use the **1 col / 2 cols** control beside that button to lay the chart out in
+**1 or 2 columns** (2 is handy for fitting a long song on one page). Chord + lyric
 pairs never split across a column, and the chord diagrams stay full-width above
 the columns.
 

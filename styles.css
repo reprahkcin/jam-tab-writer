@@ -38,7 +38,69 @@ header {
 
 header h1 { font-size: 18px; margin: 0; letter-spacing: 0.3px; }
 
-.header-actions { display: flex; gap: 8px; }
+.header-actions { display: flex; align-items: center; gap: 6px; }
+
+/* The action row is grouped by job — this chart | where charts live | in & out |
+   session tools | play — with a hairline between clusters. Scanning four short
+   groups beats reading one long row of look-alike pills. */
+.hdr-sep {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--line);
+}
+
+.icon-sprite { display: none; }
+.ico {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hdr-btn { display: inline-flex; align-items: center; gap: 6px; }
+/* display on .hdr-btn/.side-btn would otherwise outrank the [hidden] default,
+   and Save / Reopen folder are mode-specific. */
+.hdr-btn[hidden], .side-btn[hidden] { display: none; }
+/* Tools and help carry their meaning in the glyph; the words stay for the phone
+   menu and for screen readers via aria-label. */
+.hdr-btn.icon-only { padding: 6px 8px; }
+.hdr-btn.icon-only .btn-label { display: none; }
+
+/* An open tool panel (metronome / tuner / takes) lights its button, matching the
+   phone bar's .mbar-btn.is-on treatment. */
+.hdr-btn.is-open { border-color: var(--accent); color: var(--accent); }
+
+/* Perform is the one you hit mid-song without looking for it. */
+.hdr-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #23180c;
+  font-weight: 600;
+}
+.hdr-primary:hover { background: #f6c073; border-color: #f6c073; }
+.hdr-primary .ico { stroke: none; }
+
+/* Collection's green is the managed-home colour, and it also tells the two
+   folder buttons apart at a glance. */
+#collection-btn .ico { color: #5db073; }
+
+/* Small buttons that sit inside a pane or sidebar header rather than the top row. */
+.side-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.side-btn .ico { width: 14px; height: 14px; }
 
 /* Phone-only chrome — revealed in the max-width block below. Declared here,
    ahead of that block, so the media query wins on source order. */
@@ -73,14 +135,17 @@ main { display: flex; flex: 1; min-height: 0; }
 
 .sidebar-head {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
+  gap: 8px;
+  padding: 8px 14px;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   color: var(--muted);
   border-bottom: 1px solid var(--line);
 }
+.sidebar-head-end { display: flex; align-items: center; gap: 8px; }
 
 /* The drawer caret only appears on phones (see the max-width block). */
 .drawer-caret { display: none; }
@@ -254,16 +319,8 @@ main { display: flex; flex: 1; min-height: 0; }
   vertical-align: middle;
 }
 
-/* Collection button — a green dot hints at the managed-home colour. */
-#collection-btn::before {
-  content: '';
-  display: inline-block;
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: #5db073;
-  margin-right: 5px;
-  vertical-align: middle;
-}
+/* Collection's managed-home green now rides on its icon (see #collection-btn
+   .ico), so the separate dot would say the same thing twice. */
 
 /* Save-location breadcrumb under the song title. */
 .save-breadcrumb {
@@ -582,7 +639,8 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
 .view-toggles { display: flex; align-items: center; gap: 12px; text-transform: none; letter-spacing: 0; }
 .view-toggles label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .view-toggles input { accent-color: var(--accent); }
-.tog-sep { color: var(--line); }
+/* Print button + its column setting, at the end of the Preview pane header. */
+.print-ctl { display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; }
 .print-cols-ctl select {
   background: var(--panel-2);
   color: var(--text);
@@ -1057,6 +1115,16 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   .preview .section { break-after: avoid; }
 }
 
+/* Narrow laptops: drop the header to icons rather than let the labels break in
+   half inside the pills (which is what a plain flex wrap did — "Open folder"
+   over two lines, and a taller header). Tooltips and aria-labels carry the
+   names. Above the phone breakpoint, so the phone's own labelled menu wins. */
+@media screen and (min-width: 761px) and (max-width: 1200px) {
+  .hdr-btn .btn-label { display: none; }
+  .hdr-btn { padding: 6px 8px; }
+  .hdr-sep { margin: 0 2px; }
+}
+
 /* Phone layout. Scoped to `screen`: a printed page is narrower than 760px, so
    an unscoped query would hand the printer the phone's drawers, scroll areas
    and touch bars — and, sitting after the print block, would outrank it. */
@@ -1096,6 +1164,14 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   }
   header.menu-open .header-actions { display: flex; }
   .header-actions button { text-align: left; padding: 9px 12px; font-size: 14px; }
+  /* The dropdown is a list, so everything gets its words back and the cluster
+     separators become dividers between them. */
+  .hdr-btn { justify-content: flex-start; gap: 9px; }
+  /* Matches .hdr-btn.icon-only's specificity: an unlabelled row in a dropdown
+     list is just a mystery glyph. */
+  .hdr-btn .btn-label, .hdr-btn.icon-only .btn-label { display: inline; }
+  .hdr-btn.icon-only { padding: 9px 12px; }
+  .hdr-sep { width: auto; height: 1px; margin: 3px 2px; }
 
   /* Stack the song list above the workspace so each spans the full width. */
   main { flex-direction: column; }

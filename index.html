@@ -4,37 +4,107 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Jam Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=79" />
+  <link rel="stylesheet" href="styles.css?v=80" />
 </head>
 <body>
+  <!-- Icon set for the header and pane controls. Inline so the app still works
+       with no network and no build step; every icon draws in currentColor. -->
+  <svg class="icon-sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-new" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-collection" viewBox="0 0 24 24"><path d="M4 8v9.5A2.5 2.5 0 0 0 6.5 20H17"/><path d="M7.5 4h3l1.8 2.2h6.2A1.5 1.5 0 0 1 20 7.7v7.8A1.5 1.5 0 0 1 18.5 17h-11A1.5 1.5 0 0 1 6 15.5v-10A1.5 1.5 0 0 1 7.5 4z"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M4.5 5h4l2 2.5h7A1.5 1.5 0 0 1 19 9v8.5A1.5 1.5 0 0 1 17.5 19h-13A1.5 1.5 0 0 1 3 17.5v-11A1.5 1.5 0 0 1 4.5 5z"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M6 4h10l3 3v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M8.5 4v5h7"/><path d="M8.5 21v-6h7v6"/></symbol>
+    <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 3v10"/><path d="M8.5 9.5 12 13l3.5-3.5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></symbol>
+    <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 13V3"/><path d="M8.5 6.5 12 3l3.5 3.5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><path d="M9.8 14.2 14.2 9.8"/><path d="M8.9 11.1 7 13a3.6 3.6 0 0 0 5.1 5.1L14 16.2"/><path d="M15.1 12.9 17 11a3.6 3.6 0 0 0-5.1-5.1L10 7.8"/></symbol>
+    <!-- Metronome: case + pendulum swung right, weight on the arm. A slash that
+         crossed the case read as a warning triangle, so the arm starts inside. -->
+    <symbol id="i-metro" viewBox="0 0 24 24"><path d="M12 4.5 5.5 19.5h13L12 4.5z"/><path d="M12 19 17 8"/><circle cx="15.1" cy="12.7" r="1.5" fill="currentColor" stroke="none"/></symbol>
+    <!-- Tuner: a needle meter. Reads as "tuner" at 16px where a fork just
+         read as a small letter Y. -->
+    <symbol id="i-tuner" viewBox="0 0 24 24"><path d="M4 17.5a8 8 0 0 1 16 0"/><path d="M12 17.5 15.8 9.8"/><path d="M12 20.5h.01"/></symbol>
+    <symbol id="i-record" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-perform" viewBox="0 0 24 24"><path d="M8 5.4v13.2L19 12 8 5.4z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-print" viewBox="0 0 24 24"><path d="M7 9V4h10v5"/><path d="M7 17H3v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5h-4"/><path d="M7 14h10v6H7v-6z"/></symbol>
+    <symbol id="i-setlist" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h7"/><path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M9.8 9.4a2.3 2.3 0 1 1 3.4 2.2c-.8.5-1.2 1-1.2 1.9"/><path d="M12 16.6h.01"/></symbol>
+  </svg>
+
   <header>
     <h1>Jam Tab Writer</h1>
     <button id="menu-toggle" class="menu-toggle" aria-label="Menu" aria-expanded="false" aria-controls="header-actions">☰ Menu</button>
+    <!-- Grouped by job so the row can be scanned rather than read: this chart |
+         where charts live | in & out | session tools | play. Print lives with the
+         Preview pane it prints, Setlists with the song list it draws from. -->
     <div class="header-actions" id="header-actions">
-      <button id="new-btn" title="Start a new blank song">+ New</button>
-      <button id="collection-btn" title="Set up or open your Collection — a GuitarTabWriterCollection folder created inside a location you pick">Collection</button>
-      <button id="folder-btn" title="Open a folder of .cho charts and edit them in place">Open folder</button>
-      <button id="reopen-btn" title="Reopen the last folder" hidden>Reopen folder</button>
-      <button id="save-btn" title="Save this chart to its file (Cmd/Ctrl+S)" hidden>Save</button>
-      <button id="import-btn" title="Open a .txt / .cho file">Import</button>
-      <button id="export-btn" title="Download this song as a file">Export</button>
-      <button id="share-btn" title="Share this song as a link">Share</button>
-      <button id="metro-btn" title="Metronome">Metronome</button>
-      <button id="tuner-btn" title="Instrument tuner (uses your microphone)">Tuner</button>
-      <button id="capture-btn" title="Record takes from your audio interface (R)">Record</button>
-      <button id="setlist-btn" title="Build and perform setlists">Setlists</button>
-      <button id="perform-btn" title="Full-screen performance view">Perform</button>
-      <button id="print-btn" title="Print / save as PDF">Print</button>
-      <button id="help-btn" title="Keyboard shortcuts (press ?)">?</button>
+      <button id="new-btn" class="hdr-btn" title="Start a new blank song" aria-label="New song">
+        <svg class="ico"><use href="#i-new"/></svg><span class="btn-label">New</span>
+      </button>
+
+      <span class="hdr-sep" aria-hidden="true"></span>
+
+      <button id="collection-btn" class="hdr-btn" title="Set up or open your Collection — a GuitarTabWriterCollection folder created inside a location you pick" aria-label="Collection">
+        <svg class="ico"><use href="#i-collection"/></svg><span class="btn-label">Collection</span>
+      </button>
+      <button id="folder-btn" class="hdr-btn" title="Open a folder of .cho charts and edit them in place" aria-label="Open folder">
+        <svg class="ico"><use href="#i-folder"/></svg><span class="btn-label">Open folder</span>
+      </button>
+      <button id="reopen-btn" class="hdr-btn" title="Reopen the last folder" aria-label="Reopen folder" hidden>
+        <svg class="ico"><use href="#i-folder"/></svg><span class="btn-label">Reopen folder</span>
+      </button>
+      <button id="save-btn" class="hdr-btn" title="Save this chart to its file (Cmd/Ctrl+S)" aria-label="Save to file" hidden>
+        <svg class="ico"><use href="#i-save"/></svg><span class="btn-label">Save</span>
+      </button>
+
+      <span class="hdr-sep" aria-hidden="true"></span>
+
+      <button id="import-btn" class="hdr-btn" title="Open a .txt / .cho file" aria-label="Import a file">
+        <svg class="ico"><use href="#i-import"/></svg><span class="btn-label">Import</span>
+      </button>
+      <button id="export-btn" class="hdr-btn" title="Download this song as a file" aria-label="Export this song">
+        <svg class="ico"><use href="#i-export"/></svg><span class="btn-label">Export</span>
+      </button>
+      <button id="share-btn" class="hdr-btn" title="Share this song as a link" aria-label="Share as a link">
+        <svg class="ico"><use href="#i-share"/></svg><span class="btn-label">Share</span>
+      </button>
+
+      <span class="hdr-sep" aria-hidden="true"></span>
+
+      <!-- Momentary tools: icon-only on a wide screen, labelled in the phone
+           menu where there's room for words. -->
+      <button id="metro-btn" class="hdr-btn icon-only" title="Metronome" aria-label="Metronome">
+        <svg class="ico"><use href="#i-metro"/></svg><span class="btn-label">Metronome</span>
+      </button>
+      <button id="tuner-btn" class="hdr-btn icon-only" title="Instrument tuner (uses your microphone)" aria-label="Tuner">
+        <svg class="ico"><use href="#i-tuner"/></svg><span class="btn-label">Tuner</span>
+      </button>
+      <button id="capture-btn" class="hdr-btn icon-only" title="Record takes from your audio interface (R)" aria-label="Record a take">
+        <svg class="ico"><use href="#i-record"/></svg><span class="btn-label">Record</span>
+      </button>
+
+      <span class="hdr-sep" aria-hidden="true"></span>
+
+      <button id="perform-btn" class="hdr-btn hdr-primary" title="Full-screen performance view" aria-label="Perform">
+        <svg class="ico"><use href="#i-perform"/></svg><span class="btn-label">Perform</span>
+      </button>
+      <button id="help-btn" class="hdr-btn icon-only" title="Keyboard shortcuts (press ?)" aria-label="Keyboard shortcuts">
+        <svg class="ico"><use href="#i-help"/></svg><span class="btn-label">Shortcuts</span>
+      </button>
       <input type="file" id="import-input" accept=".txt,.cho,.chordpro,.crd,.pdf,text/plain,application/pdf" hidden />
     </div>
   </header>
 
   <main>
     <aside id="sidebar">
+      <!-- Setlists draw from this list, so the button lives with it. -->
       <div class="sidebar-head" id="sidebar-head" role="button" tabindex="0" aria-expanded="false" aria-controls="song-list">
         <span>Songs<span class="drawer-caret" aria-hidden="true"></span></span>
-        <span id="song-count" class="muted"></span>
+        <span class="sidebar-head-end">
+          <span id="song-count" class="muted"></span>
+          <button id="setlist-btn" class="side-btn" title="Build and perform setlists" aria-label="Setlists">
+            <svg class="ico"><use href="#i-setlist"/></svg><span class="btn-label">Setlists</span>
+          </button>
+        </span>
       </div>
       <input id="song-search" class="song-search" type="search" placeholder="Search songs…" spellcheck="false" />
       <div id="folder-bar" class="folder-bar" hidden></div>
@@ -137,14 +207,20 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
               <label title="Show chord diagrams for each instrument"><input type="checkbox" id="toggle-chords" checked /> Chords</label>
               <label title="Show a scale map for each instrument"><input type="checkbox" id="toggle-scales" checked /> Scales</label>
               <label title="Show chords as Nashville numbers (scale degrees relative to the key)"><input type="checkbox" id="toggle-numbers" /> Numbers</label>
-              <span class="tog-sep">|</span>
+              <span id="save-status" class="muted"></span>
+            </span>
+            <!-- Print sits with the column setting it obeys, next to the chart
+                 it puts on paper. -->
+            <span class="print-ctl">
               <label class="print-cols-ctl" title="Number of columns when you print / save as PDF">Print
                 <select id="print-cols">
                   <option value="1">1 col</option>
                   <option value="2">2 cols</option>
                 </select>
               </label>
-              <span id="save-status" class="muted"></span>
+              <button id="print-btn" class="side-btn" title="Print / save as PDF" aria-label="Print or save as PDF">
+                <svg class="ico"><use href="#i-print"/></svg><span class="btn-label">Print</span>
+              </button>
             </span>
           </div>
           <!-- Phone-only preview controls: one big charts switch + Perform. -->
@@ -386,9 +462,9 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=79"></script>
-  <script src="pdf2cho.js?v=79"></script>
-  <script src="qr.js?v=79"></script>
-  <script src="app.js?v=79"></script>
+  <script src="chords.js?v=80"></script>
+  <script src="pdf2cho.js?v=80"></script>
+  <script src="qr.js?v=80"></script>
+  <script src="app.js?v=80"></script>
 </body>
 </html>

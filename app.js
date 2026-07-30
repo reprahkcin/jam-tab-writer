@@ -49,6 +49,16 @@ function escapeHtml(s) {
   return s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 }
 
+// Retitle a button without disturbing its icon, and keep the accessible name in
+// step — on a wide screen some of these show the icon alone.
+function setBtnLabel(btn, text) {
+  if (!btn) return;
+  const label = btn.querySelector('.btn-label');
+  if (label) label.textContent = text;
+  else btn.textContent = text;
+  btn.setAttribute('aria-label', text);
+}
+
 function renderLine(raw, semitones, numKey, li) {
   const trimmed = raw.trim();
   // Line number of the source text, so a dragged chord knows which line to edit.
@@ -2357,7 +2367,12 @@ document.getElementById('share-copy').addEventListener('click', async () => {
     sidebar.classList.toggle('drawer-open', open);
     head.setAttribute('aria-expanded', open ? 'true' : 'false');
   };
-  head.addEventListener('click', () => { if (isPhone()) setOpen(!sidebar.classList.contains('drawer-open')); });
+  // The head doubles as the drawer handle, so a button sitting in it (Setlists)
+  // must not also toggle the drawer.
+  head.addEventListener('click', (e) => {
+    if (e.target.closest('button')) return;
+    if (isPhone()) setOpen(!sidebar.classList.contains('drawer-open'));
+  });
   head.addEventListener('keydown', (e) => { if (isPhone() && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setOpen(!sidebar.classList.contains('drawer-open')); } });
   list.addEventListener('click', (e) => { if (isPhone() && e.target.closest('li')) setOpen(false); });
 })();
@@ -2384,9 +2399,14 @@ document.getElementById('print-btn').addEventListener('click', () => {
 // Paper always gets the space-aligned chart, even when the phone screen is
 // showing wrapped lines. Covers Cmd+P as well as the Print button.
 window.addEventListener('beforeprint', () => {
-  if (!window.matchMedia('(max-width: 760px)').matches) return;
-  forceAlignedChart = true;
-  renderPreview();
+  if (window.matchMedia('(max-width: 760px)').matches) {
+    forceAlignedChart = true;
+    renderPreview();
+  }
+  // Size the type to the column here too, not just in the Print button: that
+  // button now lives in the Preview pane header, so in Editor-only view Cmd+P
+  // is the only way to print and it must land the same page.
+  computePrintFont();
 });
 window.addEventListener('afterprint', () => {
   if (!forceAlignedChart) return;
@@ -2441,7 +2461,12 @@ function computePrintFont() {
   const gapPt = 22;              // ~30px column gap
   const colPt = (usablePt - (cols - 1) * gapPt) / cols;
   const screenFontPx = parseFloat(getComputedStyle(el.previewBody).fontSize) || 14;
-  const ratio = widestBodyLinePx() / screenFontPx; // line width per unit font
+  const widest = widestBodyLinePx();
+  // Editor-only view hides the preview, so every line measures zero and the fit
+  // maths would happily settle on the 14pt ceiling and clip a wide chart. Keep
+  // whatever was last measured instead of trusting an unmeasurable pane.
+  if (widest <= 1) return;
+  const ratio = widest / screenFontPx;             // line width per unit font
   const SAFETY = 0.94;           // leave headroom so the last char never clips
   let fit = (colPt * SAFETY) / ratio;
   fit = Math.min(14, Math.max(6, fit)); // 6–14pt; wide songs still shrink to fit
@@ -2499,7 +2524,7 @@ function updateModeUI() {
   document.getElementById('save-btn').hidden = !folder;
   document.getElementById('import-btn').hidden = false; // import works in both modes
   const folderBtn = document.getElementById('folder-btn');
-  folderBtn.textContent = folder ? '+ Folder' : 'Open folder';
+  setBtnLabel(folderBtn, folder ? 'Add folder' : 'Open folder');
   folderBtn.title = folder
     ? 'Open another folder of .cho charts'
     : 'Set up a file-backed collection: copy your songs into a folder and edit on disk';
@@ -4597,6 +4622,13 @@ function toggleTool(name) {
   // independent of whether you're looking at it.
   if (panel.hidden) { if (name === 'metro') metroStop(); if (name === 'tuner') tunerStop(); }
   if (name === 'capture' && !panel.hidden) { capLoadDevices(); renderTakes(); }
+  // These three show as icons in the header, so the button itself has to say
+  // which tool you left open — there's no label to read.
+  const btn = document.getElementById(name + '-btn');
+  if (btn) {
+    btn.classList.toggle('is-open', !panel.hidden);
+    btn.setAttribute('aria-pressed', panel.hidden ? 'false' : 'true');
+  }
 }
 document.getElementById('metro-btn').addEventListener('click', () => toggleTool('metro'));
 document.getElementById('tuner-btn').addEventListener('click', () => toggleTool('tuner'));
@@ -4828,7 +4860,7 @@ async function reconnectLibraries(entries) {
 
 function showReconnect(need) {
   reopenBtn.hidden = false;
-  reopenBtn.textContent = need.length > 1 ? `Reconnect folders (${need.length})` : 'Reconnect folder';
+  setBtnLabel(reopenBtn, need.length > 1 ? `Reconnect folders (${need.length})` : 'Reconnect folder');
   reopenBtn.onclick = async () => {
     const granted = [];
     for (const entry of need) {
