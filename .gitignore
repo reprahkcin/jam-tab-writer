@@ -8,3 +8,6 @@ local tab collection/
 # Python
 __pycache__/
 *.pyc
+
+# Playwright MCP run artifacts (console logs, page snapshots).
+.playwright-mcp/
