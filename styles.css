@@ -543,6 +543,29 @@ main { display: flex; flex: 1; min-height: 0; }
 }
 .preview .empty-hint { color: var(--muted); font-family: system-ui, sans-serif; }
 
+/* Draggable chords. Each chord is its own span, and the spaces around it still
+   do the aligning, so nothing here may change the text's advance width:
+   position: relative offsets a chip mid-drag without moving anything else, and
+   the hover ring is a box-shadow rather than a border for the same reason.
+   touch-action leaves a vertical flick to scroll the pane; a sideways drag on a
+   chord is ours. */
+.preview .ch { position: relative; border-radius: 3px; cursor: grab; touch-action: pan-y; }
+.preview .ch:hover { background: rgba(240, 163, 94, 0.16); box-shadow: 0 0 0 1px rgba(240, 163, 94, 0.4); }
+.preview .ch.dragging {
+  z-index: 5;
+  cursor: grabbing;
+  background: var(--panel-2);
+  box-shadow: 0 0 0 1px var(--chord), 0 3px 10px rgba(0, 0, 0, 0.6);
+}
+/* Dragged off the chart: nothing moves if you let go here. */
+.preview .ch.no-drop { opacity: 0.45; cursor: no-drop; box-shadow: none; }
+/* The row the chord will land on. */
+.preview .chordline.drop-row { background: rgba(240, 163, 94, 0.09); border-radius: 3px; }
+body.chord-dragging { user-select: none; cursor: grabbing; }
+/* Performance mode is read-only — no grab affordance there. */
+.perform-cols .ch { cursor: default; }
+.perform-cols .ch:hover { background: none; box-shadow: none; }
+
 .muted { color: var(--muted); font-size: 12px; }
 
 .inline-btn {
@@ -924,6 +947,8 @@ main { display: flex; flex: 1; min-height: 0; }
   }
   .preview { overflow: visible; padding: 0; color: #000; font-size: 12pt; }
   .preview .chordline { color: #000; font-weight: 700; }
+  /* Chord chips are an on-screen affordance only; on paper they're just text. */
+  .preview .ch, .preview .chordline.drop-row { background: none; box-shadow: none; position: static; }
   .preview .section { color: #000; }
   .preview .empty-hint { display: none; }
 

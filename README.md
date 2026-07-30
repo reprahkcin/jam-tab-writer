@@ -158,6 +158,17 @@ into the active folder).
 
   Position the caret with the arrow keys and you can chord an entire song without
   touching the mouse.
+- **Drag a chord in the preview** to move it: grab it and slide it along the line
+  and it snaps character by character, so where it sits mid-drag is exactly where
+  it lands. Drop it on another line's chord row to move it up or down, or drag it
+  off the preview pane and let go to call the move off. The drag edits the bracket
+  in the editor text — the source stays the one truth — so Cmd/Ctrl+Z undoes a
+  move like any other edit. What's on screen may be transposed or in Nashville
+  numbers; the chord is still written back exactly as you typed it. A chord past
+  the end of the words holds its column with spaces, which is how chords-only
+  lines space themselves. Read-only in performance mode, and on a phone the
+  preview wraps lines instead of aligning them, so dragging is a desktop/tablet
+  gesture.
 - **Section buttons**: a toolbar (Intro, Verse, Pre-Chorus, Chorus, Bridge,
   Solo, Outro) inserts a `{Section}` label at the cursor on its own line.
   **Verse** auto-increments to the next number already in the chart.
@@ -301,6 +312,8 @@ share a uniform grid and even spacing (on screen and in print).
 ## Features
 
 - Live preview as you type
+- **Drag chords in the preview** to place them — character-snapped, across lines
+  too, and undoable (see "Writing syntax")
 - **Print / Save as PDF** with clean print styling and manual page breaks
 - **Transpose** up/down by semitone (chords shift, e.g. G → A)
 - **Capo** — set a capo fret; a "Capo N" banner shows the resulting sounding

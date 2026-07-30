@@ -49,8 +49,10 @@ function escapeHtml(s) {
   return s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 }
 
-function renderLine(raw, semitones, numKey) {
+function renderLine(raw, semitones, numKey, li) {
   const trimmed = raw.trim();
+  // Line number of the source text, so a dragged chord knows which line to edit.
+  const lat = li == null ? '' : ` data-l="${li}"`;
 
   if (trimmed === '') return '<div class="blank"></div>';
 
@@ -85,20 +87,26 @@ function renderLine(raw, semitones, numKey) {
 
   if (chords.length === 0) {
     // Reserve an empty chord row above every lyric line so all lines are the
-    // same height and align on a uniform grid.
-    return `<div class="line chordline"> </div><div class="line lyricline">${escapeHtml(raw)}</div>`;
+    // same height and align on a uniform grid. (It also gives a chord dragged
+    // from another line somewhere to land.)
+    return `<div class="line chordline"${lat}> </div><div class="line lyricline">${escapeHtml(raw)}</div>`;
   }
 
   // Lay chords onto their own line, nudging right so they always keep at least
   // one space between them (<= so chords that land exactly adjacent still gap).
-  let chordLine = '';
-  for (const c of chords) {
+  // Each chord is its own span: the spaces around it still do the aligning, but
+  // there's now something to grab hold of and drag (see startChordDrag).
+  let chordLine = '', chordSpans = '';
+  for (let ci = 0; ci < chords.length; ci++) {
+    const c = chords[ci];
     let pos = c.pos;
     if (pos <= chordLine.length && chordLine.length > 0) pos = chordLine.length + 1;
+    chordSpans += ' '.repeat(pos - chordLine.length) +
+      `<span class="ch" data-c="${ci}" title="Drag to move this chord">${escapeHtml(c.text)}</span>`;
     chordLine += ' '.repeat(pos - chordLine.length) + c.text;
   }
 
-  const chordHtml = `<div class="line chordline">${escapeHtml(chordLine) || ' '}</div>`;
+  const chordHtml = `<div class="line chordline"${lat}>${chordSpans || ' '}</div>`;
   if (lyric.trim() === '') return chordHtml; // instrumental / chords only
   return chordHtml + `<div class="line lyricline">${escapeHtml(lyric)}</div>`;
 }
@@ -108,7 +116,7 @@ function render(body, semitones, numKey) {
     return '<div class="empty-hint">Nothing yet — start typing in the editor. ' +
       'Chords go in brackets, e.g. <code>[Am]</code>.</div>';
   }
-  return body.split('\n').map((l) => renderLine(l, semitones, numKey)).join('');
+  return body.split('\n').map((l, i) => renderLine(l, semitones, numKey, i)).join('');
 }
 
 // ---- Wrapping chord/lyric rendering (phone performance view) ---------------
@@ -1332,6 +1340,200 @@ function transposeChordText(text, semi) {
 }
 function replaceChordText(text, from, to) {
   return text.replace(new RegExp('\\[' + escapeRegex(from) + '\\]', 'g'), '[' + to + ']');
+}
+
+// Split one source line into the words and the chords written over them, each
+// chord keeping the column of the lyric it lands on. Same walk as renderLine,
+// but it keeps the token as written (untransposed) so a move can put it back
+// verbatim.
+function parseLineChords(raw) {
+  const chords = [];
+  let lyric = '';
+  const re = /\[([^\]]*)\]/g;
+  let last = 0, m;
+  while ((m = re.exec(raw)) !== null) {
+    lyric += raw.slice(last, m.index);
+    chords.push({ pos: lyric.length, token: m[1] });
+    last = m.index + m[0].length;
+  }
+  lyric += raw.slice(last);
+  return { lyric, chords };
+}
+
+// The inverse: weave [chords] back into the lyric at their columns. A chord
+// parked past the end of the words pads with spaces to hold its column (that's
+// how a chords-only line spaces itself), and any pad left dangling past the last
+// chord is dropped.
+function buildLineChords(lyric, chords) {
+  const cs = chords.slice().sort((a, b) => a.pos - b.pos);   // stable: ties keep order
+  let text = lyric;
+  const far = cs.length ? cs[cs.length - 1].pos : 0;
+  if (far > text.length) text += ' '.repeat(far - text.length);
+  let out = '', at = 0;
+  for (const c of cs) {
+    out += text.slice(at, c.pos) + '[' + c.token + ']';
+    at = c.pos;
+  }
+  return (out + text.slice(at)).replace(/[ \t]+$/, '');
+}
+
+// Move one chord to a new column, and possibly a new line: the chord row is
+// space-aligned monospace, so a column *is* an index into the lyric beneath it.
+// Returns the whole body text with that one chord relocated.
+function moveChordInBody(body, fromLine, chordIndex, toLine, col) {
+  const lines = body.split('\n');
+  if (lines[fromLine] == null || lines[toLine] == null) return body;
+  const src = parseLineChords(lines[fromLine]);
+  const moved = src.chords[chordIndex];
+  if (!moved) return body;
+  const at = Math.max(0, Math.min(col, 400));   // ceiling keeps a wild drop from padding forever
+  if (fromLine === toLine) {
+    lines[fromLine] = buildLineChords(src.lyric,
+      src.chords.map((c, i) => (i === chordIndex ? { pos: at, token: c.token } : c)));
+  } else {
+    const dst = parseLineChords(lines[toLine]);
+    lines[fromLine] = buildLineChords(src.lyric, src.chords.filter((_, i) => i !== chordIndex));
+    lines[toLine] = buildLineChords(dst.lyric, dst.chords.concat({ pos: at, token: moved.token }));
+  }
+  return lines.join('\n');
+}
+
+// ---- Dragging chords in the preview ---------------------------------------
+// A chord's place on the chart is a whole number of characters from the left, so
+// a drag snaps to that grid: the chord you're dragging sits exactly where it will
+// land, no drop-marker guesswork. Letting go rewrites the source line, and the
+// preview re-renders from it — the text stays the one source of truth. Drop on
+// another line's chord row to move it up or down.
+
+const chordDrag = { chip: null, pid: null, armed: false, li: 0, ci: 0, col: null,
+  charW: 8, grab: 0, startX: 0, startY: 0, chipX: 0, chipY: 0, out: false,
+  rows: [], row: null, scroller: null, baseScroll: 0 };
+
+// Width of one character in the chart font, measured per drag: the chart font
+// size follows the pane width and the fit-to-width sizing.
+function chartCharWidth() {
+  const probe = document.createElement('div');
+  probe.className = 'line chordline';
+  probe.style.cssText = 'position:absolute;visibility:hidden;left:-9999px;top:0';
+  probe.textContent = '0'.repeat(40);
+  el.previewBody.appendChild(probe);
+  const w = probe.getBoundingClientRect().width / 40;
+  probe.remove();
+  return w > 0 ? w : 8;
+}
+
+el.previewBody.addEventListener('pointerdown', (e) => {
+  if (typeof perf !== 'undefined' && perf.open) return;  // performance mode is read-only
+  if (chordDrag.chip || e.button !== 0) return;
+  const chip = e.target.closest && e.target.closest('.ch');
+  const row = chip && chip.parentElement;
+  if (!chip || !row || row.dataset.l == null) return;
+  startChordDrag(e, chip, row);
+});
+
+function startChordDrag(e, chip, row) {
+  const cd = chordDrag;
+  cd.chip = chip;
+  cd.pid = e.pointerId;
+  cd.armed = false;
+  cd.li = +row.dataset.l;
+  cd.ci = +chip.dataset.c;
+  cd.col = null;
+  cd.charW = chartCharWidth();
+  cd.startX = e.clientX;
+  cd.startY = e.clientY;
+  const b = chip.getBoundingClientRect();
+  cd.chipX = b.left;
+  cd.chipY = b.top;
+  // Grab "Am7" by its 7 and the 7 is what stays under the pointer.
+  cd.grab = Math.round((e.clientX - b.left) / cd.charW);
+  cd.scroller = el.preview;
+  cd.baseScroll = cd.scroller.scrollTop;
+  // Every chord row is a candidate landing line; measure them once up front.
+  cd.rows = [...el.previewBody.querySelectorAll('.chordline[data-l]')].map((r) => {
+    const rb = r.getBoundingClientRect();
+    return { el: r, li: +r.dataset.l, top: rb.top, bottom: rb.bottom, left: rb.left };
+  });
+  cd.row = cd.rows.find((r) => r.el === row) || null;
+  try { chip.setPointerCapture(e.pointerId); } catch { /* not fatal */ }
+  window.addEventListener('pointermove', onChordDragMove);
+  window.addEventListener('pointerup', endChordDrag);
+  window.addEventListener('pointercancel', clearChordDrag);
+  if (e.pointerType !== 'touch') e.preventDefault(); // no text selection under the drag
+}
+
+function onChordDragMove(e) {
+  const cd = chordDrag;
+  if (!cd.chip || e.pointerId !== cd.pid) return;
+  if (!cd.armed) {
+    if (Math.abs(e.clientX - cd.startX) < 3 && Math.abs(e.clientY - cd.startY) < 3) return;
+    cd.armed = true;
+    cd.chip.classList.add('dragging');
+    document.body.classList.add('chord-dragging');
+  }
+  // Drag off the chart to think again: outside the preview pane the drop is
+  // called off rather than parked at whatever column the pointer implies out
+  // there. The chip dims and waits where it last made sense.
+  const pane = cd.scroller.getBoundingClientRect();
+  const out = e.clientX < pane.left || e.clientX > pane.right ||
+              e.clientY < pane.top - 40 || e.clientY > pane.bottom + 40;
+  if (out !== cd.out) {
+    cd.out = out;
+    cd.chip.classList.toggle('no-drop', out);
+    if (cd.row) cd.row.el.classList.toggle('drop-row', !out);
+  }
+  if (out) return;
+
+  // Rows were measured before the drag; if the pane scrolled under us, compare
+  // the pointer in those same coordinates.
+  const y = e.clientY + (cd.scroller.scrollTop - cd.baseScroll);
+  let best = cd.row, bestD = Infinity;
+  for (const r of cd.rows) {
+    const d = y < r.top ? r.top - y : (y > r.bottom ? y - r.bottom : 0);
+    if (d < bestD) { bestD = d; best = r; if (d === 0) break; }
+  }
+  if (best !== cd.row && cd.row) cd.row.el.classList.remove('drop-row');
+  cd.row = best;
+  if (!cd.row) return;
+  cd.row.el.classList.add('drop-row');
+  cd.col = Math.max(0, Math.min(400, Math.round((e.clientX - cd.row.left) / cd.charW) - cd.grab));
+  cd.chip.style.left = (cd.row.left + cd.col * cd.charW - cd.chipX) + 'px';
+  cd.chip.style.top = (cd.row.top - cd.chipY) + 'px';
+}
+
+function endChordDrag(e) {
+  const cd = chordDrag;
+  if (cd.chip && e.pointerId !== cd.pid) return;
+  const armed = cd.armed && !cd.out, li = cd.li, ci = cd.ci, col = cd.col;
+  const toLine = cd.row ? cd.row.li : null;
+  clearChordDrag();
+  if (!armed || toLine === null || col === null) return;
+  const body = el.editor.value;
+  const next = moveChordInBody(body, li, ci, toLine, col);
+  if (next === body) return;
+  // Keep the typist's place: replaceEditorText normally sends the caret home.
+  const ta = el.editor;
+  const start = ta.selectionStart, end = ta.selectionEnd, top = ta.scrollTop;
+  replaceEditorText(next);
+  ta.selectionStart = Math.min(start, ta.value.length);
+  ta.selectionEnd = Math.min(end, ta.value.length);
+  ta.scrollTop = top;
+}
+
+function clearChordDrag() {
+  const cd = chordDrag;
+  if (cd.chip) {
+    cd.chip.classList.remove('dragging', 'no-drop');
+    cd.chip.style.left = '';
+    cd.chip.style.top = '';
+  }
+  for (const r of cd.rows) r.el.classList.remove('drop-row');
+  document.body.classList.remove('chord-dragging');
+  window.removeEventListener('pointermove', onChordDragMove);
+  window.removeEventListener('pointerup', endChordDrag);
+  window.removeEventListener('pointercancel', clearChordDrag);
+  cd.chip = null; cd.pid = null; cd.armed = false; cd.out = false; cd.col = null;
+  cd.rows = []; cd.row = null;
 }
 
 // Transpose every written [chord] in the editor text by `semi` semitones. This
@@ -2726,6 +2928,10 @@ function renderHelp() {
       [[S + A + '↑', S + A + '↓'], 'Duplicate line(s) up / down'],
       [['Tab'], 'Insert two spaces'],
       [[C + 'S'], 'Save to file (folder mode)'],
+    ]],
+    ['Preview', [
+      [['Drag a chord'], 'Slide it along the line, or drop it on another line'],
+      [[C + 'Z'], 'Undo a chord you dragged'],
     ]],
     ['Chord search popup', [
       [['↑', '↓'], 'Move selection'],
