@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Jam Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=80" />
+  <link rel="stylesheet" href="styles.css?v=81" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -158,7 +158,9 @@
             <span class="hint">
               <button id="dictate-btn" class="inline-btn dict-btn" title="Speak lyrics into the editor (D to start, Esc to stop)" hidden>&#127908; Dictate</button>
               <button id="pagebreak-btn" class="inline-btn" title="Insert a page break at the cursor">Insert page break</button>
+              <button id="encode-chords-btn" class="inline-btn" title="Reprocess a plain chart: fold chord lines into the lyrics beneath them as [chord] tokens. Whole chart, or just the selection.">Encode chords</button>
               <button id="clear-chords-btn" class="inline-btn" title="Remove every [chord] from this chart (keeps lyrics and sections)">Clear chords</button>
+              <span id="editor-note" class="ed-note" hidden></span>
               <span class="etool">Transpose text
                 <button id="tr-text-down" class="inline-btn" title="Transpose the written chords down a semitone">&minus;</button>
                 <button id="tr-text-up" class="inline-btn" title="Transpose the written chords up a semitone">+</button>
@@ -462,9 +464,9 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=80"></script>
-  <script src="pdf2cho.js?v=80"></script>
-  <script src="qr.js?v=80"></script>
-  <script src="app.js?v=80"></script>
+  <script src="chords.js?v=81"></script>
+  <script src="pdf2cho.js?v=81"></script>
+  <script src="qr.js?v=81"></script>
+  <script src="app.js?v=81"></script>
 </body>
 </html>

@@ -120,6 +120,65 @@
     return out.join(' ');
   }
 
+  // ---- encoding a plain chart (no PDF involved) -----------------------------
+  // A chart written the old way — chords on their own line, lyrics beneath —
+  // carries the chord's position in whitespace, which nothing but a fixed-width
+  // font understands. This turns each such pair into inline [chord] tokens using
+  // the same grammar and column rules as the PDF pipeline, so a chart typed by
+  // hand, pasted from a lyrics site, or converted before the app knew better can
+  // be reprocessed in place.
+  //
+  // Idempotent by construction: a line that already holds brackets is passed
+  // through untouched, so running it twice (or over a half-encoded chart) is
+  // safe. Returns the new text plus a count of what it touched, so a caller can
+  // say "nothing to do" rather than silently doing nothing.
+  function encodeChordLines(text) {
+    const src = String(text).split('\n');
+    const out = [];
+    let merged = 0, bracketed = 0;
+    const isMeta = (s) => /^\{.*\}$/.test(s) || s.includes('[');
+
+    for (let i = 0; i < src.length; i++) {
+      const raw = src[i].replace(/\s+$/, '');
+      const s = raw.trim();
+      if (!s || isMeta(s) || !isChordLine(s)) { out.push(raw); continue; }
+
+      const nxt = i + 1 < src.length ? src[i + 1].replace(/\s+$/, '') : '';
+      const ns = nxt.trim();
+      // Unlike the OCR path, this text was typed rather than guessed at, so a
+      // single-word lyric line under a chord row ("[C]Hallelujah") is taken at
+      // face value instead of being treated as garbling.
+      if (ns && !isMeta(ns) && !isChordLine(ns)) {
+        out.push(merge(raw, nxt));
+        i++; merged++; continue;
+      }
+      out.push(bracketInPlace(raw));
+      bracketed++;
+    }
+    return { text: out.join('\n'), merged, bracketed, changed: merged + bracketed };
+  }
+
+  // A chord row with no lyrics under it (an instrumental bar). Its spacing IS
+  // the timing, so brackets go in at the original columns rather than collapsing
+  // to one space each: the gaps between the brackets are what the chart renders
+  // the chords over.
+  function bracketInPlace(line) {
+    const toks = [];
+    const re = /\S+/g;
+    let m;
+    while ((m = re.exec(line.replace(/\|/g, ' ')))) {
+      const chords = parseChords(m[0], true);
+      if (!chords) return line;                 // not chords through and through
+      for (const c of chords) toks.push([m.index, c]);
+    }
+    let out = '', col = 0;                      // col = lyric length written so far
+    for (const [pos, chord] of toks) {
+      if (pos > col) { out += ' '.repeat(pos - col); col = pos; }
+      out += '[' + chord + ']';
+    }
+    return out;
+  }
+
   // ---- layout reconstruction ------------------------------------------------
 
   function median(xs) {
@@ -428,7 +487,9 @@
 
   root.PdfToCho = {
     pdfToCho,
+    encodeChordLines,
+    isChordLine,
     // exposed for the port-fidelity test against the Python pipeline
-    _internals: { toCho, cleanCho, parseChords, isChordLine, merge, linesFromWords },
+    _internals: { toCho, cleanCho, parseChords, isChordLine, merge, linesFromWords, bracketInPlace },
   };
 })(typeof window !== 'undefined' ? window : globalThis);

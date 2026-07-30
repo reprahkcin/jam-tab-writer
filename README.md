@@ -193,6 +193,20 @@ into the active folder).
 - **Section buttons**: a toolbar (Intro, Verse, Pre-Chorus, Chorus, Bridge,
   Solo, Outro) inserts a `{Section}` label at the cursor on its own line.
   **Verse** auto-increments to the next number already in the chart.
+- **Encode chords**: reprocesses a chart written the old way — chords on their own
+  line, lyrics beneath — into inline `[chord]` tokens. It reads each chord's
+  column and folds it into the lyric under it, then drops the now-empty chord
+  line; a chord sitting in the gap between two words goes to the word that
+  follows, and runs of padding spaces in the lyric are tidied up. A chord row
+  with no lyrics under it (an instrumental bar) keeps its columns instead, so its
+  timing survives. Alignment is taken at face value: a chord landing part-way
+  into a word stays part-way into that word, because that's often exactly what
+  was meant. It runs on the **selection** when you have one — handy right after
+  pasting a verse into an encoded chart — and on the whole chart otherwise.
+  Already-bracketed lines are passed through untouched, so running it twice does
+  nothing the second time, and Cmd/Ctrl+Z undoes it. It shares its chord grammar
+  with the PDF converter, so a chart that came out plain can be run through the
+  same logic that a PDF drop uses.
 - **Clear chords**: the **Clear chords** button (editor header) strips every
   `[chord]` from the chart at once — handy for a complete re-harmonisation. It
   keeps lyrics, section labels, and `{page}` markers, and can be undone with

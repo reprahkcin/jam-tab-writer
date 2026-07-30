@@ -636,6 +636,14 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
 }
 .inline-btn:hover { background: #343a4e; }
 
+/* Transient result note for editor actions (see editorNote). */
+.ed-note {
+  color: var(--accent);
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .view-toggles { display: flex; align-items: center; gap: 12px; text-transform: none; letter-spacing: 0; }
 .view-toggles label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .view-toggles input { accent-color: var(--accent); }

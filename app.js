@@ -2589,6 +2589,58 @@ function stripChords(text) {
   ).join('\n');
 }
 
+// A short-lived note beside the editor tools, for actions whose result is
+// otherwise invisible ("nothing to encode" looks identical to "button broken").
+let edNoteTimer = null;
+function editorNote(msg) {
+  const n = document.getElementById('editor-note');
+  if (!n) return;
+  n.textContent = msg;
+  n.hidden = false;
+  clearTimeout(edNoteTimer);
+  edNoteTimer = setTimeout(() => { n.hidden = true; n.textContent = ''; }, 5000);
+}
+
+// Reprocess a chart written the old way — chords on their own line above the
+// lyrics — into inline [chord] tokens. Runs on the selection when there is one,
+// so a single pasted verse can be encoded without touching the rest, and on the
+// whole chart otherwise. Encoding is idempotent, so the whole-chart run can't
+// double up on the parts that are already done.
+function encodeChordLinesNow() {
+  const s = currentSong();
+  if (!s) return;
+  if (!window.PdfToCho || !window.PdfToCho.encodeChordLines) {
+    editorNote('Chord encoding is unavailable (pdf2cho.js failed to load).');
+    return;
+  }
+  const ta = el.editor;
+  const whole = ta.value;
+  const hasSel = ta.selectionEnd > ta.selectionStart;
+  // A chord row and the lyric row under it are one unit, so a partial selection
+  // is grown to whole lines before anything is read.
+  let from = 0, to = whole.length;
+  if (hasSel) {
+    from = whole.lastIndexOf('\n', ta.selectionStart - 1) + 1;
+    const nl = whole.indexOf('\n', ta.selectionEnd);
+    to = nl === -1 ? whole.length : nl;
+  }
+  const res = window.PdfToCho.encodeChordLines(whole.slice(from, to));
+  if (!res.changed) {
+    editorNote(hasSel
+      ? 'Nothing to encode in the selection — no plain chord lines there.'
+      : 'Nothing to encode — this chart has no plain chord lines.');
+    return;
+  }
+  const scrollTop = ta.scrollTop;
+  replaceEditorText(whole.slice(0, from) + res.text + whole.slice(to));
+  ta.scrollTop = scrollTop;
+  const bits = [];
+  if (res.merged) bits.push(`${res.merged} chord line${res.merged === 1 ? '' : 's'} folded into the lyrics`);
+  if (res.bracketed) bits.push(`${res.bracketed} instrumental row${res.bracketed === 1 ? '' : 's'} bracketed`);
+  editorNote('Encoded: ' + bits.join(', ') + '. Cmd/Ctrl+Z to undo.');
+}
+document.getElementById('encode-chords-btn').addEventListener('click', encodeChordLinesNow);
+
 document.getElementById('clear-chords-btn').addEventListener('click', () => {
   const s = currentSong();
   if (!s) return;
