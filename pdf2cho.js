@@ -179,6 +179,35 @@
     return out;
   }
 
+  // Re-run the text-level import processing over a chart that's already in the
+  // app: encode plain chord rows, drop the OCR echo junk, tidy the whitespace.
+  // Import only ever got one shot at a file, so a chart that came in mangled
+  // stayed mangled; this is the same processing, pointable at a chart you've
+  // since fixed by hand. Every step is idempotent, so a half-fixed chart can go
+  // through as many times as it takes.
+  //
+  // Encoding runs before the echo cleanup, exactly as in the PDF path
+  // (cleanCho(toCho(...))): the cleanup recognises a junk line by the bracketed
+  // chord row above it, which only exists once encoding has happened.
+  function reprocessText(text) {
+    const src = String(text);
+    const enc = encodeChordLines(src);
+    const beforeLines = enc.text.split('\n').length;
+    let out = cleanCho(enc.text);
+    const dropped = beforeLines - out.split('\n').length;
+    out = out
+      .split('\n').map((l) => l.replace(/\s+$/, '')).join('\n')  // trailing space
+      .replace(/\n{3,}/g, '\n\n');                               // runs of blanks
+    return {
+      text: out,
+      merged: enc.merged,
+      bracketed: enc.bracketed,
+      dropped,
+      tidied: out !== enc.text.replace(/[ \t]+$/gm, ''),
+      changed: out !== src,
+    };
+  }
+
   // ---- layout reconstruction ------------------------------------------------
 
   function median(xs) {
@@ -487,6 +516,7 @@
 
   root.PdfToCho = {
     pdfToCho,
+    reprocessText,
     encodeChordLines,
     isChordLine,
     // exposed for the port-fidelity test against the Python pipeline

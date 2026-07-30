@@ -193,20 +193,36 @@ into the active folder).
 - **Section buttons**: a toolbar (Intro, Verse, Pre-Chorus, Chorus, Bridge,
   Solo, Outro) inserts a `{Section}` label at the cursor on its own line.
   **Verse** auto-increments to the next number already in the chart.
-- **Encode chords**: reprocesses a chart written the old way — chords on their own
-  line, lyrics beneath — into inline `[chord]` tokens. It reads each chord's
-  column and folds it into the lyric under it, then drops the now-empty chord
-  line; a chord sitting in the gap between two words goes to the word that
-  follows, and runs of padding spaces in the lyric are tidied up. A chord row
-  with no lyrics under it (an instrumental bar) keeps its columns instead, so its
-  timing survives. Alignment is taken at face value: a chord landing part-way
-  into a word stays part-way into that word, because that's often exactly what
-  was meant. It runs on the **selection** when you have one — handy right after
-  pasting a verse into an encoded chart — and on the whole chart otherwise.
-  Already-bracketed lines are passed through untouched, so running it twice does
-  nothing the second time, and Cmd/Ctrl+Z undoes it. It shares its chord grammar
-  with the PDF converter, so a chart that came out plain can be run through the
-  same logic that a PDF drop uses.
+- **Reprocess**: runs the chart through the import processing *again*. Import only
+  ever gets one pass at a file, so a chart that arrived with mangled syntax used
+  to stay that way; this points the same steps at the chart in front of you, so
+  you can fix the text by hand and run it through again as many times as it takes.
+  Every step is idempotent — running it on a clean chart reports "nothing to
+  reprocess" and changes nothing. It does four things:
+  - **Folds plain chord lines into the lyrics.** A chart written the old way —
+    chords on their own line, lyrics beneath — has each chord's position held in
+    whitespace, which only a fixed-width font understands. Reprocessing reads the
+    column and turns it into an inline `[chord]`, then drops the empty chord line.
+    A chord sitting in the gap between two words goes to the word that follows;
+    padding runs in the lyric are tidied. Alignment is taken at face value, so a
+    chord landing part-way into a word stays there — that's often what was meant.
+    A chord row with **no** lyrics under it (an instrumental bar) keeps its
+    columns instead, because that spacing is its timing.
+  - **Drops OCR junk** — the garbled echo lines a scanned PDF leaves under a
+    chord row.
+  - **Tidies whitespace** — trailing spaces, and runs of blank lines down to one.
+  - **Lifts directives and tab blocks out of the text** — `{title:}`,
+    `{artist:}`, `{capo:}`, `{key:}`, `{tempo:}`, `{tuning:}` move into the song's
+    own fields, and `{start_of_tab}…{end_of_tab}` blocks become riff grids. Only
+    what the text actually declares is touched: a chart whose text never mentions
+    `{transpose:}` keeps the transpose you set by hand.
+
+  With a **selection**, only the text-level steps run (over whole lines) — handy
+  right after pasting one verse into an otherwise-finished chart. Directives and
+  tab blocks belong to the whole chart, so they're left alone in that case.
+  Cmd/Ctrl+Z undoes the text changes; lifted fields stay lifted. It shares its
+  chord grammar with the PDF converter, so a chart that came out plain gets
+  exactly the logic a PDF drop uses.
 - **Clear chords**: the **Clear chords** button (editor header) strips every
   `[chord]` from the chart at once — handy for a complete re-harmonisation. It
   keeps lyrics, section labels, and `{page}` markers, and can be undone with

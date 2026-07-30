@@ -2601,16 +2601,32 @@ function editorNote(msg) {
   edNoteTimer = setTimeout(() => { n.hidden = true; n.textContent = ''; }, 5000);
 }
 
-// Reprocess a chart written the old way — chords on their own line above the
-// lyrics — into inline [chord] tokens. Runs on the selection when there is one,
-// so a single pasted verse can be encoded without touching the rest, and on the
-// whole chart otherwise. Encoding is idempotent, so the whole-chart run can't
-// double up on the parts that are already done.
-function encodeChordLinesNow() {
+// Which {directives} a chart's text actually declares. parseCho fills in every
+// field with a default whether or not the text said anything, so a reprocess has
+// to know what was really there — otherwise re-running would quietly zero the
+// transpose of a chart whose text never mentioned it.
+const DIRECTIVE_LINE = /^\{(title|artist|transpose|capo|key|tempo|tuning)\s*:\s*(.*)\}\s*$/gim;
+function declaredDirectives(text) {
+  return new Set([...text.matchAll(DIRECTIVE_LINE)].map((m) => m[1].toLowerCase()));
+}
+
+// Run this chart through the import processing again.
+//
+// Import gets one pass at a file and then the processing is out of reach, so a
+// chart that arrived with its syntax mangled stays that way. This points the same
+// steps at the chart in front of you: the text-level pass (plain chord rows
+// folded into the lyrics, OCR echo junk dropped, whitespace tidied) plus the half
+// that parseCho does on the way in — lifting {title:}/{artist:}/{capo:}… into the
+// song's own fields and {start_of_tab} blocks into riff grids. Fix the syntax by
+// hand, run it again, repeat: every step is idempotent.
+//
+// With a selection, only the text-level pass runs, over whole lines — directives
+// and tab blocks belong to the chart, not to a fragment of it.
+function reprocessChart() {
   const s = currentSong();
   if (!s) return;
-  if (!window.PdfToCho || !window.PdfToCho.encodeChordLines) {
-    editorNote('Chord encoding is unavailable (pdf2cho.js failed to load).');
+  if (!window.PdfToCho || !window.PdfToCho.reprocessText) {
+    editorNote('Reprocessing is unavailable (pdf2cho.js failed to load).');
     return;
   }
   const ta = el.editor;
@@ -2624,22 +2640,67 @@ function encodeChordLinesNow() {
     const nl = whole.indexOf('\n', ta.selectionEnd);
     to = nl === -1 ? whole.length : nl;
   }
-  const res = window.PdfToCho.encodeChordLines(whole.slice(from, to));
-  if (!res.changed) {
-    editorNote(hasSel
-      ? 'Nothing to encode in the selection — no plain chord lines there.'
-      : 'Nothing to encode — this chart has no plain chord lines.');
-    return;
-  }
-  const scrollTop = ta.scrollTop;
-  replaceEditorText(whole.slice(0, from) + res.text + whole.slice(to));
-  ta.scrollTop = scrollTop;
+
+  const res = window.PdfToCho.reprocessText(whole.slice(from, to));
+  let body = res.text;
   const bits = [];
   if (res.merged) bits.push(`${res.merged} chord line${res.merged === 1 ? '' : 's'} folded into the lyrics`);
   if (res.bracketed) bits.push(`${res.bracketed} instrumental row${res.bracketed === 1 ? '' : 's'} bracketed`);
-  editorNote('Encoded: ' + bits.join(', ') + '. Cmd/Ctrl+Z to undo.');
+  if (res.dropped) bits.push(`${res.dropped} junk line${res.dropped === 1 ? '' : 's'} dropped`);
+
+  // The parseCho half: only on a whole-chart run, and only when the text really
+  // holds something to lift.
+  let liftedFields = false, liftedRiffs = 0;
+  if (!hasSel) {
+    const declared = declaredDirectives(body);
+    const hasTab = /^\{(?:start_of_tab|sot)\b/im.test(body);
+    if (declared.size || hasTab) {
+      const parsed = parseCho(body, s.title);
+      for (const key of declared) {
+        if (key === 'title') el.title.value = parsed.title;
+        else if (key === 'artist') el.artist.value = parsed.artist;
+        else if (key === 'tempo') el.tempoInput.value = parsed.tempo || '';
+        else if (key === 'tuning') el.songTuning.value = parsed.tuning || 'standard';
+        s[key] = parsed[key];
+        liftedFields = true;
+      }
+      // A tab block sat in the body as text; lifting it makes it a real riff, so
+      // it joins the ones already there rather than replacing them.
+      if (parsed.riffs.length) {
+        s.riffs = (s.riffs || []).concat(parsed.riffs);
+        liftedRiffs = parsed.riffs.length;
+      }
+      body = parsed.body;
+      if (liftedFields) bits.push(`${[...declared].sort().join(', ')} lifted out of the text`);
+      if (liftedRiffs) bits.push(`${liftedRiffs} tab block${liftedRiffs === 1 ? '' : 's'} lifted into riffs`);
+    }
+  }
+
+  const next = whole.slice(0, from) + body + whole.slice(to);
+  if (next === whole && !bits.length) {
+    editorNote(hasSel
+      ? 'Nothing to reprocess in the selection — it already looks right.'
+      : 'Nothing to reprocess — this chart is already clean.');
+    return;
+  }
+  if (!bits.length) bits.push('whitespace tidied');
+
+  const scrollTop = ta.scrollTop;
+  if (next !== whole) replaceEditorText(next);
+  ta.scrollTop = scrollTop;
+  // Field/riff lifts live on the song object, not in the editor text, so they
+  // need their own commit + redraw (replaceEditorText only covers the text).
+  if (liftedFields || liftedRiffs) {
+    el.trAmount.textContent = (s.transpose > 0 ? '+' : '') + s.transpose;
+    el.capoAmount.textContent = s.capo || 0;
+    commit();
+    renderPreview();
+    renderRiffEditor(s);
+    renderList();
+  }
+  editorNote('Reprocessed: ' + bits.join(', ') + '. Cmd/Ctrl+Z undoes the text.');
 }
-document.getElementById('encode-chords-btn').addEventListener('click', encodeChordLinesNow);
+document.getElementById('reprocess-btn').addEventListener('click', reprocessChart);
 
 document.getElementById('clear-chords-btn').addEventListener('click', () => {
   const s = currentSong();
