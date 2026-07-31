@@ -2169,3 +2169,75 @@ body.learning { overflow: hidden; }
   body.learning .lrn-strum-block, body.learning .lrn-lens { break-inside: avoid; }
   body.learning .lrn-topic h3 { break-after: avoid; }
 }
+
+/* ---- Strumming patterns ---------------------------------------------------- */
+/* Rendered with the chart (you read them while playing it) and authored below
+   the editor. Down/up arrows over a counting row, beats marked. */
+.strum-panels:empty { display: none; }
+.strum-block { margin: 10px 0 14px; }
+.strum-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--section);
+  margin-bottom: 5px;
+}
+.strum-div { font-size: 10px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--muted); }
+.strum-row { display: flex; flex-wrap: wrap; gap: 3px; }
+.sp-cell {
+  width: 34px;
+  padding: 3px 0 2px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+/* The downbeats carry the pulse, so they get the emphasis. */
+.sp-cell.sp-beat { border-color: #4a516b; }
+.sp-mark { display: block; font-size: 16px; line-height: 1.15; color: var(--accent); min-height: 19px; }
+.sp-count { display: block; font-family: var(--mono); font-size: 9px; color: var(--muted); }
+.sp-cell.sp-skip .sp-mark { color: var(--muted); }
+.sp-cell.sp-skip { opacity: 0.5; }
+
+/* Authoring grid. */
+.strum-grid { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 0 2px; }
+.sg-cell {
+  width: 40px;
+  padding: 5px 0 3px;
+  text-align: center;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  cursor: pointer;
+}
+.sg-cell:hover { border-color: var(--accent); }
+.sg-cell.sg-beat { background: #333a52; }
+.sg-mark { display: block; font-size: 18px; line-height: 1.1; color: var(--accent); min-height: 21px; }
+.sg-count { display: block; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+.sg-cell.sg-skip .sg-mark { color: var(--line); }
+.strum-label {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 0;
+  flex: 1 1 140px;
+}
+
+@media print {
+  .strum-title { color: #000; }
+  .strum-div { color: #333; }
+  .sp-cell { background: #fff; border: 1px solid #999; }
+  .sp-mark { color: #000; }
+  .sp-count { color: #333; }
+  .sp-cell.sp-skip { opacity: 1; }
+  .sp-cell.sp-skip .sp-mark { color: #999; }
+  .strum-block { break-inside: avoid; }
+}

@@ -137,11 +137,18 @@
     const out = [];
     let merged = 0, bracketed = 0;
     const isMeta = (s) => /^\{.*\}$/.test(s) || s.includes('[');
+    let fenced = false;   // inside {start_of_tab} / {start_of_strum} …
 
     for (let i = 0; i < src.length; i++) {
       const raw = src[i].replace(/\s+$/, '');
       const s = raw.trim();
-      if (!s || isMeta(s) || !isChordLine(s)) { out.push(raw); continue; }
+      // Fenced blocks are somebody else's notation and must come through
+      // untouched. A strumming pattern of all downstrokes is literally
+      // "D D D D", which reads as a chord row and would otherwise be bracketed
+      // into nonsense.
+      if (/^\{start_of_(tab|strum|sot)\b/i.test(s) || /^\{sot\b/i.test(s)) fenced = true;
+      else if (/^\{end_of_(tab|strum)\}$|^\{eot\}$/i.test(s)) fenced = false;
+      if (fenced || !s || isMeta(s) || !isChordLine(s)) { out.push(raw); continue; }
 
       const nxt = i + 1 < src.length ? src[i + 1].replace(/\s+$/, '') : '';
       const ns = nxt.trim();

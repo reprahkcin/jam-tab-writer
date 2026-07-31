@@ -609,6 +609,8 @@ const el = {
   roadmap: document.getElementById('roadmap'),
   riffPanels: document.getElementById('riff-panels'),
   riffEditors: document.getElementById('riff-editors'),
+  strumPanels: document.getElementById('strum-panels'),
+  strumEditors: document.getElementById('strum-editors'),
   harmonica: document.getElementById('harmonica-panel'),
   toggleChords: document.getElementById('toggle-chords'),
   toggleScales: document.getElementById('toggle-scales'),
@@ -659,7 +661,7 @@ function currentSong() {
 }
 
 function blankSong() {
-  return { id: newId(), title: '', artist: '', body: '', transpose: 0, capo: 0, key: null, scaleRoot: null, focusChord: null, riffs: [], tempo: null, tuning: null, updated: Date.now() };
+  return { id: newId(), title: '', artist: '', body: '', transpose: 0, capo: 0, key: null, scaleRoot: null, focusChord: null, riffs: [], strums: [], tempo: null, tuning: null, updated: Date.now() };
 }
 
 function selectSong(id) {
@@ -692,6 +694,7 @@ function selectSong(id) {
   renderList();
   renderBreadcrumb();
   renderRiffEditor(s);
+  renderStrumEditor(s);
 }
 
 // Two views of every chord:
@@ -730,6 +733,7 @@ function renderPreview() {
   renderInstrumentBar();
   renderInstruments(s);
   renderRoadmap(s);
+  renderStrums(s);
   renderRiffs(s);
   if (prefs.ensemble.harmonica) renderHarmonica(s);
   else el.harmonica.innerHTML = '';
@@ -1941,6 +1945,173 @@ function noteToPc(str) {
 
 // Serialize a song to .cho text (directive block + body).
 // ---- Riffs / solos (tablature) ---------------------------------------------
+// ---- Strumming patterns ----------------------------------------------------
+// A pattern is { id, label, div, slots }: `div` is slots per beat (2 = eighths,
+// 4 = sixteenths) and `slots` is one character each — D down, U up, x muted
+// chuck, - a slot the hand passes through without hitting the strings. The
+// strumming hand keeps moving the whole time, so a skipped slot is information,
+// not an absence: that's why '-' is a value rather than a gap.
+//
+// It serializes to a {start_of_strum: label} block holding the counting row and
+// the pattern row, aligned. The count row is what tells a reader (and the parser)
+// whether these are eighths or sixteenths, and it means the .cho file shows the
+// pattern legibly to anyone who opens it in a text editor.
+const STRUM_MARKS = ['D', 'U', 'x', '-'];
+const STRUM_DEFAULT_BEATS = 4;
+
+function newStrum(label) {
+  const div = 2;
+  return {
+    id: newId(),
+    label: label || 'Strum',
+    div,
+    slots: new Array(STRUM_DEFAULT_BEATS * div).fill('-'),
+  };
+}
+
+// "1 & 2 & 3 & 4 &" for eighths, "1 e & a …" for sixteenths.
+const STRUM_COUNTS = { 2: ['&'], 4: ['e', '&', 'a'] };
+function strumCount(i, div) {
+  return i % div === 0 ? String(i / div + 1) : STRUM_COUNTS[div][(i % div) - 1];
+}
+function strumCountRow(st) {
+  return st.slots.map((_, i) => strumCount(i, st.div)).join(' ');
+}
+function strumPatternRow(st) {
+  return st.slots.join(' ');
+}
+function strumToBlock(st) {
+  return `{start_of_strum: ${st.label}}\n${strumCountRow(st)}\n${strumPatternRow(st)}\n{end_of_strum}`;
+}
+
+// Read a strum block back. The counting row gives the division; the pattern row
+// gives the slots. Hand-edited files are met halfway: anything that isn't a
+// known mark becomes a skipped slot rather than being dropped, so the pattern
+// keeps its length and stays in time.
+function strumFromBlock(label, lines) {
+  const rows = lines.map((l) => l.trim()).filter(Boolean);
+  const countRow = rows.find((r) => /^[1-9](\s|$)/.test(r)) || '';
+  const patRow = rows.find((r) => /^[DUx-]([\s]|$)/i.test(r)) || rows[rows.length - 1] || '';
+  const div = /\b[ea]\b/.test(countRow) ? 4 : 2;
+  const slots = patRow.split(/\s+/).filter(Boolean)
+    .map((t) => {
+      const c = t[0] === 'X' ? 'x' : t[0];
+      return STRUM_MARKS.includes(c) ? c : '-';
+    });
+  if (!slots.length) return newStrum(label);
+  // Keep whole beats, so the counting row underneath always lines up.
+  while (slots.length % div) slots.push('-');
+  return { id: newId(), label: label || 'Strum', div, slots };
+}
+
+// The pattern as it appears in the chart and on paper.
+function renderStrums(s) {
+  const strums = (s && s.strums) || [];
+  el.strumPanels.innerHTML = strums.map((st) => {
+    const cells = st.slots.map((c, i) => {
+      const mark = c === 'D' ? '↓' : c === 'U' ? '↑' : c === 'x' ? '×' : '';
+      const cls = 'sp-cell' + (c === '-' ? ' sp-skip' : '') + (i % st.div === 0 ? ' sp-beat' : '');
+      return `<div class="${cls}"><span class="sp-mark">${mark}</span>` +
+        `<span class="sp-count">${escapeHtml(strumCount(i, st.div))}</span></div>`;
+    }).join('');
+    return `<section class="strum-block"><div class="strum-title">${escapeHtml(st.label || 'Strum')}` +
+      `<span class="strum-div">${st.div === 4 ? 'sixteenths' : 'eighths'}</span></div>` +
+      `<div class="strum-row">${cells}</div></section>`;
+  }).join('');
+}
+
+// The authoring grid (below the editor): click a slot to cycle D → U → x → skip.
+function renderStrumEditor(s) {
+  const cont = el.strumEditors;
+  if (!s) { cont.innerHTML = ''; return; }
+  const strums = s.strums || (s.strums = []);
+  if (!strums.length) {
+    cont.innerHTML = '<div class="riff-empty">No patterns yet — “+ Add pattern” starts one that ' +
+      'prints with the chart.</div>';
+    return;
+  }
+  const hint = '<div class="riff-hint">Click a slot to cycle it: ' +
+    '<b>↓</b> down · <b>↑</b> up · <b>×</b> muted chuck · blank for a slot you pass through. ' +
+    'Keep the hand moving through the blanks — that is what keeps the time.</div>';
+  cont.innerHTML = hint + strums.map((st, si) => {
+    const cells = st.slots.map((c, i) => {
+      const mark = c === 'D' ? '↓' : c === 'U' ? '↑' : c === 'x' ? '×' : '';
+      const cls = 'sg-cell' + (c === '-' ? ' sg-skip' : '') + (i % st.div === 0 ? ' sg-beat' : '');
+      return `<button class="${cls}" data-si="${si}" data-i="${i}" ` +
+        `title="${escapeHtml(strumCount(i, st.div))} — click to change">` +
+        `<span class="sg-mark">${mark}</span>` +
+        `<span class="sg-count">${escapeHtml(strumCount(i, st.div))}</span></button>`;
+    }).join('');
+    return `<div class="riff-edit">` +
+      `<div class="riff-edit-head">` +
+        `<input class="strum-label" data-si="${si}" value="${escapeHtml(st.label || '')}" placeholder="Pattern name" title="Pattern name (prints as the heading)" />` +
+        `<span class="riff-tools">` +
+          `<button class="inline-btn sg-div" data-si="${si}" title="Switch between eighth and sixteenth notes">${st.div === 4 ? '16ths' : '8ths'}</button>` +
+          `<button class="inline-btn sg-addbeat" data-si="${si}" title="Add a beat">+ beat</button>` +
+          `<button class="inline-btn sg-delbeat" data-si="${si}" title="Remove the last beat">&minus; beat</button>` +
+          `<button class="inline-btn sg-del" data-si="${si}" title="Delete this pattern">Delete</button>` +
+        `</span>` +
+      `</div><div class="strum-grid">${cells}</div></div>`;
+  }).join('');
+  wireStrumEditor(s);
+}
+
+function wireStrumEditor(s) {
+  const cont = el.strumEditors;
+  const touched = () => { s.updated = Date.now(); schedulePersist(); };
+  cont.querySelectorAll('.sg-cell').forEach((b) => b.addEventListener('click', () => {
+    const st = s.strums[+b.dataset.si];
+    const i = +b.dataset.i;
+    st.slots[i] = STRUM_MARKS[(STRUM_MARKS.indexOf(st.slots[i]) + 1) % STRUM_MARKS.length];
+    touched();
+    renderStrumEditor(s);
+    renderStrums(s);
+  }));
+  cont.querySelectorAll('.strum-label').forEach((inp) => inp.addEventListener('input', () => {
+    s.strums[+inp.dataset.si].label = inp.value;
+    touched();
+    renderStrums(s); // don't rebuild the grid — it would take the caret with it
+  }));
+  cont.querySelectorAll('.sg-div').forEach((b) => b.addEventListener('click', () => {
+    const st = s.strums[+b.dataset.si];
+    const beats = st.slots.length / st.div;
+    const was = st.slots;
+    const wasDiv = st.div;
+    st.div = st.div === 2 ? 4 : 2;
+    // Keep the beats you already wrote: the notes that land on a beat (and, going
+    // down to eighths, the offbeats) stay put rather than the pattern resetting.
+    st.slots = new Array(beats * st.div).fill('-');
+    for (let i = 0; i < was.length; i++) {
+      const at = Math.round((i / wasDiv) * st.div);
+      if (at < st.slots.length && was[i] !== '-') st.slots[at] = was[i];
+    }
+    touched();
+    renderStrumEditor(s);
+    renderStrums(s);
+  }));
+  cont.querySelectorAll('.sg-addbeat').forEach((b) => b.addEventListener('click', () => {
+    const st = s.strums[+b.dataset.si];
+    for (let i = 0; i < st.div; i++) st.slots.push('-');
+    touched();
+    renderStrumEditor(s);
+    renderStrums(s);
+  }));
+  cont.querySelectorAll('.sg-delbeat').forEach((b) => b.addEventListener('click', () => {
+    const st = s.strums[+b.dataset.si];
+    if (st.slots.length > st.div) st.slots.length -= st.div;
+    touched();
+    renderStrumEditor(s);
+    renderStrums(s);
+  }));
+  cont.querySelectorAll('.sg-del').forEach((b) => b.addEventListener('click', () => {
+    if (!confirm('Delete this strumming pattern?')) return;
+    s.strums.splice(+b.dataset.si, 1);
+    touched();
+    renderStrumEditor(s);
+    renderStrums(s);
+  }));
+}
+
 // A riff is { id, label, cols }: cols is an array of steps, each step a 6-cell
 // array [high-e … low-E], each cell '' or a fret number. It serializes to a
 // standard ChordPro {start_of_tab: label} … {end_of_tab} block so it round-trips
@@ -2013,6 +2184,9 @@ function songToCho(s) {
   if (s.tuning && s.tuning !== 'standard') out += `{tuning: ${s.tuning}}\n`;
   if (out) out += '\n';
   out += s.body;
+  if (s.strums && s.strums.length) {
+    out += (out.endsWith('\n') ? '\n' : '\n\n') + s.strums.map(strumToBlock).join('\n\n') + '\n';
+  }
   if (s.riffs && s.riffs.length) {
     out += (out.endsWith('\n') ? '\n' : '\n\n') + s.riffs.map(riffToBlock).join('\n\n') + '\n';
   }
@@ -2026,6 +2200,7 @@ function parseCho(text, fallbackTitle) {
   const body = [];
   let sawDirective = false;
   let tabLabel = null, tabLines = null; // inside a {start_of_tab}…{end_of_tab}
+  let strumLabel = null, strumLines = null; // inside a {start_of_strum}…{end_of_strum}
   for (const line of lines) {
     if (tabLines) {
       if (/^\{(end_of_tab|eot)\}\s*$/i.test(line)) {
@@ -2036,8 +2211,19 @@ function parseCho(text, fallbackTitle) {
       }
       continue;
     }
+    if (strumLines) {
+      if (/^\{end_of_strum\}\s*$/i.test(line)) {
+        s.strums.push(strumFromBlock(strumLabel, strumLines));
+        strumLines = null; strumLabel = null;
+      } else {
+        strumLines.push(line);
+      }
+      continue;
+    }
     const sot = line.match(/^\{(?:start_of_tab|sot)\s*:?\s*(.*)\}\s*$/i);
     if (sot) { sawDirective = true; tabLabel = sot[1].trim() || 'Riff'; tabLines = []; continue; }
+    const sos = line.match(/^\{start_of_strum\s*:?\s*(.*)\}\s*$/i);
+    if (sos) { sawDirective = true; strumLabel = sos[1].trim() || 'Strum'; strumLines = []; continue; }
     const t = line.match(/^\{(title|artist|transpose|capo|key|tempo|tuning)\s*:\s*(.*)\}\s*$/i);
     if (t) {
       sawDirective = true;
@@ -2053,7 +2239,8 @@ function parseCho(text, fallbackTitle) {
       body.push(line);
     }
   }
-  if (tabLines) s.riffs.push(riffFromBlock(tabLabel, tabLines)); // unterminated block
+  if (tabLines) s.riffs.push(riffFromBlock(tabLabel, tabLines));       // unterminated block
+  if (strumLines) s.strums.push(strumFromBlock(strumLabel, strumLines));
   if (sawDirective && body[0] === '') body.shift(); // drop blank after directives
   // Drop trailing blank lines left where riff blocks were lifted out of the body.
   while (body.length && body[body.length - 1] === '') body.pop();
@@ -2377,6 +2564,18 @@ document.getElementById('share-copy').addEventListener('click', async () => {
   head.addEventListener('keydown', (e) => { if (isPhone() && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setOpen(!sidebar.classList.contains('drawer-open')); } });
   list.addEventListener('click', (e) => { if (isPhone() && e.target.closest('li')) setOpen(false); });
 })();
+
+document.getElementById('add-strum-btn').addEventListener('click', () => {
+  ensureSongForTyping();
+  const cur = currentSong();
+  if (!cur) { alert('Start or open a song first, then add a pattern.'); return; }
+  if (!cur.strums) cur.strums = [];
+  cur.strums.push(newStrum(cur.strums.length ? 'Pattern ' + (cur.strums.length + 1) : 'Strum'));
+  cur.updated = Date.now();
+  schedulePersist();
+  renderStrumEditor(cur);
+  renderStrums(cur);
+});
 
 document.getElementById('add-riff-btn').addEventListener('click', () => {
   ensureSongForTyping(); // create a local song to hold it if none is selected

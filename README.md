@@ -368,6 +368,41 @@ Click **Perform** (top bar) for a full-screen stage view of the current song:
   the whole screen when you want.
 - **Esc** exits. Auto-fit, column count, size, and panel choices are remembered.
 
+## Strumming patterns
+
+Below the editor, the **Strumming** panel authors the pattern for a song. Click
+**+ Add pattern**, name it, and click each slot to cycle it:
+
+| Mark | Means |
+| --- | --- |
+| **↓** | downstroke |
+| **↑** | upstroke |
+| **×** | muted chuck — hit the strings with the fretting hand relaxed |
+| *blank* | a slot the hand passes through without hitting the strings |
+
+That last one is the point of the grid rather than a string of letters: the
+strumming hand keeps moving up and down the whole bar, so a slot you *skip* is
+information about the motion, not an absence. The counting row under each slot
+("1 & 2 &…") is what you say out loud while playing it.
+
+Per pattern: **8ths / 16ths** switches the subdivision (what you already wrote
+keeps its place in the bar), **+ beat** and **− beat** change the length, and a
+song can hold as many patterns as it needs — one for the verse, another for the
+chorus.
+
+Patterns render with the chart rather than on their own page, since you read them
+while playing it, and they print with it. They save into the `.cho` file as a
+`{start_of_strum: name}` block holding the counting row and the pattern row, so
+the file stays legible to anyone who opens it in a text editor and round-trips
+exactly:
+
+```
+{start_of_strum: Verse}
+1 & 2 & 3 & 4 &
+D - D U x U D U
+{end_of_strum}
+```
+
 ## Riffs & solos
 
 Below the editor, the **Riffs & Solos** panel lets you author tablature. Click
@@ -408,6 +443,8 @@ share a uniform grid and even spacing (on screen and in print).
 - Live preview as you type
 - **Drag chords in the preview** to place them — character-snapped, across lines
   too, and undoable (see "Writing syntax")
+- **Strumming patterns** — author down/up/mute/skip patterns per song; they print
+  with the chart and round-trip through the `.cho` file
 - **Learn** — theory charts for chords, keys, inversions and rhythm, drawn by the
   same engine as the chord panels and workable in your song's own key
 - **Print / Save as PDF** with clean print styling and manual page breaks

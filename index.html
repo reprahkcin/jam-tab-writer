@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Jam Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=82" />
+  <link rel="stylesheet" href="styles.css?v=83" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -198,6 +198,14 @@
 
 Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
           <!-- Author riffs/solos as tab grids; each prints on its own page. -->
+          <!-- Author strumming patterns: click a slot to cycle it. -->
+          <div id="strums-authoring" class="riffs-authoring">
+            <div class="riffs-head">
+              <span>Strumming</span>
+              <button id="add-strum-btn" class="inline-btn" title="Add a strumming pattern">+ Add pattern</button>
+            </div>
+            <div id="strum-editors"></div>
+          </div>
           <div id="riffs-authoring" class="riffs-authoring">
             <div class="riffs-head">
               <span>Riffs &amp; Solos</span>
@@ -248,6 +256,9 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
             <div id="instrument-panels"></div>
             <!-- Arrangement roadmap: click a section to scroll to it. -->
             <div id="roadmap" class="roadmap"></div>
+            <!-- Strumming patterns sit with the chart rather than on their own
+                 page: you read them while playing it, not separately. -->
+            <div id="strum-panels" class="strum-panels"></div>
             <div id="preview-body"></div>
             <!-- Rendered riffs/solos; each block prints on its own page. -->
             <div id="riff-panels"></div>
@@ -488,11 +499,11 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=82"></script>
+  <script src="chords.js?v=83"></script>
   <!-- After chords.js: the theory charts are drawn with its renderers. -->
-  <script src="learn.js?v=82"></script>
-  <script src="pdf2cho.js?v=82"></script>
-  <script src="qr.js?v=82"></script>
-  <script src="app.js?v=82"></script>
+  <script src="learn.js?v=83"></script>
+  <script src="pdf2cho.js?v=83"></script>
+  <script src="qr.js?v=83"></script>
+  <script src="app.js?v=83"></script>
 </body>
 </html>
