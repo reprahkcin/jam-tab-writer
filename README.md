@@ -302,6 +302,46 @@ button lights up while the panel is open):
   - Readings are median-smoothed over several frames, so the number settles
     instead of flickering. Needs the HTTPS site or localhost for mic access.
 
+## Learn — music theory charts
+
+**Learn** (toolbar) opens a full-screen set of theory charts. Every diagram in it
+is drawn by the same engine as the chord panels — `chordIntervals`, `triadShape`,
+the fretboard and keyboard renderers — so the charts can't drift out of step with
+what the app shows you while you play, and improving the engine improves the
+teaching. Esc closes it; **Print** gives you the open topic as a clean
+black-on-white sheet for the music stand.
+
+Four topics:
+
+- **Chords** — the interval ruler every chord name is shorthand for, the triads
+  (major, minor, sus4, sus2, dim, aug) and sevenths (maj7, 7, m7, 6) as formulas
+  with keyboard diagrams, and how to read a chord name part by part, including
+  what the slash means.
+- **Keys** — the circle of fifths, key signatures, relative major/minor, and the
+  seven chords a major key gives you with their Roman numerals and what each one
+  is for.
+- **Inversions** — root position vs 1st and 2nd inversion on the keyboard, why a
+  slash chord *is* an inversion, the same triad on adjacent string sets up the
+  neck, and a worked voice-leading example showing the bass step down instead of
+  leap.
+- **Rhythm** — note values with drawn glyphs, dots and triplets, what the two
+  numbers in a time signature mean, counting the subdivisions out loud, and four
+  strumming patterns as down/up grids.
+
+### The "In this song" lens
+
+With the lens on (and a chart open that has chords), every topic is worked in
+**your song's key** instead of a neutral C, and each one gains a section about the
+chart in front of you: your chords taken apart into their notes, where each sits
+in the key as a Roman numeral, which ones are borrowed from outside it, whether
+you're already playing the relative minor, and the voicings available for what
+you've written. Turn the lens off and the same charts read as plain theory.
+
+Chords are matched to the key by the notes in them rather than by spelling, so a
+shape the app writes as `A#` still reads as the `I` of B flat, and a `G7` still
+reads as the `V`. The lens disables itself when nothing with chords is open,
+rather than guessing.
+
 ## Performance mode
 
 Click **Perform** (top bar) for a full-screen stage view of the current song:
@@ -368,6 +408,8 @@ share a uniform grid and even spacing (on screen and in print).
 - Live preview as you type
 - **Drag chords in the preview** to place them — character-snapped, across lines
   too, and undoable (see "Writing syntax")
+- **Learn** — theory charts for chords, keys, inversions and rhythm, drawn by the
+  same engine as the chord panels and workable in your song's own key
 - **Print / Save as PDF** with clean print styling and manual page breaks
 - **Transpose** up/down by semitone (chords shift, e.g. G → A)
 - **Capo** — set a capo fret; a "Capo N" banner shows the resulting sounding

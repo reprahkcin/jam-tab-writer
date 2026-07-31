@@ -648,6 +648,7 @@ function loadPrefs() {
   p.perform = Object.assign({ cols: 4, font: 22, autoSecs: 25, autoFit: true, panels: {} }, p.perform);
   p.perform.panels = Object.assign({ instruments: true, harp: true }, p.perform.panels);
   p.metro = Object.assign({ bpm: 100, steps: 16, click: true, pattern: null }, p.metro);
+  p.learn = Object.assign({ topic: 'chords', lens: true }, p.learn);
   p.capture = Object.assign({ deviceId: null, deviceLabel: '', format: 'wav' }, p.capture);
   return p;
 }
@@ -3055,6 +3056,95 @@ function performSetlist(sl) {
   openPerform();
 }
 
+// ---- Learn: music theory charts --------------------------------------------
+// The charts are drawn by learn.js out of the same engine as the chord panels.
+// This side owns the overlay, the topic you last looked at, and the lens — the
+// song descriptor that lets a chart be worked in your key instead of C.
+
+const learn = { open: false };
+
+// What the charts need to know about the open song. Null when nothing is open,
+// which also disables the lens.
+function learnSongCtx() {
+  const s = currentSong();
+  if (!s) return null;
+  // The key the chords are written in (shapes, not sounding): the lens teaches
+  // the chart in front of you, and that's what your fingers are doing.
+  const pc = s.key !== null && s.key !== undefined
+    ? s.key
+    : (firstChordPc(s.body) === null ? null : (((firstChordPc(s.body) + s.transpose) % 12) + 12) % 12);
+  return {
+    title: s.title,
+    keyName: pc === null ? null : HARP_NAMES[pc],
+    keyPc: pc,
+    chords: uniqueShapes(s),
+    tempo: s.tempo || null,
+  };
+}
+
+function renderLearn() {
+  if (!window.Learn) return;
+  const song = learnSongCtx();
+  const canLens = !!(song && song.keyName);
+  const lens = !!prefs.learn.lens && canLens;
+
+  document.getElementById('learn-tabs').innerHTML = window.Learn.TOPICS.map((t) =>
+    `<button class="learn-tab${t.id === prefs.learn.topic ? ' on' : ''}" data-topic="${t.id}"` +
+    ` role="tab" aria-selected="${t.id === prefs.learn.topic}" title="${escapeHtml(t.blurb)}">${escapeHtml(t.title)}</button>`
+  ).join('');
+
+  const ctl = document.getElementById('learn-lens-ctl');
+  const box = document.getElementById('learn-lens');
+  box.checked = lens;
+  box.disabled = !canLens;
+  ctl.classList.toggle('is-off', !canLens);
+  ctl.title = canLens
+    ? 'Work the charts through the key and chords of the song you have open'
+    : 'Open a song with at least one chord to work the charts through it';
+
+  const body = document.getElementById('learn-body');
+  body.innerHTML = window.Learn.render(prefs.learn.topic, { lens, song });
+  body.scrollTop = 0;
+}
+
+function openLearn() {
+  if (learn.open) return;
+  // Performance mode is a stage view; a theory overlay on top of it is nobody's
+  // idea of a good time mid-song.
+  if (typeof perf !== 'undefined' && perf.open) return;
+  learn.open = true;
+  document.body.classList.add('learning');
+  document.getElementById('learn-overlay').hidden = false;
+  renderLearn();
+  document.getElementById('learn-body').focus();
+}
+
+function closeLearn() {
+  if (!learn.open) return;
+  learn.open = false;
+  document.body.classList.remove('learning');
+  document.getElementById('learn-overlay').hidden = true;
+}
+
+document.getElementById('learn-btn').addEventListener('click', openLearn);
+document.getElementById('learn-close').addEventListener('click', closeLearn);
+document.getElementById('learn-tabs').addEventListener('click', (e) => {
+  const b = e.target.closest('.learn-tab');
+  if (!b) return;
+  prefs.learn.topic = b.dataset.topic;
+  savePrefs();
+  renderLearn();
+});
+document.getElementById('learn-lens').addEventListener('change', (e) => {
+  prefs.learn.lens = e.target.checked;
+  savePrefs();
+  renderLearn();
+});
+document.getElementById('learn-print').addEventListener('click', () => window.print());
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && learn.open) { e.preventDefault(); closeLearn(); }
+});
+
 // ---- Keyboard shortcuts cheatsheet -----------------------------------------
 function renderHelp() {
   const A = ALT_LABEL, C = IS_MAC ? '⌘' : 'Ctrl+', S = IS_MAC ? '⇧' : 'Shift+';
@@ -3070,6 +3160,9 @@ function renderHelp() {
     ['Preview', [
       [['Drag a chord'], 'Slide it along the line, or drop it on another line'],
       [[C + 'Z'], 'Undo a chord you dragged'],
+    ]],
+    ['Learn', [
+      [['Esc'], 'Close the theory charts'],
     ]],
     ['Chord search popup', [
       [['↑', '↓'], 'Move selection'],
@@ -3117,7 +3210,7 @@ document.addEventListener('keydown', (e) => {
   // "D" starts dictation. Only a start: once it's running your caret is in the
   // editor, so stopping goes through Esc or the button instead of a bare letter.
   // Unlike R, it's a writing tool, so it stays out of performance mode.
-  if ((e.key === 'd' || e.key === 'D') && !typing && !dict.on && !perf.open
+  if ((e.key === 'd' || e.key === 'D') && !typing && !dict.on && !perf.open && !learn.open
       && !e.metaKey && !e.ctrlKey && !e.altKey) {
     e.preventDefault();
     dictStart();

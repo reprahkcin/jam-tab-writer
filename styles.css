@@ -1915,3 +1915,257 @@ body.performing { overflow: hidden; }
   border-radius: 4px;
   vertical-align: middle;
 }
+
+/* ---- Learn: music theory charts -------------------------------------------- */
+/* Full-screen like performance mode, but a reading surface rather than a stage:
+   text is selectable, the body scrolls, and one topic prints as a clean sheet. */
+.learn-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+}
+/* display here would otherwise outrank the [hidden] default and leave a
+   full-screen invisible overlay swallowing every click. */
+.learn-overlay[hidden] { display: none; }
+body.learning { overflow: hidden; }
+
+.learn-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 18px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.learn-brand { font-weight: 700; letter-spacing: 0.3px; }
+.learn-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.learn-tab {
+  padding: 5px 12px;
+  font-size: 13px;
+  border-radius: 999px;
+}
+.learn-tab.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #23180c;
+  font-weight: 600;
+}
+.learn-bar-end { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.learn-lens-ctl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+.learn-lens-ctl input { accent-color: var(--accent); }
+.learn-lens-ctl.is-off { color: var(--muted); cursor: default; }
+
+.learn-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 26px 22px 60px;
+  outline: none;
+}
+.lrn-topic { max-width: 900px; margin: 0 auto; line-height: 1.55; }
+.lrn-h2 { margin: 0 0 6px; font-size: 24px; }
+.lrn-topic h3 {
+  margin: 34px 0 8px;
+  font-size: 16px;
+  color: var(--section);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 5px;
+}
+.lrn-topic h4.lrn-sub { margin: 18px 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.lrn-topic p { margin: 8px 0; }
+.lrn-lede { font-size: 15px; color: var(--text); }
+.lrn-dim { color: var(--muted); }
+.lrn-gloss { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+
+.lrn-table { border-collapse: collapse; width: 100%; margin: 10px 0 4px; font-size: 13px; }
+.lrn-table th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  padding: 4px 8px 4px 0;
+  font-weight: 600;
+}
+.lrn-table td { padding: 5px 8px 5px 0; border-bottom: 1px solid rgba(54, 59, 79, 0.5); vertical-align: middle; }
+.lrn-num { font-family: var(--mono); color: var(--accent); font-weight: 700; white-space: nowrap; }
+.lrn-num.lrn-out { color: var(--muted); }
+.lrn-note-cell { font-family: var(--mono); font-weight: 700; white-space: nowrap; }
+
+/* Chart cards: a diagram plus a line about what it shows. */
+.lrn-cards { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0; align-items: flex-start; }
+.lrn-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.lrn-card-wide { flex: 1 1 260px; max-width: 420px; }
+.lrn-card-h { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.lrn-formula { font-family: var(--mono); font-size: 13px; color: var(--accent); margin-bottom: 8px; }
+.lrn-card .chord-diagram { min-width: 0; }
+
+/* Chord-name anatomy. */
+.lrn-anatomy { display: grid; gap: 6px; margin: 12px 0; }
+.lrn-anatomy > div { display: flex; align-items: baseline; gap: 12px; }
+.lrn-part {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--accent);
+  min-width: 44px;
+  text-align: right;
+}
+.lrn-part-l { color: var(--muted); font-size: 13px; }
+
+/* Circle of fifths. */
+.lrn-circle-wrap { display: flex; gap: 24px; flex-wrap: wrap; align-items: center; margin: 12px 0; }
+.lrn-circle-ring { fill: none; stroke: var(--line); }
+.lrn-circle-maj { fill: var(--text); font-size: 14px; font-weight: 700; font-family: system-ui, sans-serif; }
+.lrn-circle-min { fill: var(--muted); font-size: 11px; font-family: system-ui, sans-serif; }
+.lrn-circle-maj.on, .lrn-circle-min.on { fill: #23180c; }
+.lrn-circle-hit { fill: var(--accent); }
+.lrn-circle-rel { fill: var(--section); }
+.lrn-circle-cap { fill: var(--muted); font-size: 9px; font-family: system-ui, sans-serif; }
+.lrn-circle-side { display: grid; gap: 8px; align-content: center; }
+.lrn-fact { font-size: 13px; }
+.lrn-fact-k {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+}
+
+.lrn-rel { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.lrn-rel-pair {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.lrn-rel-pair span { color: var(--muted); }
+.lrn-rel-pair.on { border-color: var(--accent); }
+
+.lrn-compare { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0; }
+.lrn-compare > div { flex: 1 1 260px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.lrn-compare-h { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin-bottom: 6px; }
+.lrn-chordline { font-family: var(--mono); font-weight: 700; color: var(--chord); font-size: 15px; margin-bottom: 4px; }
+
+/* Rhythm. */
+.lrn-note { color: var(--text); vertical-align: middle; }
+.lrn-notes td { padding-top: 2px; padding-bottom: 2px; }
+.lrn-note-glyph { width: 44px; }
+.lrn-timesigs { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0; }
+.lrn-timesig { flex: 1 1 200px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.lrn-sig { font-family: var(--mono); font-size: 26px; font-weight: 700; line-height: 1; color: var(--accent); }
+.lrn-count { display: flex; gap: 5px; margin: 8px 0 2px; }
+.lrn-beat {
+  min-width: 24px;
+  padding: 3px 0;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 13px;
+  background: var(--panel-2);
+  border-radius: 5px;
+}
+.lrn-beat.on { background: var(--accent); color: #23180c; font-weight: 700; }
+.lrn-count-row { font-family: var(--mono); letter-spacing: 1px; }
+
+.lrn-strum-block { margin: 14px 0; }
+.lrn-strum { display: flex; gap: 4px; margin: 6px 0; }
+.lrn-strum-cell {
+  width: 40px;
+  padding: 5px 0 3px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+.lrn-strum-mark { display: block; font-size: 17px; line-height: 1.1; color: var(--accent); min-height: 20px; }
+.lrn-strum-beat { display: block; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+.lrn-strum-cell.lrn-strum-skip .lrn-strum-mark { color: var(--muted); }
+.lrn-strum-cell.lrn-strum-none { opacity: 0.45; }
+
+/* The "in this song" lens: clearly marked as being about your chart, not theory
+   in the abstract. */
+.lrn-lens {
+  margin: 26px 0 6px;
+  padding: 14px 16px;
+  background: rgba(240, 163, 94, 0.07);
+  border: 1px solid rgba(240, 163, 94, 0.35);
+  border-radius: 12px;
+}
+.lrn-lens-h { margin: 0 0 8px; font-size: 14px; color: var(--accent); }
+.lrn-lens .lrn-table th { border-bottom-color: rgba(240, 163, 94, 0.3); }
+
+@media screen and (max-width: 760px) {
+  .learn-bar { padding: 8px var(--gutter); gap: 8px; }
+  .learn-bar-end { margin-left: 0; width: 100%; }
+  .learn-body { padding: 16px var(--gutter) 50px; }
+  .lrn-circle-wrap { gap: 14px; }
+  .lrn-card-wide { max-width: none; }
+}
+
+/* Printing a topic: the sheet, and nothing else. Charts are meant to go on a
+   music stand, so the app chrome and the tab strip come off. */
+@media print {
+  body.learning header,
+  body.learning main,
+  body.learning .learn-bar { display: none !important; }
+  /* The overlay carries the app's dark background; on paper it has to be a white
+     sheet like every other printout, and the text inside inherits from here. */
+  body.learning .learn-overlay {
+    position: static;
+    display: block;
+    background: #fff;
+    color: #000;
+    height: auto;
+  }
+  body.learning .learn-body { overflow: visible; padding: 0; }
+  body.learning .lrn-topic { max-width: none; color: #000; }
+  body.learning .lrn-table td { border-bottom: 1px solid #bbb; }
+  body.learning .lrn-table th { color: #333; border-bottom: 1px solid #999; }
+  body.learning .lrn-topic h3 { color: #000; border-bottom: 1px solid #999; }
+  body.learning .lrn-dim, body.learning .lrn-gloss,
+  body.learning .lrn-part-l, body.learning .lrn-fact-k { color: #333; }
+  body.learning .lrn-num, body.learning .lrn-formula,
+  body.learning .lrn-sig, body.learning .lrn-chordline,
+  /* .lrn-lede pins var(--text), so it needs naming or it prints pale grey. */
+  body.learning .lrn-lede, body.learning .lrn-note { color: #000; }
+  body.learning .lrn-card, body.learning .lrn-timesig,
+  body.learning .lrn-compare > div, body.learning .lrn-rel-pair,
+  body.learning .lrn-strum-cell { background: #fff; border: 1px solid #999; }
+  body.learning .lrn-lens { background: #fff; border: 1px solid #333; }
+  body.learning .lrn-lens-h { color: #000; }
+  body.learning .lrn-beat { background: #eee; color: #000; }
+  body.learning .lrn-beat.on { background: #ccc; }
+  body.learning .lrn-strum-mark { color: #000; }
+  body.learning .lrn-note { color: #000; }
+  body.learning .lrn-circle-maj { fill: #000; }
+  body.learning .lrn-circle-min, body.learning .lrn-circle-cap { fill: #333; }
+  body.learning .lrn-circle-ring { stroke: #999; }
+  body.learning .lrn-circle-hit { fill: #ddd; }
+  body.learning .lrn-circle-rel { fill: #eee; }
+  body.learning .lrn-circle-maj.on, body.learning .lrn-circle-min.on { fill: #000; }
+  body.learning .lrn-card, body.learning .lrn-timesig,
+  body.learning .lrn-strum-block, body.learning .lrn-lens { break-inside: avoid; }
+  body.learning .lrn-topic h3 { break-after: avoid; }
+}

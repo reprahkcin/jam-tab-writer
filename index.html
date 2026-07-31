@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Jam Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=81" />
+  <link rel="stylesheet" href="styles.css?v=82" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -28,6 +28,8 @@
     <symbol id="i-print" viewBox="0 0 24 24"><path d="M7 9V4h10v5"/><path d="M7 17H3v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5h-4"/><path d="M7 14h10v6H7v-6z"/></symbol>
     <symbol id="i-setlist" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h7"/><path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M9.8 9.4a2.3 2.3 0 1 1 3.4 2.2c-.8.5-1.2 1-1.2 1.9"/><path d="M12 16.6h.01"/></symbol>
+    <!-- Learn: an open book. -->
+    <symbol id="i-learn" viewBox="0 0 24 24"><path d="M12 7.5S10.2 5.8 6.8 5.8c-1.4 0-2.3.3-2.8.5v12c.5-.2 1.4-.5 2.8-.5 3.4 0 5.2 1.7 5.2 1.7"/><path d="M12 7.5s1.8-1.7 5.2-1.7c1.4 0 2.3.3 2.8.5v12c-.5-.2-1.4-.5-2.8-.5-3.4 0-5.2 1.7-5.2 1.7"/><path d="M12 7.5V19"/></symbol>
   </svg>
 
   <header>
@@ -84,6 +86,9 @@
 
       <span class="hdr-sep" aria-hidden="true"></span>
 
+      <button id="learn-btn" class="hdr-btn" title="Music theory charts — chords, keys, inversions, rhythm" aria-label="Learn">
+        <svg class="ico"><use href="#i-learn"/></svg><span class="btn-label">Learn</span>
+      </button>
       <button id="perform-btn" class="hdr-btn hdr-primary" title="Full-screen performance view" aria-label="Perform">
         <svg class="ico"><use href="#i-perform"/></svg><span class="btn-label">Perform</span>
       </button>
@@ -424,6 +429,25 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
     </div>
   </div>
 
+  <!-- Learn: music theory charts, drawn by the same engine as the chord panels.
+       The "In this song" lens re-points every chart at the open chart's key. -->
+  <div id="learn-overlay" class="learn-overlay" hidden>
+    <div class="learn-bar">
+      <span class="learn-brand">Learn</span>
+      <nav id="learn-tabs" class="learn-tabs" role="tablist" aria-label="Topics"></nav>
+      <span class="learn-bar-end">
+        <label id="learn-lens-ctl" class="learn-lens-ctl" title="Work the charts through the key and chords of the song you have open">
+          <input type="checkbox" id="learn-lens" /> In this song
+        </label>
+        <button id="learn-print" class="side-btn" title="Print this topic" aria-label="Print this topic">
+          <svg class="ico"><use href="#i-print"/></svg><span class="btn-label">Print</span>
+        </button>
+        <button id="learn-close" class="side-btn" title="Close (Esc)" aria-label="Close">Close</button>
+      </span>
+    </div>
+    <div id="learn-body" class="learn-body" tabindex="-1"></div>
+  </div>
+
   <!-- Keyboard shortcuts cheatsheet. -->
   <div id="help-modal" class="share-modal" hidden>
     <div class="share-card help-card">
@@ -464,9 +488,11 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=81"></script>
-  <script src="pdf2cho.js?v=81"></script>
-  <script src="qr.js?v=81"></script>
-  <script src="app.js?v=81"></script>
+  <script src="chords.js?v=82"></script>
+  <!-- After chords.js: the theory charts are drawn with its renderers. -->
+  <script src="learn.js?v=82"></script>
+  <script src="pdf2cho.js?v=82"></script>
+  <script src="qr.js?v=82"></script>
+  <script src="app.js?v=82"></script>
 </body>
 </html>
