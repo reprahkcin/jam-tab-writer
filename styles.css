@@ -1032,7 +1032,9 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   .chord-diagram svg .cd-mark, .chord-diagram svg .cd-fretnum { fill: #333; }
   .chord-diagrams, .harmonica-panel, .scale-panel { break-inside: avoid; }
   .inst-row, .scale-inst { break-inside: avoid; }
-  .inst-label { color: #000; }
+  /* The per-instrument headings kept the screen's teal on paper — the last
+     coloured text left in a printout that is otherwise black on white. */
+  .inst-label, .inst-head { color: #000; }
   /* Piano in print: grayscale fills, labels stay legible. */
   .pk-white { fill: #fff; stroke: #000; }
   .pk-black { fill: #333; stroke: #000; }
