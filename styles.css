@@ -1274,6 +1274,7 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   .mbar-perform { background: var(--accent); border-color: var(--accent); color: #23180c; }
   body.charts-off #instrument-bar,
   body.charts-off #instrument-panels,
+  body.charts-off #theory-panel,
   body.charts-off #harmonica-panel { display: none; }
 
 }
@@ -2289,4 +2290,97 @@ body.learning { overflow: hidden; }
   body.learning .lrn-aka { color: #333; }
   body.learning .lrn-inapp { color: #333; }
   body.learning .lrn-def { border-bottom: 1px solid #ccc; break-inside: avoid; }
+}
+
+/* ---- Theory panel ---------------------------------------------------------- */
+/* Key context above the instrument panels: the chords the key gives you, what
+   you borrowed, and the chromatic ruler underneath it all. */
+.theory-panel:empty { display: none; }
+.theory-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.th-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+.th-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--section);
+}
+.th-ctl { font-size: 11px; }
+.th-head select {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 2px 4px;
+  font-size: 12px;
+}
+.th-fact { font-size: 12px; }
+.th-k {
+  display: inline-block;
+  min-width: 96px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+}
+.th-fact .th-k { min-width: 0; margin-right: 6px; }
+/* The screen has the pickers; paper needs the facts written out instead. */
+.th-print { display: none; }
+
+.th-row { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; flex-wrap: wrap; }
+.th-row .th-k { padding-top: 4px; }
+.th-chips, .th-borrowed, .th-ivs { display: flex; flex-wrap: wrap; gap: 4px; }
+.th-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+}
+/* A chord this song actually uses. */
+.th-chip.on { border-color: var(--accent); color: var(--accent); }
+.th-chip.th-out { border-color: #7f6ad9; color: #b7a7f5; }
+.th-num { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+.th-chip.on .th-num { color: var(--accent); }
+.th-scale { font-family: var(--mono); font-size: 13px; padding-top: 3px; }
+
+/* Chromatic ruler: twelve semitones, the seven in the key picked out. */
+.th-iv {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  width: 40px;
+  padding: 2px 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.th-iv.th-in { background: var(--panel-2); border-color: var(--line); color: var(--text); }
+.th-iv b { font-family: var(--mono); font-weight: 700; }
+
+@media print {
+  .theory-panel:not(:empty) { background: #fff; border: 1px solid #999; break-inside: avoid; }
+  .th-title { color: #000; }
+  .th-head select, .th-ctl { display: none; }
+  .th-print { display: inline; font-size: 11px; color: #333; }
+  .th-fact { display: none; }
+  .th-k { color: #333; }
+  .th-chip { background: #fff; border: 1px solid #999; color: #000; }
+  .th-chip.on { border-color: #000; border-width: 2px; color: #000; }
+  .th-chip.th-out { border-color: #666; border-style: dashed; color: #000; }
+  .th-num { color: #333; }
+  .th-chip.on .th-num { color: #000; }
+  .th-scale { color: #000; }
+  .th-iv { color: #666; }
+  .th-iv.th-in { background: #fff; border-color: #999; color: #000; }
 }

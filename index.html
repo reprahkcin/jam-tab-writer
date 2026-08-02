@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Jam Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=84" />
+  <link rel="stylesheet" href="styles.css?v=85" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -222,6 +222,7 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
               <label title="Show chord diagrams for each instrument"><input type="checkbox" id="toggle-chords" checked /> Chords</label>
               <label title="Show a scale map for each instrument"><input type="checkbox" id="toggle-scales" checked /> Scales</label>
               <label title="Show chords as Nashville numbers (scale degrees relative to the key)"><input type="checkbox" id="toggle-numbers" /> Numbers</label>
+              <label title="Show the key's theory panel: its chords, relative minor and chromatic intervals"><input type="checkbox" id="toggle-theory" checked /> Theory</label>
               <span id="save-status" class="muted"></span>
             </span>
             <!-- Print sits with the column setting it obeys, next to the chart
@@ -251,6 +252,9 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
             <div id="capo-banner"></div>
             <!-- The jam: on/off chip per instrument, built by renderInstrumentBar(). -->
             <div id="instrument-bar" class="instrument-bar"></div>
+            <!-- Key context for the chart: what key it is in, the chords that
+                 come with it, and the chromatic ruler under them. -->
+            <div id="theory-panel" class="theory-panel"></div>
             <div id="harmonica-panel" class="harmonica-panel"></div>
             <!-- One section per active instrument (chords + scale), built by renderInstruments(). -->
             <div id="instrument-panels"></div>
@@ -499,11 +503,11 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=84"></script>
+  <script src="chords.js?v=85"></script>
   <!-- After chords.js: the theory charts are drawn with its renderers. -->
-  <script src="learn.js?v=84"></script>
-  <script src="pdf2cho.js?v=84"></script>
-  <script src="qr.js?v=84"></script>
-  <script src="app.js?v=84"></script>
+  <script src="learn.js?v=85"></script>
+  <script src="pdf2cho.js?v=85"></script>
+  <script src="qr.js?v=85"></script>
+  <script src="app.js?v=85"></script>
 </body>
 </html>

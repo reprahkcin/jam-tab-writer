@@ -73,10 +73,12 @@
     ['11', 'Major 7th', 6, 'the "7" in maj7 — one step below the octave'],
   ];
 
-  // How many letters each chord tone spans, by semitones from the root. Differs
-  // from the ruler above at the tritone: inside a chord it is always a flat 5th
-  // (G dim is G Bb Db), never a sharp 4th.
-  const CHORD_LETTER_STEPS = { 0: 0, 2: 1, 3: 2, 4: 2, 5: 3, 6: 4, 7: 4, 8: 4, 9: 5, 10: 6, 11: 6 };
+  // How many letters each chord tone spans, by semitones from the root. These
+  // agree with the INTERVAL_LABELS shorthand (b2, b3, b5, #5, b7 …), so a note
+  // named "b5" is spelled as a flattened fifth — Db above G, never C#. Differs
+  // from the ruler above at the tritone, which inside a chord is always a flat
+  // 5th (G dim is G Bb Db) rather than a sharp 4th.
+  const CHORD_LETTER_STEPS = { 0: 0, 1: 1, 2: 1, 3: 2, 4: 2, 5: 3, 6: 4, 7: 4, 8: 4, 9: 5, 10: 6, 11: 6 };
 
   // Chord families, as formulas over those intervals. `q` is the suffix the app
   // itself parses, so the diagrams below are the real ones.
@@ -741,6 +743,14 @@
   root.Learn = {
     TOPICS,
     render,
+    // The theory engine, for callers that want the facts rather than a chart —
+    // the theory panel beside the chord diagrams is built from these, so the
+    // panel and the Learn charts can never disagree about a key.
+    theory: {
+      majorScaleSpelled, diatonicChords, degreeOf, triadIdOf,
+      keyEntry, keyPcOf, sigText, spellFrom, toneName,
+      INTERVALS, CIRCLE, DEGREES,
+    },
     // exposed for tests
     _internals: { majorScaleSpelled, diatonicChords, keyPcOf, sigText, CIRCLE },
   };

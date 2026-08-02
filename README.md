@@ -302,6 +302,35 @@ button lights up while the panel is open):
   - Readings are median-smoothed over several frames, so the number settles
     instead of flickering. Needs the HTTPS site or localhost for mic access.
 
+## The theory panel
+
+Above the instrument charts, a **Theory** panel gives the key context for the
+chart you have open — toggled with the **Theory** checkbox in the Preview header,
+alongside Chords and Scales:
+
+- **Key**, with its signature and relative minor. Detected from the first chord;
+  the picker overrides it when the song starts somewhere other than home.
+- **Chords in the key** — all seven with their Roman numerals, and the ones this
+  song actually uses picked out, so the shape of the progression is visible at a
+  glance.
+- **Borrowed** — any chord of yours from outside the key, with a note on hover
+  saying what the key would have given you instead.
+- **Notes** — the seven notes of the key, properly spelled.
+- **Chromatic** — all twelve semitones from the tonic with their interval
+  shorthand (R, b2, 2, b3 …), the seven in the key picked out from the five that
+  aren't. This is the ruler every chord, scale and interval in the song is
+  measured against.
+
+It describes the chords **as written** — the shapes under your fingers — and when
+a capo is on it says what that sounds like, matching how the chord diagrams
+behave. Notes are spelled to agree with their interval name, so the slot labelled
+`b5` reads `Db` and never `C#`; in a flat key that honesty produces the correct
+but unusual `Cb`, and hovering names the everyday equivalent.
+
+The panel is built from the same engine as the Learn charts (`Learn.theory`), so
+the two can never describe a key differently. It prints with the chart, with the
+picker replaced by the facts written out.
+
 ## Learn — music theory charts
 
 **Learn** (toolbar) opens a full-screen set of theory charts. Every diagram in it
@@ -451,6 +480,8 @@ share a uniform grid and even spacing (on screen and in print).
 - Live preview as you type
 - **Drag chords in the preview** to place them — character-snapped, across lines
   too, and undoable (see "Writing syntax")
+- **Theory panel** — the key of the open chart, the chords it gives you, what you
+  borrowed, and the chromatic ruler, beside the chord and scale charts
 - **Strumming patterns** — author down/up/mute/skip patterns per song; they print
   with the chart and round-trip through the `.cho` file
 - **Learn** — theory charts for chords, keys, inversions and rhythm, drawn by the

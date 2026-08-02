@@ -610,9 +610,11 @@ const el = {
   riffPanels: document.getElementById('riff-panels'),
   riffEditors: document.getElementById('riff-editors'),
   strumPanels: document.getElementById('strum-panels'),
+  theoryPanel: document.getElementById('theory-panel'),
   strumEditors: document.getElementById('strum-editors'),
   harmonica: document.getElementById('harmonica-panel'),
   toggleChords: document.getElementById('toggle-chords'),
+  toggleTheory: document.getElementById('toggle-theory'),
   toggleScales: document.getElementById('toggle-scales'),
   toggleNumbers: document.getElementById('toggle-numbers'),
 };
@@ -625,7 +627,7 @@ const ENSEMBLE_DEFAULTS = { guitar1: true, guitar2: true, ukulele: true, mandoli
 
 function loadPrefs() {
   const defaults = {
-    showChords: true, showScales: true, harmonica: true, chordMode: 'shapes', nashville: false,
+    showChords: true, showScales: true, showTheory: true, harmonica: true, chordMode: 'shapes', nashville: false,
     scaleType: 'majPent',
     voicings: { guitar1: {}, guitar2: {} }, pianoInv: { piano: {} },
     ensemble: Object.assign({}, ENSEMBLE_DEFAULTS),
@@ -647,6 +649,7 @@ function loadPrefs() {
   p.ensemble = Object.assign({}, ENSEMBLE_DEFAULTS, p.ensemble);
   if (typeof p.showChords !== 'boolean') p.showChords = p.diagrams !== false;  // old 'diagrams' toggle
   if (typeof p.showScales !== 'boolean') p.showScales = p.lead !== false;      // old 'lead' carried the scale
+  if (typeof p.showTheory !== 'boolean') p.showTheory = true;
   p.perform = Object.assign({ cols: 4, font: 22, autoSecs: 25, autoFit: true, panels: {} }, p.perform);
   p.perform.panels = Object.assign({ instruments: true, harp: true }, p.perform.panels);
   p.metro = Object.assign({ bpm: 100, steps: 16, click: true, pattern: null }, p.metro);
@@ -731,6 +734,7 @@ function renderPreview() {
   renderTuningBanner(s);
   renderCapoBanner(s);
   renderInstrumentBar();
+  renderTheory(s);
   renderInstruments(s);
   renderRoadmap(s);
   renderStrums(s);
@@ -750,7 +754,8 @@ function renderPreview() {
 function updateFrontMatter() {
   const panels = el.instPanels.querySelector('.inst-panel, .sp-head') !== null;
   const harp = (el.harmonica.innerHTML || '').trim() !== '';
-  el.preview.classList.toggle('has-front-matter', panels || harp);
+  const theory = (el.theoryPanel.innerHTML || '').trim() !== '';
+  el.preview.classList.toggle('has-front-matter', panels || harp || theory);
 }
 
 // ---- The jam: instruments, their chords, and their scales ------------------
@@ -795,6 +800,118 @@ function renderInstrumentBar() {
     savePrefs();
     renderPreview();
   }));
+}
+
+// ---- Theory panel ----------------------------------------------------------
+// The key context for the chart in front of you: which key it is in, the chords
+// that key gives you, which of yours are borrowed from outside it, the relative
+// minor, and the chromatic ruler the whole thing is measured on. Built from the
+// same engine as the Learn charts (window.Learn.theory), so a key can't be
+// described one way here and another way there.
+
+// The key of the chords as they are written — what your hands are doing.
+// soundingKeyPc folds the capo in; the chart itself doesn't.
+function theoryKeyPc(s) {
+  const sounding = soundingKeyPc(s);
+  if (sounding === null) return null;
+  return (((sounding - (s.capo || 0)) % 12) + 12) % 12;
+}
+
+function renderTheory(s) {
+  const box = el.theoryPanel;
+  if (!box) return;
+  const T = window.Learn && window.Learn.theory;
+  const pc = s ? theoryKeyPc(s) : null;
+  if (!s || !T || pc === null || !prefs.showTheory) { box.innerHTML = ''; return; }
+
+  // Name the key from the circle of fifths rather than the sharp-name table, so
+  // a flat key is called Bb and its chords get spelled to match.
+  const entry = T.CIRCLE.find((c) => T.keyPcOf(c.major) === pc) || T.CIRCLE[0];
+  const keyName = entry.major;
+  const dia = T.diatonicChords(keyName);
+  const scale = T.majorScaleSpelled(keyName);
+  const mine = uniqueShapes(s);
+  const placed = mine.map((c) => ({ name: c, at: T.degreeOf(c, dia) }));
+  const inKey = new Set(placed.filter((p) => p.at.kind === 'in').map((p) => p.at.degree.num));
+  const strangers = placed.filter((p) => p.at.kind !== 'in');
+
+  // Auto-detected from the first chord unless the song says otherwise; the
+  // picker writes the sounding key, which is what the rest of the app stores.
+  const auto = s.key === null || s.key === undefined;
+  let keyOpts = `<option value="auto"${auto ? ' selected' : ''}>Auto (${escapeHtml(keyName)})</option>`;
+  for (let i = 0; i < 12; i++) {
+    const nm = (T.CIRCLE.find((c) => T.keyPcOf(c.major) === i) || {}).major || HARP_NAMES[i];
+    keyOpts += `<option value="${i}"${!auto && pc === i ? ' selected' : ''}>${escapeHtml(nm)}</option>`;
+  }
+
+  const capoNote = s.capo
+    ? `<span class="th-fact"><span class="th-k">With capo ${s.capo}</span>sounds as ` +
+      `${escapeHtml(HARP_NAMES[soundingKeyPc(s)])}</span>`
+    : '';
+
+  const degreeChips = dia.map((d) => {
+    const used = inKey.has(d.num);
+    return `<span class="th-chip${used ? ' on' : ''}" title="${escapeHtml(d.num + ' — ' + d.role)}">` +
+      `<b>${escapeHtml(d.chord)}</b><span class="th-num">${escapeHtml(d.num)}</span></span>`;
+  }).join('');
+
+  // The chromatic ruler: all twelve semitones from the tonic, with the seven
+  // that belong to the key marked. This is the thing every interval, chord and
+  // scale in the song is measured against.
+  const inScale = new Set(scale.map((n) => T.keyPcOf(n)));
+  const chromatic = T.INTERVALS.map(([n, name]) => {
+    const semis = Number(n);
+    // Spell to match the shorthand under it: the slot labelled b5 has to read
+    // Db, not C#, or the ruler teaches two different things at once. In flat
+    // keys that honesty produces Cb and Fb, which are right but look wrong, so
+    // the everyday name for the same pitch goes in the tooltip.
+    const at = (pc + semis) % 12;
+    const note = T.toneName(keyName, semis);
+    const common = HARP_NAMES[at];
+    const diatonic = inScale.has(at);
+    const short = INTERVAL_LABELS[semis] || String(semis);
+    const tip = `${name} — ${semis} semitone${semis === 1 ? '' : 's'}` +
+      (note === common ? '' : ` · the same note as ${common}`);
+    return `<span class="th-iv${diatonic ? ' th-in' : ''}" title="${escapeHtml(tip)}">` +
+      `<b>${escapeHtml(note)}</b><span class="th-num">${escapeHtml(short)}</span></span>`;
+  }).join('');
+
+  const borrowed = strangers.length
+    ? `<div class="th-row"><span class="th-k">Borrowed</span><span class="th-borrowed">` +
+      strangers.map((p) => {
+        const why = p.at.kind === 'altered'
+          ? `the key would give you ${p.at.degree.chord} here`
+          : 'from outside the key';
+        return `<span class="th-chip th-out" title="${escapeHtml(why)}"><b>${escapeHtml(p.name)}</b></span>`;
+      }).join('') + `</span></div>`
+    : '';
+
+  box.innerHTML =
+    `<div class="th-head">` +
+      `<span class="th-title">Theory</span>` +
+      `<span class="muted th-ctl">Key</span><select id="theory-key" title="The key the chart is written in">${keyOpts}</select>` +
+      `<span class="th-fact"><span class="th-k">Signature</span>${escapeHtml(T.sigText(entry.acc))}</span>` +
+      `<span class="th-fact"><span class="th-k">Relative minor</span>${escapeHtml(entry.minor)}</span>` +
+      capoNote +
+      `<span class="th-print">Key of ${escapeHtml(keyName)} · ${escapeHtml(T.sigText(entry.acc))} · relative minor ${escapeHtml(entry.minor)}</span>` +
+    `</div>` +
+    `<div class="th-row"><span class="th-k">Chords in ${escapeHtml(keyName)}</span><span class="th-chips">${degreeChips}</span></div>` +
+    borrowed +
+    `<div class="th-row"><span class="th-k">Notes</span><span class="th-scale">${escapeHtml(scale.join(' '))}</span></div>` +
+    `<div class="th-row th-chrom"><span class="th-k">Chromatic</span><span class="th-ivs">${chromatic}</span></div>`;
+
+  const sel = document.getElementById('theory-key');
+  if (sel) sel.addEventListener('change', (e) => {
+    const cur = currentSong();
+    if (!cur) return;
+    // s.key is stored as the sounding key, so a capo has to be added back on.
+    cur.key = e.target.value === 'auto'
+      ? null
+      : (((parseInt(e.target.value, 10) + (cur.capo || 0)) % 12) + 12) % 12;
+    cur.updated = Date.now();
+    schedulePersist();
+    renderPreview();
+  });
 }
 
 // Scale root/type/focus controls — shown once above the per-instrument scales.
@@ -2381,6 +2498,11 @@ el.toggleChords.addEventListener('change', () => {
 });
 el.toggleScales.addEventListener('change', () => {
   prefs.showScales = el.toggleScales.checked;
+  savePrefs();
+  renderPreview();
+});
+el.toggleTheory.addEventListener('change', () => {
+  prefs.showTheory = el.toggleTheory.checked;
   savePrefs();
   renderPreview();
 });
@@ -5179,6 +5301,7 @@ function boot() {
   initTuningSelect();
   el.toggleChords.checked = prefs.showChords;
   el.toggleScales.checked = prefs.showScales;
+  el.toggleTheory.checked = prefs.showTheory;
   el.toggleNumbers.checked = prefs.nashville;
   applyLayout();
   applyPrintCols();
