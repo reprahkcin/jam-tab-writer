@@ -95,6 +95,86 @@
     { q: '6', label: 'Major 6th', formula: '1 · 3 · 5 · 6', iv: [0, 4, 7, 9], gloss: 'Sweeter and older-sounding than a 7th.' },
   ];
 
+  // ---- vocabulary -----------------------------------------------------------
+  // The words that get used around you as though everyone already knows them.
+  // `aka` carries the synonym (bar/measure is the same thing twice), `see` links
+  // to the topic that shows it properly, and `app` says where the app does it —
+  // half of learning a word is meeting the thing it names.
+  const VOCAB = [
+    ['Time', 'What keeps everyone playing together.', [
+      { t: 'Beat', d: 'The steady pulse you tap your foot to. Everything else in the song is measured against it.' },
+      { t: 'Tempo', d: 'How fast the beat goes, counted in BPM — beats per minute. 60 BPM is one beat a second; most songs sit between 70 and 140.', app: 'Set it in the Tempo box; the metronome and count-in both use it.' },
+      { t: 'Bar', aka: 'measure', d: 'One group of beats — the unit a song is counted and written in. “Bar” and “measure” are two words for exactly the same thing; bar is the British habit, measure the American one.' },
+      { t: 'Time signature', d: 'Two stacked numbers at the start: how many beats are in a bar, and which note value counts as one beat. 4/4 is four quarter-note beats.', see: 'rhythm' },
+      { t: 'Downbeat', d: 'Beat 1 of the bar — the strongest one, where a change usually lands.' },
+      { t: 'Offbeat', aka: 'the "and"', d: 'The half-beat between the numbers, counted “1 <b>and</b> 2 <b>and</b>”. Upstrokes tend to live here.' },
+      { t: 'Upbeat', aka: 'pickup, anacrusis', d: 'Two meanings, so listen for which: the offbeat before a downbeat, or the note or two that lead into bar 1 — that second sense is also called a pickup, or an anacrusis on a written score.' },
+      { t: 'Syncopation', d: 'Accents deliberately landing off the beat instead of on it. It is most of what makes a rhythm feel like something rather than like counting.' },
+      { t: 'Swing', d: 'Dividing each beat unevenly — long, then short — instead of straight down the middle. Blues, jazz and a lot of country are swung.' },
+      { t: 'Groove', d: 'The overall feel of how a rhythm sits: the pulse plus the accents plus how tightly everyone is locked to it.' },
+      { t: 'Rest', d: 'A silence with a written length. Rests are played as deliberately as notes.' },
+      { t: 'Tie', d: 'Joins two notes of the same pitch into one longer sound, so it can run across a bar line.' },
+      { t: 'Triplet', d: 'Three even notes in the space where two would normally go — counted “1-trip-let”.', see: 'rhythm' },
+      { t: 'Count-in', d: 'A bar of beats before the music starts, so everyone comes in together.', app: 'The Count in button plays four beats at the song’s tempo.' },
+    ]],
+    ['Pitch and harmony', 'What the notes are and why they belong together.', [
+      { t: 'Pitch', d: 'How high or low a sound is. A note is a pitch with a length attached.' },
+      { t: 'Semitone', aka: 'half step', d: 'The smallest step in Western music — one fret on a guitar, or any key to the very next one on a piano.' },
+      { t: 'Whole step', aka: 'tone', d: 'Two semitones. Two frets.' },
+      { t: 'Octave', d: 'Twelve semitones. The same note name again, higher or lower — so alike that we give it the same letter.' },
+      { t: 'Interval', d: 'The distance between two notes, named for how many letters it spans: a 3rd, a 5th, an octave.', see: 'chords' },
+      { t: 'Scale', d: 'An ordered set of notes inside an octave that a melody draws on. The major scale is the one most other things are described against.' },
+      { t: 'Mode', d: 'The same set of notes treated as though a different one is home. Play C major’s notes but centre on D and you get D Dorian — same seven notes, different resting point, and a noticeably different mood. Ionian is plain major; Aeolian is plain minor.' },
+      { t: 'Key', d: 'The home note of a song plus the notes and chords that belong with it. “In the key of G” means G is where things resolve.', see: 'keys' },
+      { t: 'Tonic', aka: 'the one', d: 'The home note of a key — the one that sounds like arriving.' },
+      { t: 'Root', d: 'The note a chord is built on and named after. Not always the lowest note being played: see inversion.' },
+      { t: 'Chord', d: 'Three or more notes sounding together.', see: 'chords' },
+      { t: 'Triad', d: 'A three-note chord: root, 3rd and 5th. The basic building block.', see: 'chords' },
+      { t: 'Diatonic', d: 'Belonging to the key — built only from its seven notes. A chord from outside is “borrowed”.', see: 'keys' },
+      { t: 'Inversion', d: 'The same chord with a different one of its notes at the bottom. Written as a slash chord: C/E is a C with E in the bass.', see: 'inversions' },
+      { t: 'Voicing', d: 'Which notes of a chord you actually play, in which octaves, on which strings. Two voicings of G are the same chord and a different sound.', app: 'The dropdown under each chord diagram switches voicing.' },
+      { t: 'Arpeggio', d: 'A chord played one note at a time instead of all at once.' },
+      { t: 'Transpose', d: 'Move everything up or down by the same interval, so the song keeps its shape in a new key — usually to suit a voice.', app: 'The Transpose stepper does it to the display; Transpose text rewrites the chart itself.' },
+      { t: 'Capo', d: 'A clamp across the neck that raises every open string, letting you keep familiar shapes in a higher key.', app: 'The Capo stepper shows the resulting sounding key.' },
+      { t: 'Relative minor', d: 'The minor key sharing a major key’s exact notes, built on its 6th degree — G major and E minor. Same notes, different home.', see: 'keys' },
+      { t: 'Nashville numbers', d: 'Writing chords as scale degrees (1, 4, 5) instead of letters, so one chart works in any key. Handy when the singer wants it down a tone.', app: 'The Numbers toggle above the preview.' },
+      { t: 'Pedal tone', aka: 'drone', d: 'One note held or repeated while the chords change over it.' },
+    ]],
+    ['Shape of a song', 'The parts, and what they are called.', [
+      { t: 'Phrase', d: 'A musical sentence — usually two or four bars, about the length you would sing in one breath. Melodies are built out of phrases the way writing is built out of sentences.' },
+      { t: 'Riff', d: 'A short repeated figure that defines a song — the thing you hum when naming it. Usually the guitar or bass, usually the same every time.', app: 'Write them in the Riffs & Solos panel.' },
+      { t: 'Lick', d: 'A short idea used while soloing. The difference from a riff: a riff is the song’s, a lick is yours and moves between songs.' },
+      { t: 'Hook', d: 'Whatever lodges in the listener’s head — a line, a riff, a rhythm. Not a section, a quality.' },
+      { t: 'Verse', d: 'The section that carries the story. Same music each time, different words.' },
+      { t: 'Chorus', d: 'The section that repeats words and all, usually the loudest and highest, usually with the title in it.' },
+      { t: 'Pre-chorus', d: 'A short build between verse and chorus that makes the chorus feel like an arrival.' },
+      { t: 'Bridge', d: 'A section that goes somewhere else — new chords, often once only, to stop the song circling.' },
+      { t: 'Intro / Outro', d: 'What gets you in and what gets you out. An outro that repeats and fades is a vamp.' },
+      { t: 'Refrain', d: 'A repeated line at the end of every verse. A chorus is a section; a refrain is a line.' },
+      { t: 'Vamp', d: 'A short chord loop repeated as long as needed — to jam over, to talk over, or to end on.' },
+      { t: 'Turnaround', d: 'A bar or two at the end of a section that walks you back to the top.' },
+      { t: 'Break', d: 'A moment where most of the band drops out. A silence you fall through, then everyone returns.' },
+      { t: 'Form', d: 'The running order of the sections, written as letters: AABA, or verse–chorus–verse.', app: 'The roadmap above the chart lists your sections in order.' },
+      { t: 'Coda', d: 'A tail — an ending section that is not just another chorus.' },
+    ]],
+    ['Playing it', 'What your hands are doing.', [
+      { t: 'Strum', d: 'Dragging a pick or fingers across the strings so the notes sound almost together.', app: 'Write patterns in the Strumming panel.' },
+      { t: 'Downstroke / upstroke', d: 'Strumming towards the floor or back up. Downs feel heavier; ups are lighter and usually land on the offbeat.' },
+      { t: 'Chuck', aka: 'muted strum', d: 'Relaxing the fretting hand so the strings hit as a percussive click rather than a chord. The × in a strumming pattern.' },
+      { t: 'Palm mute', d: 'Resting the picking-hand palm on the strings near the bridge for a tight, damped sound.' },
+      { t: 'Hammer-on / pull-off', d: 'Sounding a note by slamming a finger down, or by plucking as you lift off — without picking again.', app: 'h and p in the riff grid.' },
+      { t: 'Bend', d: 'Pushing a string sideways to raise its pitch, usually a semitone or a whole tone.' },
+      { t: 'Slide', d: 'Moving to another fret without lifting off, so the pitch travels there.' },
+      { t: 'Barre', d: 'One finger flattened across several strings, making a shape movable up the neck.' },
+      { t: 'Open string', d: 'A string played unfretted. Open strings ring longer and are why some keys are easier than others on a guitar.' },
+      { t: 'Fret', d: 'A metal strip on the neck; also the space between two of them, and the verb for pressing a string down.' },
+      { t: 'Tuning', d: 'Which notes the open strings are set to. Standard is E A D G B E; anything else is an alternate tuning — Drop D just lowers the 6th string a tone.', app: 'Set a song’s tuning in the Tuning box; the tuner listens against it.' },
+      { t: 'Fingerpicking', d: 'Playing strings individually with the fingers instead of strumming across them.' },
+      { t: 'Dynamics', d: 'How loud or soft you play, and the changing of it. The most-ignored tool a beginner has.' },
+      { t: 'Tone', aka: 'timbre', d: 'The colour of a sound as distinct from its pitch — why the same note differs on a nylon string and a Telecaster.' },
+    ]],
+  ];
+
   // ---- small drawing helpers ------------------------------------------------
 
   const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
@@ -577,6 +657,54 @@
     return h;
   }
 
+  function topicWords(ctx) {
+    const topicTitle = (id) => (TOPICS.find((t) => t.id === id) || {}).title || id;
+    let h = `<p class="lrn-lede">The words that get used around you as though everyone
+      already knows them. Nothing here is complicated once it is said plainly.</p>
+      <div class="lrn-find">
+        <input id="lrn-find" type="search" placeholder="Find a word…" spellcheck="false"
+          aria-label="Filter the vocabulary" />
+        <span id="lrn-find-none" class="lrn-dim" hidden>No word matches that.</span>
+      </div>`;
+
+    for (const [group, blurb, terms] of VOCAB) {
+      h += `<section class="lrn-group"><h3>${esc(group)}</h3><p class="lrn-dim">${esc(blurb)}</p><dl class="lrn-defs">`;
+      for (const item of terms) {
+        // data-term carries a lowercased haystack so the filter can match a
+        // definition, not just a heading.
+        const hay = (item.t + ' ' + (item.aka || '') + ' ' + item.d + ' ' + (item.app || '')).toLowerCase();
+        h += `<div class="lrn-def" data-term="${esc(hay)}">
+          <dt>${esc(item.t)}${item.aka ? `<span class="lrn-aka">also: ${esc(item.aka)}</span>` : ''}</dt>
+          <dd>${item.d}` +
+          (item.app ? `<span class="lrn-inapp">In the app: ${item.app}</span>` : '') +
+          (item.see ? ` <button class="lrn-see" data-goto="${item.see}">See ${esc(topicTitle(item.see))} →</button>` : '') +
+          `</dd></div>`;
+      }
+      h += '</dl></section>';
+    }
+
+    // The lens turns the glossary into a read-out of your own song: the same
+    // words, with what they currently are.
+    if (ctx.lens && ctx.song) {
+      const s = ctx.song;
+      const rows = [
+        ['Key', s.keyName ? s.keyName + ' major' : null],
+        ['Tempo', s.tempo ? s.tempo + ' BPM' : null],
+        ['Chords', s.chords.length ? s.chords.join(' · ') : null],
+        ['Riffs', s.riffCount ? `${s.riffCount} written` : null],
+        ['Strumming patterns', s.strumCount ? `${s.strumCount} written` : null],
+        ['Sections', s.sections && s.sections.length ? s.sections.join(' → ') : null],
+      ].filter(([, v]) => v);
+      if (rows.length) {
+        h += lensBlock(ctx, `<p>The same words, pointed at what you have open:</p>
+          <table class="lrn-table"><tbody>` +
+          rows.map(([k, v]) => `<tr><td class="lrn-num">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('') +
+          `</tbody></table>`);
+      }
+    }
+    return h;
+  }
+
   // Pitch class of a key name like 'C', 'F#', 'Bb'.
   function keyPcOf(name) {
     const letter = name[0].toUpperCase();
@@ -589,6 +717,7 @@
     { id: 'keys', title: 'Keys', blurb: 'Key signatures, relative keys, and the chords a key gives you', render: topicKeys },
     { id: 'inversions', title: 'Inversions', blurb: 'Same notes, different bass — and why it matters', render: topicInversions },
     { id: 'rhythm', title: 'Rhythm', blurb: 'Note values, time signatures and strumming', render: topicRhythm },
+    { id: 'words', title: 'Words', blurb: 'Plain definitions of the vocabulary — bars, phrases, modes, riffs', render: topicWords },
   ];
 
   // The key the generic examples are worked in. With the lens on we use the

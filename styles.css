@@ -2241,3 +2241,52 @@ body.learning { overflow: hidden; }
   .sp-cell.sp-skip .sp-mark { color: #999; }
   .strum-block { break-inside: avoid; }
 }
+
+/* ---- Learn: vocabulary ------------------------------------------------------ */
+.lrn-find { margin: 14px 0 4px; display: flex; align-items: center; gap: 10px; }
+.lrn-find input {
+  flex: 0 1 260px;
+  padding: 6px 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.lrn-find input:focus { outline: none; border-color: var(--accent); }
+.lrn-group[hidden] { display: none; }
+.lrn-defs { margin: 6px 0 0; }
+.lrn-def { padding: 9px 0; border-bottom: 1px solid rgba(54, 59, 79, 0.5); }
+.lrn-def[hidden] { display: none; }
+.lrn-def dt {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+.lrn-aka { font-weight: 400; font-size: 12px; color: var(--muted); margin-left: 8px; }
+.lrn-def dd { margin: 0; font-size: 13.5px; }
+/* Where the app does the thing the word names. */
+.lrn-inapp {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--section);
+}
+.lrn-see {
+  padding: 1px 8px;
+  margin-top: 4px;
+  font-size: 11px;
+  border-radius: 999px;
+  color: var(--muted);
+}
+.lrn-see:hover { color: var(--text); border-color: var(--accent); }
+
+@media print {
+  /* A glossary is a reference sheet; the filter box is a screen control. */
+  body.learning .lrn-find, body.learning .lrn-see { display: none !important; }
+  body.learning .lrn-def dt { color: #000; }
+  body.learning .lrn-aka { color: #333; }
+  body.learning .lrn-inapp { color: #333; }
+  body.learning .lrn-def { border-bottom: 1px solid #ccc; break-inside: avoid; }
+}

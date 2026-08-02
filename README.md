@@ -311,7 +311,7 @@ what the app shows you while you play, and improving the engine improves the
 teaching. Esc closes it; **Print** gives you the open topic as a clean
 black-on-white sheet for the music stand.
 
-Four topics:
+Five topics:
 
 - **Chords** — the interval ruler every chord name is shorthand for, the triads
   (major, minor, sus4, sus2, dim, aug) and sevenths (maj7, 7, m7, 6) as formulas
@@ -327,6 +327,14 @@ Four topics:
 - **Rhythm** — note values with drawn glyphs, dots and triplets, what the two
   numbers in a time signature mean, counting the subdivisions out loud, and four
   strumming patterns as down/up grids.
+- **Words** — a glossary of the vocabulary that gets used around you as though
+  everyone already knows it, in plain language: bars (and why "measure" is the
+  same thing), beats, downbeats and offbeats, modes, phrases, riffs versus licks,
+  verses and vamps and turnarounds, hammer-ons, voicings, tone. Grouped by area —
+  time, pitch and harmony, shape of a song, playing it — with a **Find a word**
+  box that searches definitions as well as headings. Where the app itself does
+  the thing a word names, the entry says where to find it; where another topic
+  shows it properly, the entry links straight there.
 
 ### The "In this song" lens
 

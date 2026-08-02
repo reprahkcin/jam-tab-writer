@@ -3278,6 +3278,9 @@ function learnSongCtx() {
     keyPc: pc,
     chords: uniqueShapes(s),
     tempo: s.tempo || null,
+    riffCount: (s.riffs || []).length,
+    strumCount: (s.strums || []).length,
+    sections: songSections(s.body),
   };
 }
 
@@ -3304,6 +3307,37 @@ function renderLearn() {
   const body = document.getElementById('learn-body');
   body.innerHTML = window.Learn.render(prefs.learn.topic, { lens, song });
   body.scrollTop = 0;
+  wireLearnBody(body);
+}
+
+// Controls that live inside a rendered topic: the vocabulary filter, and the
+// "see …" links that jump to the topic where a word is shown properly.
+function wireLearnBody(body) {
+  body.querySelectorAll('[data-goto]').forEach((b) => b.addEventListener('click', () => {
+    prefs.learn.topic = b.dataset.goto;
+    savePrefs();
+    renderLearn();
+  }));
+
+  const find = body.querySelector('#lrn-find');
+  if (!find) return;
+  const none = body.querySelector('#lrn-find-none');
+  const defs = [...body.querySelectorAll('.lrn-def')];
+  const groups = [...body.querySelectorAll('.lrn-group')];
+  find.addEventListener('input', () => {
+    const q = find.value.trim().toLowerCase();
+    let shown = 0;
+    for (const d of defs) {
+      const hit = !q || d.dataset.term.includes(q);
+      d.hidden = !hit;
+      if (hit) shown++;
+    }
+    // A group with nothing left in it is just a heading over empty space.
+    for (const g of groups) {
+      g.hidden = !g.querySelector('.lrn-def:not([hidden])');
+    }
+    none.hidden = shown > 0;
+  });
 }
 
 function openLearn() {
