@@ -236,6 +236,102 @@
     return CIRCLE.find((c) => c.major === name) || CIRCLE[0];
   }
 
+  // Numerals for a minor key. Same seven chords as its relative major, counted
+  // from the sixth degree, so the minor chord you keep coming home to is i.
+  const MINOR_DEGREES = [
+    { num: 'i', name: 'minor', role: 'home — the minor tonic' },
+    { num: 'ii°', name: 'diminished', role: 'tense; usually passing through' },
+    { num: 'III', name: 'major', role: 'the relative major — the bright one' },
+    { num: 'iv', name: 'minor', role: 'the lift away from home' },
+    { num: 'v', name: 'minor', role: 'the pull home — often played major instead' },
+    { num: 'VI', name: 'major', role: 'warm; a common place to land' },
+    { num: 'VII', name: 'major', role: 'steps back down to the i' },
+  ];
+  function diatonicChordsMinor(majorName) {
+    const dia = diatonicChords(majorName);
+    return dia.slice(5).concat(dia.slice(0, 5))
+      .map((d, i) => Object.assign({}, d, MINOR_DEGREES[i]));
+  }
+  // The natural minor scale: its relative major's notes, started six degrees up.
+  function minorScaleSpelled(majorName) {
+    const sc = majorScaleSpelled(majorName);
+    return sc.slice(5).concat(sc.slice(0, 5));
+  }
+
+  // Work out which key a set of chords is in.
+  //
+  // Taking the first chord as the tonic and assuming major — which is what this
+  // did at first — calls an "Am F C G" song A major and then reports every one
+  // of its own chords as borrowed. Instead: score all twelve major note-sets by
+  // how much of the song they actually contain, then decide major or minor by
+  // where the tonic sits inside the winner — its I or its vi.
+  //
+  // `tonicHintPc` is the pitch class to treat as home: the song's declared key,
+  // or its first chord's root.
+  function inferKey(chordNames, tonicHintPc) {
+    const chords = (chordNames || []).map(triadIdOf).filter(Boolean);
+    let best = null;
+    for (const entry of CIRCLE) {
+      const dia = diatonicChords(entry.major).map((d) => triadIdOf(d.chord)).filter(Boolean);
+      let score = 0;
+      for (const c of chords) {
+        const exact = dia.some((d) => d.pc === c.pc && (d.q === c.q || c.third === 's'));
+        if (exact) score += 2;
+        else if (dia.some((d) => d.pc === c.pc)) score += 1;  // right root, borrowed quality
+      }
+      // A chord built on the hinted tonic is worth more: it is the note the song
+      // keeps returning to, whichever way the rest of it leans.
+      if (tonicHintPc !== null && tonicHintPc !== undefined) {
+        if (keyPcOf(entry.major) === tonicHintPc) score += 1;
+        if (keyPcOf(entry.minor.replace(/m$/, '')) === tonicHintPc) score += 1;
+      }
+      // Simpler signatures win a tie: C major before B# major, so to speak.
+      const tie = -Math.abs(entry.acc) / 100;
+      if (!best || score + tie > best.score + best.tie) best = { entry, score, tie };
+    }
+
+    let entry = best.entry;
+    let tonicPc = tonicHintPc === null || tonicHintPc === undefined
+      ? keyPcOf(entry.major)
+      : tonicHintPc;
+
+    // Where does the tonic sit in the winning key?
+    const degreeIdx = diatonicChords(entry.major).findIndex((d) => keyPcOf(d.note) === tonicPc);
+    let minor;
+    if (degreeIdx === 5) minor = true;         // the vi: a minor key
+    else if (degreeIdx === 0) minor = false;   // the I: a major key
+    else if (degreeIdx === -1) {
+      // The tonic isn't even in the best-fitting key — trust the tonic over the
+      // fit and describe that key instead.
+      entry = CIRCLE.find((c) => keyPcOf(c.major) === tonicPc) || entry;
+      minor = false;
+    } else {
+      // Sitting on some other degree (a modal song, or too little to go on):
+      // let the chord actually built on the tonic decide.
+      const onTonic = chords.find((c) => c.pc === tonicPc);
+      minor = !!(onTonic && onTonic.third === 'm');
+      if (minor) {
+        const rel = CIRCLE.find((c) => keyPcOf(c.minor.replace(/m$/, '')) === tonicPc);
+        if (rel) entry = rel;
+      } else {
+        entry = CIRCLE.find((c) => keyPcOf(c.major) === tonicPc) || entry;
+      }
+    }
+
+    return {
+      entry,
+      tonicPc,
+      minor,
+      majorName: entry.major,
+      minorName: entry.minor,
+      // What to call the key, and the chords that come with it.
+      name: minor ? entry.minor.replace(/m$/, '') + ' minor' : entry.major + ' major',
+      tonicName: minor ? entry.minor.replace(/m$/, '') : entry.major,
+      chords: minor ? diatonicChordsMinor(entry.major) : diatonicChords(entry.major),
+      scale: minor ? minorScaleSpelled(entry.major) : majorScaleSpelled(entry.major),
+    };
+  }
+
   // Chords have to be matched by the notes in them, never by how they are
   // spelled: the app writes shapes with sharps (A#) while the key that contains
   // them is named with flats (Bb), and a string compare would report every chord
@@ -492,7 +588,12 @@
       <b>${esc(dia[0].chord)} ${esc(dia[4].chord)} ${esc(dia[5].chord)} ${esc(dia[3].chord)}</b>.</p>`;
 
     if (ctx.lens && ctx.song && ctx.song.chords.length) {
-      const seen = ctx.song.chords.map((c) => ({ name: c, at: degreeOf(c, dia) }));
+      // Analyse against the song's actual key, which may well be the minor one:
+      // measuring an Am F C G song against A major reports all four of its own
+      // chords as borrowed.
+      const songKey = inferKey(ctx.song.chords, ctx.song.keyName ? keyPcOf(ctx.song.keyName) : null);
+      const songDia = songKey.chords;
+      const seen = ctx.song.chords.map((c) => ({ name: c, at: degreeOf(c, songDia) }));
       const rows = seen.map(({ name, at }) => {
         const cell = (num, note) => `<tr><td class="lrn-note-cell">${esc(name)}</td>` +
           `<td class="lrn-num${num === '—' ? ' lrn-out' : ''}">${esc(num)}</td><td class="lrn-dim">${note}</td></tr>`;
@@ -510,14 +611,20 @@
         const id = triadIdOf(x.name);
         return id && id.pc === relId.pc && id.third === 'm';
       });
-      h += lensBlock(ctx, `<p>Where your chords sit in ${esc(k.major)}:</p>
-        <table class="lrn-table"><thead><tr><th>Chord</th><th>Degree</th><th></th></tr></thead><tbody>${rows}</tbody></table>` +
+      h += lensBlock(ctx, `<p>This song sits in <b>${esc(songKey.name)}</b>` +
+        (songKey.minor
+          ? `, the relative minor of ${esc(songKey.majorName)} — the two share every note, which is why
+             the chart above describes them together. Counted from its own home note:</p>`
+          : `. Where your chords sit in it:</p>`) +
+        `<table class="lrn-table"><thead><tr><th>Chord</th><th>Degree</th><th></th></tr></thead><tbody>${rows}</tbody></table>` +
         (strangers.length
           ? `<p class="lrn-dim">${esc(strangers.map((x) => x.name).join(', '))} ${strangers.length === 1 ? 'sits' : 'sit'} outside
              the plain key. Borrowed chords are not mistakes — they are where the colour comes from.</p>`
-          : `<p class="lrn-dim">Every chord in this song is diatonic to ${esc(k.major)} — which is why it hangs together so easily.</p>`) +
-        `<p>Its relative minor is <b>${esc(k.minor)}</b>${
-          playsRelative ? ' — which you are already playing.' : '.'}</p>`);
+          : `<p class="lrn-dim">Every chord in this song is diatonic to ${esc(songKey.name)} — which is why it hangs together so easily.</p>`) +
+        (songKey.minor
+          ? ''
+          : `<p>Its relative minor is <b>${esc(k.minor)}</b>${
+              playsRelative ? ' — which you are already playing.' : '.'}</p>`));
     }
     return h;
   }
@@ -690,7 +797,9 @@
     if (ctx.lens && ctx.song) {
       const s = ctx.song;
       const rows = [
-        ['Key', s.keyName ? s.keyName + ' major' : null],
+        ['Key', s.chords && s.chords.length
+          ? inferKey(s.chords, s.keyName ? keyPcOf(s.keyName) : null).name
+          : (s.keyName ? s.keyName + ' major' : null)],
         ['Tempo', s.tempo ? s.tempo + ' BPM' : null],
         ['Chords', s.chords.length ? s.chords.join(' · ') : null],
         ['Riffs', s.riffCount ? `${s.riffCount} written` : null],
@@ -726,6 +835,13 @@
   // song's own key so the theory arrives in the key under your fingers; C is the
   // neutral default because it has no sharps or flats to explain away.
   function workingKey(ctx) {
+    if (ctx.lens && ctx.song && ctx.song.chords && ctx.song.chords.length) {
+      // The charts here are written around major keys, so a minor song is worked
+      // in its relative major — the same seven notes, which is the point the
+      // Keys topic makes anyway. The lens block names the real key.
+      const k = inferKey(ctx.song.chords, ctx.song.keyName ? keyPcOf(ctx.song.keyName) : null);
+      if (k && k.majorName) return k.majorName;
+    }
     if (ctx.lens && ctx.song && ctx.song.keyName) {
       const hit = CIRCLE.find((c) => keyPcOf(c.major) === keyPcOf(ctx.song.keyName));
       if (hit) return hit.major;
@@ -747,9 +863,10 @@
     // the theory panel beside the chord diagrams is built from these, so the
     // panel and the Learn charts can never disagree about a key.
     theory: {
-      majorScaleSpelled, diatonicChords, degreeOf, triadIdOf,
+      majorScaleSpelled, minorScaleSpelled, diatonicChords, diatonicChordsMinor,
+      inferKey, degreeOf, triadIdOf,
       keyEntry, keyPcOf, sigText, spellFrom, toneName,
-      INTERVALS, CIRCLE, DEGREES,
+      INTERVALS, CIRCLE, DEGREES, MINOR_DEGREES,
     },
     // exposed for tests
     _internals: { majorScaleSpelled, diatonicChords, keyPcOf, sigText, CIRCLE },

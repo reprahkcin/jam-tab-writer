@@ -744,6 +744,9 @@ function renderPreview() {
   // In performance mode the panels are relocated into the overlay and shown
   // independently of the app's own toggles, so keep them all populated.
   if (typeof perf !== 'undefined' && perf.open) perfRenderPanels(s);
+  // The Learn lens describes whichever song is open, so it has to follow along
+  // when you switch — otherwise it sits there describing the last one.
+  if (typeof learn !== 'undefined' && learn.open) renderLearn();
   updateFrontMatter();
 }
 
@@ -824,13 +827,16 @@ function renderTheory(s) {
   const pc = s ? theoryKeyPc(s) : null;
   if (!s || !T || pc === null || !prefs.showTheory) { box.innerHTML = ''; return; }
 
-  // Name the key from the circle of fifths rather than the sharp-name table, so
-  // a flat key is called Bb and its chords get spelled to match.
-  const entry = T.CIRCLE.find((c) => T.keyPcOf(c.major) === pc) || T.CIRCLE[0];
-  const keyName = entry.major;
-  const dia = T.diatonicChords(keyName);
-  const scale = T.majorScaleSpelled(keyName);
+  // Which key, major or minor. Assuming the first chord is a major tonic called
+  // an "Am F C G" song A major and then reported every one of its own chords as
+  // borrowed; inferKey scores the song's chords against all twelve keys and
+  // works out where the tonic sits inside the winner.
   const mine = uniqueShapes(s);
+  const key = T.inferKey(mine, pc);
+  const entry = key.entry;
+  const keyName = key.tonicName;         // what the key is called: G, or A for A minor
+  const dia = key.chords;
+  const scale = key.scale;
   const placed = mine.map((c) => ({ name: c, at: T.degreeOf(c, dia) }));
   const inKey = new Set(placed.filter((p) => p.at.kind === 'in').map((p) => p.at.degree.num));
   const strangers = placed.filter((p) => p.at.kind !== 'in');
@@ -838,7 +844,7 @@ function renderTheory(s) {
   // Auto-detected from the first chord unless the song says otherwise; the
   // picker writes the sounding key, which is what the rest of the app stores.
   const auto = s.key === null || s.key === undefined;
-  let keyOpts = `<option value="auto"${auto ? ' selected' : ''}>Auto (${escapeHtml(keyName)})</option>`;
+  let keyOpts = `<option value="auto"${auto ? ' selected' : ''}>Auto (${escapeHtml(key.name)})</option>`;
   for (let i = 0; i < 12; i++) {
     const nm = (T.CIRCLE.find((c) => T.keyPcOf(c.major) === i) || {}).major || HARP_NAMES[i];
     keyOpts += `<option value="${i}"${!auto && pc === i ? ' selected' : ''}>${escapeHtml(nm)}</option>`;
@@ -891,11 +897,15 @@ function renderTheory(s) {
       `<span class="th-title">Theory</span>` +
       `<span class="muted th-ctl">Key</span><select id="theory-key" title="The key the chart is written in">${keyOpts}</select>` +
       `<span class="th-fact"><span class="th-k">Signature</span>${escapeHtml(T.sigText(entry.acc))}</span>` +
-      `<span class="th-fact"><span class="th-k">Relative minor</span>${escapeHtml(entry.minor)}</span>` +
+      // A minor key shares its signature with its relative major, so that is the
+      // useful pointer in one direction and the relative minor in the other.
+      `<span class="th-fact"><span class="th-k">${key.minor ? 'Relative major' : 'Relative minor'}</span>` +
+        `${escapeHtml(key.minor ? entry.major : entry.minor)}</span>` +
       capoNote +
-      `<span class="th-print">Key of ${escapeHtml(keyName)} · ${escapeHtml(T.sigText(entry.acc))} · relative minor ${escapeHtml(entry.minor)}</span>` +
+      `<span class="th-print">Key of ${escapeHtml(key.name)} · ${escapeHtml(T.sigText(entry.acc))} · ` +
+        `relative ${key.minor ? 'major' : 'minor'} ${escapeHtml(key.minor ? entry.major : entry.minor)}</span>` +
     `</div>` +
-    `<div class="th-row"><span class="th-k">Chords in ${escapeHtml(keyName)}</span><span class="th-chips">${degreeChips}</span></div>` +
+    `<div class="th-row"><span class="th-k">Chords in ${escapeHtml(key.name)}</span><span class="th-chips">${degreeChips}</span></div>` +
     borrowed +
     `<div class="th-row"><span class="th-k">Notes</span><span class="th-scale">${escapeHtml(scale.join(' '))}</span></div>` +
     `<div class="th-row th-chrom"><span class="th-k">Chromatic</span><span class="th-ivs">${chromatic}</span></div>`;
