@@ -1620,6 +1620,11 @@ body.performing { overflow: hidden; }
 .tuner-freq b { color: var(--text); font-weight: 700; }
 .tf-arrow { opacity: 0.6; }
 .tf-sweet { color: var(--accent); }
+/* The note you're currently on, shown only when it isn't the one you're after. */
+.tf-heard { color: var(--text); font-weight: 700; }
+/* Lock state for the string chips, directly under them. */
+.tuner-lock { font-size: 10px; text-align: center; color: var(--muted); }
+.tuner-lock.is-locked { color: var(--accent); }
 
 /* Flat side left, sharp side right. The scale is fixed at ±100¢ and the target
    never moves, so the needle's distance from centre is the distance still to

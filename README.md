@@ -299,7 +299,18 @@ button lights up while the panel is open):
     belongs.) The one you're playing lights up; it earns a **✓** once you've
     brought it in tune, so you can see at a glance which strings are still to do.
     **Click a chip** to lock the tuner to that string (click again to unlock);
-    while locked, playing anything else says which string to play instead.
+    a line under the row says which state the lock is in.
+  - **Locking is what rescues a badly flat string**, and it matters most on the
+    close-spaced instruments. Left to pick the nearest string itself, the tuner
+    can only be right within half the gap between neighbours — 250¢ on a guitar,
+    but just 100¢ on a re-entrant ukulele, whose *g* and A are a whole tone
+    apart. A *g* sitting 300¢ flat **is** the E string's pitch, and no tuner can
+    tell those apart by ear. Lock the string and the tuner takes your word for
+    it: it reads against that string however far out you are, up to a fifth,
+    past which you really are on a different string and it says so. While you're
+    more than half a semitone off, the readout also names the note you're
+    currently on — *"339.3 Hz (F4) → 392.00 Hz"* — so a big number becomes a
+    landmark you can watch climb, and a mis-plucked string names itself.
   - **Low strings** are read the way they actually sound. A bass fundamental is
     slower than a guitar's and often weaker than the harmonics above it — a
     laptop mic barely reproduces 41 Hz at all — so bass tunings listen over a

@@ -4248,7 +4248,16 @@ const tuner = {
 const TUNE_IN_CENTS = 5;
 const CENTS_WINDOW = 5;      // frames in the median smoother
 const IDLE_MS = 1500;        // silence before the readout dims and asks for a note
-const WRONG_STRING_CENTS = 250; // past this, a pinned string is hearing a different one
+// Locking to a string is a statement of intent, so it's honoured a long way
+// out: a slack new string can sit a couple of tones flat, and on a ukulele —
+// whose g and A are only 200¢ apart — a flat g lands right on top of the E.
+// Refusing to read it there leaves you with no way to tune that string at all.
+// Past a fifth it really is a different string, so the tuner says so.
+const PIN_GIVE_UP_CENTS = 700;
+// Past half a semitone the note you're on has a different name from the one
+// you're aiming at, and naming it turns a big number into a landmark: it's the
+// difference between "500¢ sharp" and "you're on the A string".
+const LANDMARK_CENTS = 60;
 // The meter spans a full semitone either way, so a string that's badly out looks
 // badly out instead of pegging at the end of a ±50¢ scale.
 const METER_RANGE = 100;
@@ -4523,16 +4532,26 @@ function updateTuner(freq) {
   // the first frames of the new one.
   if (tuner.lastTarget !== t.i) { tuner.hist.length = 0; tuner.lastTarget = t.i; }
   const smoothed = smoothCents(cents);
-  // Pinned to one string but hearing a different one: "502¢ sharp" is a true
-  // number and useless advice. Name the string to play instead.
-  const wrongString = tuner.pinned != null && Math.abs(smoothed) > WRONG_STRING_CENTS;
+  // Pinned to one string and hearing something a fifth away: that's a different
+  // string, not a mistuned one. Name the string to play instead. Anything short
+  // of that is read as the pinned string, however far out it is — see
+  // PIN_GIVE_UP_CENTS.
+  const wrongString = tuner.pinned != null && Math.abs(smoothed) > PIN_GIVE_UP_CENTS;
   const advice = wrongString
     ? { inTune: false, text: `Play the ${t.number}${ordSuffix(t.number)} string` }
     : tuneAdvice(smoothed);
   if (advice.inTune) tuner.done.add(t.i);
 
+  // Where you are now, named, once you're far enough out that it isn't the note
+  // you're aiming at. Suppressed near the target, where it would just repeat the
+  // target's own name, and when a harmonic was matched, where the note heard is
+  // an octave up from the string that's actually in tune.
+  const heard = freqToNote(freq);
+  const landmark = Math.abs(smoothed) > LANDMARK_CENTS && `${heard.name}${heard.octave}` !== t.note
+    ? ` <span class="tf-heard">(${heard.name}${heard.octave})</span>` : '';
+
   noteEl.textContent = t.label + ' · ' + t.number + ordSuffix(t.number);
-  freqEl.innerHTML = `${freq.toFixed(1)} Hz <span class="tf-arrow">→</span> <b>${t.hz.toFixed(2)} Hz</b>` +
+  freqEl.innerHTML = `${freq.toFixed(1)} Hz${landmark} <span class="tf-arrow">→</span> <b>${t.hz.toFixed(2)} Hz</b>` +
     (t.offset ? ` <span class="tf-sweet">(${t.offset > 0 ? '+' : ''}${t.offset}¢ sweetened)</span>` : '');
   adviceEl.textContent = advice.text;
   adviceEl.className = 'tuner-advice ' +
@@ -5349,6 +5368,14 @@ function paintTunerStrings(active, inTune) {
     b.classList.toggle('is-in-tune', active === i && !!inTune);
     b.classList.toggle('done', tuner.done.has(i));
   });
+  // Say which state the lock is in, rather than leaving it to be inferred from
+  // an outlined chip.
+  const lock = document.getElementById('tuner-lock');
+  const pinned = tuner.pinned != null && tunerTargets()[tuner.pinned];
+  lock.textContent = pinned
+    ? `Locked to the ${pinned.number}${ordSuffix(pinned.number)} string — tap it again to unlock`
+    : 'Tap a string to lock the tuner to it';
+  lock.classList.toggle('is-locked', !!pinned);
 }
 (function initTunerPreset() {
   const tp = document.getElementById('tuner-preset');

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Jam Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=90" />
+  <link rel="stylesheet" href="styles.css?v=91" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -312,6 +312,9 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
       <!-- One chip per string: name over its target pitch. Click to lock the
            tuner to that string; click again to go back to picking the nearest. -->
       <div id="tuner-strings" class="tuner-strings"></div>
+      <!-- Locking matters most where strings sit close together: on a ukulele a
+           flat g reads as the E, and only a lock can tell them apart. -->
+      <div id="tuner-lock" class="tuner-lock">Tap a string to lock the tuner to it</div>
       <div id="tuner-readout" class="tuner-readout">
         <div id="tuner-note" class="tuner-note">&mdash;</div>
         <div id="tuner-freq" class="tuner-freq">Play one string</div>
@@ -500,11 +503,11 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=90"></script>
+  <script src="chords.js?v=91"></script>
   <!-- After chords.js: the theory charts are drawn with its renderers. -->
-  <script src="learn.js?v=90"></script>
-  <script src="pdf2cho.js?v=90"></script>
-  <script src="qr.js?v=90"></script>
-  <script src="app.js?v=90"></script>
+  <script src="learn.js?v=91"></script>
+  <script src="pdf2cho.js?v=91"></script>
+  <script src="qr.js?v=91"></script>
+  <script src="app.js?v=91"></script>
 </body>
 </html>
