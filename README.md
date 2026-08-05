@@ -286,11 +286,26 @@ button lights up while the panel is open):
   one string. Readings are measured against the strings of the chosen tuning
   rather than the nearest chromatic note, so half a semitone flat on the low E
   reads as *"tighten the 6th"*, not *"that's a nicely tuned D#"*.
+  - **Tunings**, grouped by instrument in the picker — everything in the jam
+    tunes here, and your choice is remembered:
+    - *Guitar* — Standard, Drop D, DADGAD, James Taylor (sweetened)
+    - *Bass* — Standard (EADG), 5-string (BEADG), Drop D (DADG)
+    - *Mandolin* — Standard (GDAE), Cross G (GDGD)
+    - *Ukulele* — Standard C (gCEA, re-entrant), Low G (GCEA), Baritone (DGBE)
   - **String row** — each chip shows a string over the pitch it's aiming at in
-    Hz. The one you're playing lights up; it earns a **✓** once you've brought it
-    in tune, so you can see at a glance which strings are still to do.
+    Hz, in string order: the thickest string first, which is the 6th on a guitar
+    and the 4th on a bass, mandolin or ukulele. (On a re-entrant ukulele that
+    thickest-first order puts the high *g* at the left, where the 4th string
+    belongs.) The one you're playing lights up; it earns a **✓** once you've
+    brought it in tune, so you can see at a glance which strings are still to do.
     **Click a chip** to lock the tuner to that string (click again to unlock);
     while locked, playing anything else says which string to play instead.
+  - **Low strings** are read the way they actually sound. A bass fundamental is
+    slower than a guitar's and often weaker than the harmonics above it — a
+    laptop mic barely reproduces 41 Hz at all — so bass tunings listen over a
+    four-times-longer window, and every reading is also checked against each
+    target's 2nd, 3rd and 4th harmonic. An octave-up reading of an in-tune low E
+    reads as *an in-tune low E*, not as a badly sharp D.
   - **Meter** — a fixed scale spanning a full semitone either way (±100 cents),
     labelled at −100/−50/0/+50/+100 so you can read the remaining distance off
     it rather than watching the needle peg. Past a semitone it pegs anyway and an

@@ -1078,14 +1078,18 @@ function soundingKeyPc(s) {
   return (((pc + s.transpose + (s.capo || 0)) % 12) + 12) % 12;
 }
 
-// Fill the meta-row tuning dropdown from the tuner presets (once).
+// Fill the meta-row tuning dropdown from the tuner presets (once). A song's
+// tuning is the guitar it was written for — the tuner carries the bass,
+// mandolin and ukulele tunings, but they aren't a property of the chart.
+function isSongTuning(id) { return !!TUNER_PRESETS[id] && TUNER_PRESETS[id].inst === 'Guitar'; }
 function initTuningSelect() {
   el.songTuning.innerHTML = Object.entries(TUNER_PRESETS)
+    .filter(([id]) => isSongTuning(id))
     .map(([id, t]) => `<option value="${id}">${escapeHtml(id === 'standard' ? 'Standard' : t.name)}</option>`).join('');
 }
 function renderTuningBanner(s) {
   const id = s.tuning;
-  if (!id || id === 'standard' || !TUNER_PRESETS[id]) { el.tuningBanner.innerHTML = ''; return; }
+  if (!id || id === 'standard' || !isSongTuning(id)) { el.tuningBanner.innerHTML = ''; return; }
   el.tuningBanner.innerHTML = `<b>Tune to ${escapeHtml(TUNER_PRESETS[id].name)}</b> for this song`;
 }
 
@@ -2361,7 +2365,7 @@ function parseCho(text, fallbackTitle) {
       else if (key === 'capo') s.capo = Math.max(0, Math.min(11, parseInt(t[2], 10) || 0));
       else if (key === 'key') s.key = noteToPc(t[2]);
       else if (key === 'tempo') s.tempo = Math.max(20, Math.min(400, parseInt(t[2], 10))) || null;
-      else if (key === 'tuning') { const v = t[2].trim(); s.tuning = TUNER_PRESETS[v] ? v : null; }
+      else if (key === 'tuning') { const v = t[2].trim(); s.tuning = isSongTuning(v) ? v : null; }
     } else {
       body.push(line);
     }
@@ -4231,6 +4235,7 @@ function setBpm(v) {
 // 6th string", not "you played a D#, which is nicely in tune".
 const tuner = {
   ctx: null, stream: null, analyser: null, buf: null, raf: null, on: false, preset: 'standard',
+  decim: 1,        // sample thinning for the current tuning (see tunerAnalysisFor)
   pinned: null,    // string index the user picked by hand, or null to auto-pick
   hist: [],        // recent cent readings, for the median smoother
   lastTarget: null,// which string those readings belong to
@@ -4248,18 +4253,44 @@ const WRONG_STRING_CENTS = 250; // past this, a pinned string is hearing a diffe
 // badly out instead of pegging at the end of a ±50¢ scale.
 const METER_RANGE = 100;
 
-// Tuning presets: each is a list of target strings, low → high, as
-// [note+octave, cent offset]. The offset sweetens the target away from equal
-// temperament (0 = standard pitch). Covers alternate tunings and sweetened ones.
+// Tuning presets: each is a list of target strings in string order — thickest
+// (highest-numbered) first — as [note+octave, cent offset]. That's also low →
+// high everywhere except a re-entrant ukulele, whose 4th string sits on top.
+// The offset sweetens the target away from equal temperament (0 = standard
+// pitch). `inst` groups them in the picker; only guitar tunings are offered as
+// a song's tuning, since that's the instrument a chart's shapes are written for.
 const TUNER_PRESETS = {
-  standard: { name: 'Standard (EADGBE)', strings: [['E2', 0], ['A2', 0], ['D3', 0], ['G3', 0], ['B3', 0], ['E4', 0]] },
-  dropD: { name: 'Drop D (DADGBE)', strings: [['D2', 0], ['A2', 0], ['D3', 0], ['G3', 0], ['B3', 0], ['E4', 0]] },
-  dadgad: { name: 'DADGAD', strings: [['D2', 0], ['A2', 0], ['D3', 0], ['G3', 0], ['A3', 0], ['D4', 0]] },
-  jamesTaylor: { name: 'James Taylor (sweetened)', strings: [['E2', -12], ['A2', -10], ['D3', -8], ['G3', -4], ['B3', -6], ['E4', -3]] },
+  standard: { name: 'Standard (EADGBE)', inst: 'Guitar', strings: [['E2', 0], ['A2', 0], ['D3', 0], ['G3', 0], ['B3', 0], ['E4', 0]] },
+  dropD: { name: 'Drop D (DADGBE)', inst: 'Guitar', strings: [['D2', 0], ['A2', 0], ['D3', 0], ['G3', 0], ['B3', 0], ['E4', 0]] },
+  dadgad: { name: 'DADGAD', inst: 'Guitar', strings: [['D2', 0], ['A2', 0], ['D3', 0], ['G3', 0], ['A3', 0], ['D4', 0]] },
+  jamesTaylor: { name: 'James Taylor (sweetened)', inst: 'Guitar', strings: [['E2', -12], ['A2', -10], ['D3', -8], ['G3', -4], ['B3', -6], ['E4', -3]] },
+  bass: { name: 'Standard (EADG)', inst: 'Bass', strings: [['E1', 0], ['A1', 0], ['D2', 0], ['G2', 0]] },
+  bass5: { name: '5-string (BEADG)', inst: 'Bass', strings: [['B0', 0], ['E1', 0], ['A1', 0], ['D2', 0], ['G2', 0]] },
+  bassDropD: { name: 'Drop D (DADG)', inst: 'Bass', strings: [['D1', 0], ['A1', 0], ['D2', 0], ['G2', 0]] },
+  mandolin: { name: 'Standard (GDAE)', inst: 'Mandolin', strings: [['G3', 0], ['D4', 0], ['A4', 0], ['E5', 0]] },
+  mandolinCrossG: { name: 'Cross G (GDGD)', inst: 'Mandolin', strings: [['G3', 0], ['D4', 0], ['G4', 0], ['D5', 0]] },
+  ukeC: { name: 'Standard C (gCEA, re-entrant)', inst: 'Ukulele', strings: [['G4', 0], ['C4', 0], ['E4', 0], ['A4', 0]] },
+  ukeLowG: { name: 'Low G (GCEA)', inst: 'Ukulele', strings: [['G3', 0], ['C4', 0], ['E4', 0], ['A4', 0]] },
+  ukeBaritone: { name: 'Baritone (DGBE)', inst: 'Ukulele', strings: [['D3', 0], ['G3', 0], ['B3', 0], ['E4', 0]] },
 };
 
 // Autocorrelation pitch detector. Returns frequency in Hz, or -1 if unclear.
-function detectPitch(buf, sampleRate) {
+// `decim` averages groups of samples first: a low string needs a long window to
+// hold two periods (a 41 Hz bass E needs 50 ms for one), but autocorrelation
+// costs O(n²), so the long window is thinned back to a workable length before
+// the search. Averaging also rolls off the highs, which a bass note doesn't need.
+function detectPitch(input, rate, decim = 1) {
+  let buf = input, sampleRate = rate;
+  if (decim > 1) {
+    const out = new Float32Array(Math.floor(input.length / decim));
+    for (let i = 0; i < out.length; i++) {
+      let sum = 0;
+      for (let j = 0; j < decim; j++) sum += input[i * decim + j];
+      out[i] = sum / decim;
+    }
+    buf = out;
+    sampleRate = rate / decim;
+  }
   const SIZE = buf.length;
   let rms = 0;
   for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
@@ -4303,8 +4334,18 @@ function noteToFreq(spec) {
   return 440 * Math.pow(2, (midi - 69) / 12);
 }
 
-// The current tuning's target pitches, low → high, with any sweetening applied.
-// Strings are numbered the way a player counts them: the low string is the 6th.
+// How much signal this tuning needs. Bass fundamentals are too slow for the
+// window a guitar gets by with, so those presets listen four times as long and
+// decimate to keep the search the same size. Everything from a guitar upwards
+// keeps the short window, which stays responsive.
+function tunerAnalysisFor(preset) {
+  const lowest = Math.min(...TUNER_PRESETS[preset].strings.map(([note]) => noteToFreq(note)));
+  return lowest < 70 ? { fftSize: 8192, decim: 4 } : { fftSize: 2048, decim: 1 };
+}
+
+// The current tuning's target pitches in string order, with any sweetening
+// applied. Strings are numbered the way a player counts them: the thickest
+// string is the 6th on a guitar, the 4th on a bass, mandolin or ukulele.
 let tunerTargetCache = { preset: null, list: [] };
 function tunerTargets() {
   if (tunerTargetCache.preset !== tuner.preset) {
@@ -4326,6 +4367,34 @@ function tunerTargets() {
 
 function centsFrom(freq, targetHz) { return 1200 * Math.log2(freq / targetHz); }
 
+// A plucked string's fundamental can be weaker than the harmonics above it —
+// badly so for a bass through a laptop mic, which barely reproduces 41 Hz at
+// all. The detector then reports an octave or a twelfth up, and measuring that
+// against the nearest target lands on the wrong string entirely. So every
+// target is also compared against the reading divided by 2, 3 and 4.
+const MAX_HARMONIC = 4;
+// A harmonic only counts if it lands near the target: a D string is a whole
+// tone off the E string's octave, and calling that "the E string, 200¢ flat"
+// would send you to the wrong peg. Out past this it stays a wrong-string reading.
+const HARMONIC_LOCK = 120;
+// Cents of doubt added per harmonic step, to break ties in favour of the
+// fundamental — a plain E4 is the 1st string, not the 6th string's 4th harmonic.
+const HARMONIC_PENALTY = 15;
+
+// How far this reading is from one target, allowing for the detector having
+// locked onto a harmonic. `score` ranks candidates; `cents` is what's shown.
+function centsToTarget(freq, target) {
+  const cents = centsFrom(freq, target.hz);
+  let best = { cents, score: Math.abs(cents) };
+  for (let h = 2; h <= MAX_HARMONIC; h++) {
+    const c = centsFrom(freq / h, target.hz);
+    if (Math.abs(c) > HARMONIC_LOCK) continue;
+    const score = Math.abs(c) + (h - 1) * HARMONIC_PENALTY;
+    if (score < best.score) best = { cents: c, score };
+  }
+  return best;
+}
+
 // The string this reading is measured against: the pinned one if you've picked
 // one, else whichever target is closest right now. Re-read every frame, so the
 // tuner always follows whatever you're actually playing.
@@ -4333,12 +4402,12 @@ function tunerTargetFor(freq) {
   const list = tunerTargets();
   if (tuner.pinned != null && list[tuner.pinned]) {
     const t = list[tuner.pinned];
-    return { t, cents: centsFrom(freq, t.hz) };
+    return { t, ...centsToTarget(freq, t) };
   }
   let best = null;
   for (const t of list) {
-    const cents = centsFrom(freq, t.hz);
-    if (!best || Math.abs(cents) < Math.abs(best.cents)) best = { t, cents };
+    const m = centsToTarget(freq, t);
+    if (!best || m.score < best.score) best = { t, ...m };
   }
   return best;
 }
@@ -4397,8 +4466,7 @@ async function tunerStart() {
   tuner.ctx = new (window.AudioContext || window.webkitAudioContext)();
   const src = tuner.ctx.createMediaStreamSource(tuner.stream);
   tuner.analyser = tuner.ctx.createAnalyser();
-  tuner.analyser.fftSize = 2048;
-  tuner.buf = new Float32Array(tuner.analyser.fftSize);
+  applyTunerAnalysis();
   src.connect(tuner.analyser);
   tuner.on = true;
   resetTunerReading();
@@ -4411,10 +4479,19 @@ async function tunerStart() {
   paintTunerStrings();
   tunerLoop();
 }
+// Point the analyser at what the current tuning needs. Safe to call while
+// running, so switching to a bass mid-session widens the window straight away.
+function applyTunerAnalysis() {
+  const a = tunerAnalysisFor(tuner.preset);
+  tuner.decim = a.decim;
+  if (!tuner.analyser) return;
+  tuner.analyser.fftSize = a.fftSize;
+  tuner.buf = new Float32Array(a.fftSize);
+}
 function tunerLoop() {
   if (!tuner.on) return;
   tuner.analyser.getFloatTimeDomainData(tuner.buf);
-  updateTuner(detectPitch(tuner.buf, tuner.ctx.sampleRate));
+  updateTuner(detectPitch(tuner.buf, tuner.ctx.sampleRate, tuner.decim));
   tuner.raf = requestAnimationFrame(tunerLoop);
 }
 function updateTuner(freq) {
@@ -5275,8 +5352,18 @@ function paintTunerStrings(active, inTune) {
 }
 (function initTunerPreset() {
   const tp = document.getElementById('tuner-preset');
+  // Grouped by instrument, straight from the presets, so adding a tuning in one
+  // place puts it in the picker.
+  const groups = new Map();
+  for (const [id, t] of Object.entries(TUNER_PRESETS)) {
+    if (!groups.has(t.inst)) groups.set(t.inst, []);
+    groups.get(t.inst).push(`<option value="${id}">${escapeHtml(t.name)}</option>`);
+  }
+  tp.innerHTML = [...groups].map(([inst, opts]) =>
+    `<optgroup label="${escapeHtml(inst)}">${opts.join('')}</optgroup>`).join('');
   tuner.preset = TUNER_PRESETS[prefs.tunerPreset] ? prefs.tunerPreset : 'standard';
   tp.value = tuner.preset;
+  applyTunerAnalysis();
   renderTunerStrings();
   tp.addEventListener('change', () => {
     tuner.preset = tp.value;
@@ -5286,6 +5373,7 @@ function paintTunerStrings(active, inTune) {
     tuner.pinned = null;
     tuner.done.clear();
     resetTunerReading();
+    applyTunerAnalysis();
     renderTunerStrings();
   });
 })();

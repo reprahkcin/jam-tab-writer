@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Jam Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=89" />
+  <link rel="stylesheet" href="styles.css?v=90" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -304,13 +304,10 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
   <div id="tuner-panel" class="tool-panel" hidden>
     <div class="tool-head"><span>Tuner</span><button class="tool-close" data-tool="tuner" title="Close">&#10005;</button></div>
     <div class="tool-body">
+      <!-- Filled from TUNER_PRESETS, grouped by instrument: guitar, bass,
+           mandolin, ukulele. -->
       <label class="tuner-preset-lbl">Tuning
-        <select id="tuner-preset">
-          <option value="standard">Standard (EADGBE)</option>
-          <option value="dropD">Drop D (DADGBE)</option>
-          <option value="dadgad">DADGAD</option>
-          <option value="jamesTaylor">James Taylor (sweetened)</option>
-        </select>
+        <select id="tuner-preset"></select>
       </label>
       <!-- One chip per string: name over its target pitch. Click to lock the
            tuner to that string; click again to go back to picking the nearest. -->
@@ -503,11 +500,11 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=89"></script>
+  <script src="chords.js?v=90"></script>
   <!-- After chords.js: the theory charts are drawn with its renderers. -->
-  <script src="learn.js?v=89"></script>
-  <script src="pdf2cho.js?v=89"></script>
-  <script src="qr.js?v=89"></script>
-  <script src="app.js?v=89"></script>
+  <script src="learn.js?v=90"></script>
+  <script src="pdf2cho.js?v=90"></script>
+  <script src="qr.js?v=90"></script>
+  <script src="app.js?v=90"></script>
 </body>
 </html>

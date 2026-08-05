@@ -1586,10 +1586,12 @@ body.performing { overflow: hidden; }
   flex: 1; background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
   border-radius: 5px; padding: 3px 6px; font-size: 12px;
 }
-/* One chip per string: name over the pitch it's aiming at. */
+/* One chip per string: name over the pitch it's aiming at. The count follows
+   the tuning — four for a bass, mandolin or ukulele, five or six for the rest —
+   so the chips are capped rather than stretching to fill a short row. */
 .tuner-strings { display: flex; justify-content: center; gap: 4px; }
 .tstr {
-  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  flex: 1; max-width: 58px; display: flex; flex-direction: column; align-items: center; gap: 1px;
   padding: 3px 2px; border-radius: 5px; cursor: pointer;
   background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
   position: relative;
