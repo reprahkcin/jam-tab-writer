@@ -1343,7 +1343,28 @@ body.performing { overflow: hidden; }
 .perform-bar button:hover { background: #343a4e; }
 .pf-toggle.on { background: var(--accent); border-color: var(--accent); color: #1c1e26; font-weight: 700; }
 .pf-page { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 74px; text-align: right; }
-.pf-exit { font-size: 15px !important; line-height: 1; }
+/* Exit floats bottom-right, away from the top edge: in fullscreen on macOS the
+   browser toolbar slides down over the top strip the moment the mouse goes up
+   there, covering anything placed in the bar. */
+.pf-exit {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 10;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 13px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  font-family: system-ui, sans-serif;
+  transition: opacity 0.35s ease;
+}
+.pf-exit:hover { background: #343a4e; }
+.perform-overlay.immersive .pf-exit { opacity: 0; }
+.perform-overlay.immersive .pf-exit:hover { opacity: 1; }
 
 .perform-panels {
   display: flex;
@@ -1733,10 +1754,13 @@ body.performing { overflow: hidden; }
   .pf-desk-only { display: none !important; }
   .perform-bar .pf-phone-only { display: flex; }
   /* Compact bar: exit pinned top-right so it never claims a whole row, and
-     "Fit" dropped since it sizes text to columns we no longer use. */
+     "Fit" dropped since it sizes text to columns we no longer use. No browser
+     chrome drops over the top on touch, and bottom corners are thumb-scroll
+     territory, so the phone keeps the exit up top. */
   .perform-bar { position: relative; gap: 8px 12px; padding: 8px 46px 8px 12px; }
   .pf-song { max-width: calc(100% - 10px); font-size: 14px; }
-  .pf-exit { position: absolute; top: 6px; right: 8px; }
+  .pf-exit { top: 6px; right: 8px; bottom: auto; padding: 5px 9px; font-size: 15px; }
+  .perform-overlay.immersive .pf-exit { opacity: 1; }
   #pf-fit { display: none; }
   /* Wrapped lines carry the performance font size. */
   .perform-cols .wline { font-size: var(--pf-font, 22px); }

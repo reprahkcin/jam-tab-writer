@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Jam Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=91" />
+  <link rel="stylesheet" href="styles.css?v=92" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -436,8 +436,10 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
         <button id="pf-next-song" title="Next song (&rarr; at end)">Song &#9654;</button>
       </div>
       <span class="pf-page" id="pf-page"></span>
-      <button id="pf-exit" class="pf-exit" title="Exit performance mode (Esc)">&#10005;</button>
     </div>
+    <!-- Exit floats bottom-right, clear of the top edge where macOS drops the
+         fullscreen browser toolbar over anything you try to click. -->
+    <button id="pf-exit" class="pf-exit" title="Exit performance mode (Esc)">&#10005;</button>
     <div id="perform-panels" class="perform-panels"></div>
     <div id="perform-viewport" class="perform-viewport">
       <div id="perform-cols" class="perform-cols preview"></div>
@@ -503,11 +505,11 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=91"></script>
+  <script src="chords.js?v=92"></script>
   <!-- After chords.js: the theory charts are drawn with its renderers. -->
-  <script src="learn.js?v=91"></script>
-  <script src="pdf2cho.js?v=91"></script>
-  <script src="qr.js?v=91"></script>
-  <script src="app.js?v=91"></script>
+  <script src="learn.js?v=92"></script>
+  <script src="pdf2cho.js?v=92"></script>
+  <script src="qr.js?v=92"></script>
+  <script src="app.js?v=92"></script>
 </body>
 </html>
