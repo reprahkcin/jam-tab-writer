@@ -301,14 +301,44 @@ function idbSet(key, val) {
 let libCounter = 1;
 function newLibId() { return 'lib' + (libCounter++).toString(36) + newId(); }
 
-async function scanDir(dir, prefix, out, dirs) {
+// Recorded takes are app-managed audio filed under a takes/ subfolder beside
+// the chart they belong to. Their names carry the recording timestamp.
+const TAKES_DIR = 'takes';
+const TAKE_FILE_RE = /-\d{4}-\d{2}-\d{2}-\d{6}\.(wav|webm|m4a)$/;
+
+async function scanDir(dir, prefix, out, dirs, loose) {
   for await (const entry of dir.values()) {
     if (entry.kind === 'file' && entry.name.endsWith('.cho')) {
       out.push({ name: entry.name, path: prefix + entry.name, handle: entry });
+    } else if (entry.kind === 'file' && loose && TAKE_FILE_RE.test(entry.name)) {
+      loose.push({ name: entry.name, dir, handle: entry }); // take outside takes/
     } else if (entry.kind === 'directory') {
+      if (entry.name === TAKES_DIR) continue;   // app-managed audio, not charts
       if (dirs) dirs.add(prefix + entry.name);            // remember (incl. empty)
-      await scanDir(entry, prefix + entry.name + '/', out, dirs);
+      await scanDir(entry, prefix + entry.name + '/', out, dirs, loose);
     }
+  }
+}
+
+// One-time tidy: takes recorded before the takes/ subfolder existed sit loose
+// beside the charts — move them in (a real rename where the browser supports
+// it, else copy-then-delete). Runs unawaited on folder load; a file that can't
+// be moved just stays where it is until the next open.
+async function tidyLooseTakes(loose) {
+  for (const f of loose) {
+    try {
+      const dest = await f.dir.getDirectoryHandle(TAKES_DIR, { create: true });
+      if (f.handle.move) {
+        await f.handle.move(dest, f.name);
+      } else {
+        const blob = await f.handle.getFile();
+        const out = await dest.getFileHandle(f.name, { create: true });
+        const w = await out.createWritable();
+        await w.write(blob);
+        await w.close();
+        await f.dir.removeEntry(f.name);
+      }
+    } catch { /* permission lapsed or file locked — leave it loose */ }
   }
 }
 
@@ -317,8 +347,10 @@ async function scanDir(dir, prefix, out, dirs) {
 async function loadLibrarySongs(lib) {
   const found = [];
   const dirs = new Set();
-  await scanDir(lib.handle, '', found, dirs);
+  const loose = [];
+  await scanDir(lib.handle, '', found, dirs, loose);
   lib.subdirs = dirs;
+  if (loose.length) tidyLooseTakes(loose);
   found.sort((a, b) => a.path.localeCompare(b.path));
   const loaded = [];
   for (const f of found) {
@@ -4889,7 +4921,7 @@ async function captureStop() {
   await takesPut(take);
   const wrote = await capWriteToDisk(take);
   capSetStatus(wrote
-    ? `Saved ${take.name} — also written next to the chart.`
+    ? `Saved ${take.name} — filed in the takes folder beside the chart.`
     : `Saved ${take.name}.`);
   renderTakes();
 }
@@ -4913,8 +4945,9 @@ function capTakeName(title, ext) {
   return `${base}-${stamp}.${ext}`;
 }
 
-// In folder mode the take is also written beside the chart, so it's a real file
-// in the same folder you already sync or commit — no export step to remember.
+// In folder mode the take is also written to disk, so it's a real file in the
+// same folder you already sync or commit — no export step to remember. It goes
+// into a takes/ subfolder beside the chart rather than loose among the charts.
 async function capWriteToDisk(take) {
   if (mode !== 'folder' || !take.songKey || !take.songKey.startsWith('lib:')) return false;
   const s = resolveKey(take.songKey);
@@ -4923,7 +4956,7 @@ async function capWriteToDisk(take) {
   if (!lib || !lib.handle) return false;
   try {
     const sub = (s.path || '').split('/').slice(0, -1).join('/');
-    const dir = await resolveDir(lib, sub, true);
+    const dir = await resolveDir(lib, joinPath(sub, TAKES_DIR), true);
     const fh = await dir.getFileHandle(take.name, { create: true });
     const w = await fh.createWritable();
     await w.write(take.blob);
@@ -4995,15 +5028,28 @@ async function renderTakes() {
       `<button class="cap-del" data-id="${t.id}" title="Delete this take">&#10005;</button></div></div>`;
   };
 
+  // Every song's takes, grouped: the open song first (even when empty, so the
+  // record target is obvious), then the other songs by their newest take,
+  // then the unfiled bin. `all` is sorted newest-first, so first appearance
+  // orders the groups by recency.
+  const bySong = new Map();
+  for (const t of all) {
+    if (!t.songKey || t.songKey === curKey) continue;
+    if (!bySong.has(t.songKey)) bySong.set(t.songKey, { title: t.songTitle || 'Untitled', takes: [] });
+    bySong.get(t.songKey).takes.push(t);
+  }
   let html = '';
   if (cur) {
     html += `<div class="cap-group">${escapeHtml(cur.title || 'Untitled')}</div>`;
     html += mine.length ? mine.map(row).join('') : '<div class="cap-empty">No takes for this song yet.</div>';
   }
+  for (const g of bySong.values()) {
+    html += `<div class="cap-group">${escapeHtml(g.title)}</div>` + g.takes.map(row).join('');
+  }
   if (unfiled.length) {
     html += `<div class="cap-group">Unfiled</div>` + unfiled.map(row).join('');
   }
-  if (!cur && !unfiled.length) html = '<div class="cap-empty">No takes yet. Hit Record.</div>';
+  if (!html) html = '<div class="cap-empty">No takes yet. Hit Record.</div>';
   box.innerHTML = html;
 
   box.querySelectorAll('.cap-del').forEach((b) => b.addEventListener('click', async () => {
