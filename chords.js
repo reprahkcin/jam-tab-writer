@@ -41,6 +41,12 @@ const OPEN_CHORDS = {
   'B7':    [-1, 2, 1, 2, 0, 2],
   'Bm':    [-1, 2, 4, 4, 3, 2],
   'Bm7':   [-1, 2, 0, 2, 0, 2],
+  // Common open forms for qualities the barre generator would put mid-neck.
+  'C9':    [-1, 3, 2, 3, 3, 3],
+  'E9':    [0, 2, 0, 1, 0, 2],
+  'G9':    [3, -1, 0, 2, 0, 1],
+  'Eadd9': [0, 2, 2, 1, 0, 2],
+  'Gadd9': [3, -1, 0, 2, 0, 3],
 };
 
 // Movable barre forms. Patterns are the open shape; add the barre fret to
@@ -54,8 +60,12 @@ const MOVABLE = {
     'm7':    [0, 2, 0, 0, 0, 0],
     'maj7':  [0, 2, 1, 1, 0, 0],
     'sus4':  [0, 2, 2, 2, 0, 0],
+    '7sus4': [0, 2, 0, 2, 0, 0],
     '6':     [0, 2, 2, 1, 2, 0],
     'm6':    [0, 2, 2, 0, 2, 0],
+    'aug':   [0, 3, 2, 1, 1, 0],
+    'dim7':  [0, 1, 2, 0, 2, 0],
+    '5':     [0, 2, 2, -1, -1, -1],
   } },
   A: { ref: 9, q: {
     'major': [-1, 0, 2, 2, 2, 0],
@@ -65,8 +75,19 @@ const MOVABLE = {
     'maj7':  [-1, 0, 2, 1, 2, 0],
     'sus4':  [-1, 0, 2, 2, 3, 0],
     'sus2':  [-1, 0, 2, 2, 0, 0],
+    '7sus4': [-1, 0, 2, 0, 3, 0],
     '6':     [-1, 0, 2, 2, 2, 2],
     'm6':    [-1, 0, 2, 2, 1, 2],
+    'aug':   [-1, 0, 3, 2, 2, 1],
+    'dim':   [-1, 0, 1, 2, 1, -1],
+    'dim7':  [-1, 0, 1, 2, 1, 2],
+    'm7b5':  [-1, 0, 1, 0, 1, -1],
+    '9':     [-1, 0, 2, 4, 2, 3],
+    'm9':    [-1, 0, 2, 4, 1, 3],
+    'maj9':  [-1, 0, 2, 4, 2, 4],
+    'add9':  [-1, 0, 2, 4, 2, 0],
+    'madd9': [-1, 0, 2, 4, 1, 0],
+    '5':     [-1, 0, 2, 2, -1, -1],
   } },
   // D-shape forms (root on the 4th string) — handy mid-neck voicings.
   D: { ref: 2, label: 'D', q: {
@@ -89,6 +110,8 @@ const TRIAD_TONES = {
   'm':     [0, 3, 7],
   'sus2':  [0, 2, 7],
   'sus4':  [0, 5, 7],
+  'dim':   [0, 3, 6],
+  'aug':   [0, 4, 8],
 };
 
 // Adjacent 3-string sets (indices into the [6th..1st] array), low → high.
@@ -180,17 +203,31 @@ function chordRootPc(root, acc) {
 }
 
 // Map a chord suffix to one of the qualities we can draw; null if unsupported.
+// Order matters: longer/more specific spellings first, so maj9 never falls
+// through to the bare-m test (that bug drew Cmaj9 as C minor) and m7b5 never
+// reads as a plain m7.
 function parseQuality(suffix) {
   const s = suffix.trim();
   if (s === '' || s === 'maj' || s === 'M') return 'major';
-  if (/^(maj7|M7|Δ)/.test(s)) return 'maj7';
+  if (/^(maj9|M9)/.test(s)) return 'maj9';
+  if (/^(maj|M7|Δ)/.test(s)) return 'maj7';        // maj7; maj11/13 approximated
+  if (/^(m7b5|min7b5|-7b5|ø)/.test(s)) return 'm7b5';
+  if (/^(dim7|°7)/.test(s)) return 'dim7';
+  if (/^(dim|°)/.test(s)) return 'dim';
+  if (/^(aug|\+)/.test(s)) return 'aug';
+  if (/^(m9|min9)/.test(s)) return 'm9';
   if (/^(m7|min7|-7)/.test(s)) return 'm7';
   if (/^(m6|min6)/.test(s)) return 'm6';
+  if (/^(madd9|m\(add9\))/.test(s)) return 'madd9';
   if (/^(m|min|-)/.test(s)) return 'm';
-  if (/^7/.test(s)) return '7';
+  if (/^7sus/.test(s)) return '7sus4';
+  if (/^9/.test(s)) return '9';
+  if (/^(7|11|13)/.test(s)) return '7';            // 11/13: the b7 is the core
   if (/^6/.test(s)) return '6';
+  if (/^5/.test(s)) return '5';
   if (/^sus2/.test(s)) return 'sus2';
-  if (/^sus4?/.test(s)) return 'sus4';
+  if (/^sus/.test(s)) return 'sus4';
+  if (/^\(?add9/.test(s)) return 'add9';
   return null;
 }
 
@@ -204,12 +241,8 @@ function movableShape(rootPc, quality) {
   return c.pat.map((v) => (v < 0 ? -1 : v + c.f));
 }
 
-// Resolve a chord name (e.g. "F#m7", "Cadd9", "D/F#") to a fret array, or null.
-function resolveChord(name) {
-  const m = name.match(CHORD_RE);
-  if (!m) return null;
-  const [, root, acc, suffix] = m; // bass (slash) is ignored for the shape
-  const pc = chordRootPc(root, acc);
+// The plain (no-bass) shape for a parsed chord: named bank first, then barres.
+function plainShape(root, acc, suffix, pc) {
   const spellings = [root + acc + suffix, SHARP[pc] + suffix];
   for (const key of spellings) {
     if (OPEN_CHORDS[key]) return OPEN_CHORDS[key];
@@ -217,6 +250,58 @@ function resolveChord(name) {
   const quality = parseQuality(suffix);
   if (!quality) return null;
   return movableShape(pc, quality);
+}
+
+// Regraft a shape so the slash bass is its lowest note: try putting the bass
+// on the 6th, 5th or 4th string within reach of the remaining fingers, muting
+// anything below it. Candidates that lose a chord tone are rejected; ties are
+// settled toward open bass strings and tight fret spans. This derives the
+// standard shapes (D/F# 2x0232, G/B x20033-family, C/G 3x2010, Am/G 3x2210,
+// C/B x22010, G/D xx0003 …) instead of keeping a hand-written slash bank.
+function graftBass(frets, bassPc) {
+  const plainPcs = new Set();
+  frets.forEach((f, i) => { if (f >= 0) plainPcs.add((STRING_ABS[i] + f) % 12); });
+  let best = null;
+  for (let s = 0; s <= 2; s++) {
+    const rest = frets.slice(s + 1).filter((f) => f > 0);
+    const lo = rest.length ? Math.min(...rest) : 0;
+    const hi = rest.length ? Math.max(...rest) : 0;
+    for (let f = 0; f <= 15; f++) {
+      if ((STRING_ABS[s] + f) % 12 !== bassPc) continue;
+      if (f !== 0 && (f < lo - 2 || f > (rest.length ? hi + 2 : 3))) continue;
+      const out = frets.slice();
+      for (let k = 0; k < s; k++) out[k] = -1;
+      out[s] = f;
+      const notes = [];
+      const pcs = new Set();
+      out.forEach((fr, i) => { if (fr >= 0) { notes.push(STRING_ABS[i] + fr); pcs.add((STRING_ABS[i] + fr) % 12); } });
+      if (Math.min(...notes) !== STRING_ABS[s] + f) continue;      // bass must be lowest
+      if ([...plainPcs].some((p) => !pcs.has(p))) continue;        // keep every chord tone
+      const fr = out.filter((x) => x > 0);
+      const span = fr.length ? Math.max(...fr) - Math.min(...fr) : 0;
+      if (span > 4) continue;
+      const score = (f > 0 ? 10 : 0) + span * 2 + s;
+      if (!best || score < best.score) best = { out, score };
+    }
+  }
+  return best ? best.out : null;
+}
+
+// Resolve a chord name (e.g. "F#m7", "Cadd9", "D/F#") to a fret array, or null.
+// Slash chords get the named bass grafted in as the lowest note; if no playable
+// graft exists the plain shape is the fallback.
+function resolveChord(name) {
+  const m = name.match(CHORD_RE);
+  if (!m) return null;
+  const [, root, acc, suffix, bass, bacc] = m;
+  const pc = chordRootPc(root, acc);
+  const shape = plainShape(root, acc, suffix, pc);
+  if (!bass || !shape) return shape;
+  const bassPc = chordRootPc(bass, bacc || '');
+  const notes = [];
+  shape.forEach((f, i) => { if (f >= 0) notes.push(STRING_ABS[i] + f); });
+  if (Math.min(...notes) % 12 === bassPc) return shape; // already voiced that way
+  return graftBass(shape, bassPc) || shape;
 }
 
 // Build a small SVG fretboard diagram for a chord. `soundingName`, when given,
@@ -244,7 +329,10 @@ function scaleById(id) { return SCALES.find((s) => s.id === id) || SCALES[0]; }
 const QUALITY_IV = {
   'major': [0, 4, 7], 'm': [0, 3, 7], '7': [0, 4, 7, 10], 'm7': [0, 3, 7, 10],
   'maj7': [0, 4, 7, 11], '6': [0, 4, 7, 9], 'm6': [0, 3, 7, 9],
-  'sus2': [0, 2, 7], 'sus4': [0, 5, 7],
+  'sus2': [0, 2, 7], 'sus4': [0, 5, 7], '7sus4': [0, 5, 7, 10],
+  'dim': [0, 3, 6], 'dim7': [0, 3, 6, 9], 'm7b5': [0, 3, 6, 10], 'aug': [0, 4, 8],
+  '9': [0, 2, 4, 7, 10], 'm9': [0, 2, 3, 7, 10], 'maj9': [0, 2, 4, 7, 11],
+  'add9': [0, 2, 4, 7], 'madd9': [0, 2, 3, 7], '5': [0, 7],
 };
 
 // Interval degree labels by semitone distance from the chord root.
@@ -253,26 +341,30 @@ const INTERVAL_LABELS = {
   6: 'b5', 7: '5', 8: '#5', 9: '6', 10: 'b7', 11: '7',
 };
 
-// A chord's root pitch class + its interval list (from the root), or null.
+// A chord's root pitch class + its interval list (from the root) + the slash
+// bass pitch class (null when the name has no slash), or null if unparsable.
 function chordIntervals(name) {
   const m = name.match(CHORD_RE);
   if (!m) return null;
-  const [, root, acc, suffix] = m;
-  let iv = QUALITY_IV[parseQuality(suffix)];
-  if (!iv) {
-    if (/dim|°/.test(suffix)) iv = [0, 3, 6];
-    else if (/aug|\+/.test(suffix)) iv = [0, 4, 8];
-    else iv = [0, 4, 7]; // reasonable default
-  }
-  return { rootPc: chordRootPc(root, acc), iv };
+  const [, root, acc, suffix, bass, bacc] = m;
+  const iv = QUALITY_IV[parseQuality(suffix)] || [0, 4, 7]; // reasonable default
+  return {
+    rootPc: chordRootPc(root, acc),
+    iv,
+    bassPc: bass ? chordRootPc(bass, bacc || '') : null,
+  };
 }
 
 // Map of pitch class -> interval label for a chord name (R/3/5/7 …), or null.
+// A slash bass outside the chord tones is included with its own degree label.
 function chordToneLabels(name) {
   const ci = chordIntervals(name);
   if (!ci) return null;
   const map = new Map();
   for (const i of ci.iv) map.set((ci.rootPc + i) % 12, INTERVAL_LABELS[i] || '');
+  if (ci.bassPc !== null && !map.has(ci.bassPc)) {
+    map.set(ci.bassPc, INTERVAL_LABELS[(ci.bassPc - ci.rootPc + 12) % 12] || '');
+  }
   return map;
 }
 
@@ -386,7 +478,7 @@ function pianoChordSVG(displayName, inv, soundingName, extra) {
   const invI = ((inv || 0) % n + n) % n;
   // Rotate so the inversion's bass tone comes first, then stack ascending.
   const order = ci.iv.slice(invI).concat(ci.iv.slice(0, invI));
-  const positions = new Map(); // absolute semitone -> { label, root }
+  let positions = new Map(); // absolute semitone -> { label, root, bass }
   let prev = -1;
   for (const t of order) {
     let abs = (ci.rootPc + t) % 12;
@@ -394,9 +486,26 @@ function pianoChordSVG(displayName, inv, soundingName, extra) {
     positions.set(abs, { label: INTERVAL_LABELS[t] || '', root: t === 0 });
     prev = abs;
   }
+  // A slash bass outside the chord tones sits below the stack (shifting the
+  // stack up an octave if needed, as long as it still fits the two octaves).
+  const bassIsExtra = ci.bassPc !== null && !ci.iv.some((t) => (ci.rootPc + t) % 12 === ci.bassPc);
+  if (bassIsExtra) {
+    const keys = [...positions.keys()];
+    const shift = ci.bassPc >= keys[0] ? 12 : 0;
+    if (keys[keys.length - 1] + shift <= 23) {
+      const shifted = new Map([[ci.bassPc, { label: INTERVAL_LABELS[(ci.bassPc - ci.rootPc + 12) % 12] || '', root: false, bass: true }]]);
+      for (const [abs, info] of positions) shifted.set(abs + shift, info);
+      positions = shifted;
+    }
+  } else if (ci.bassPc !== null) {
+    // Mark the bottom key when the chosen inversion really puts the named
+    // bass there (the inversion dropdown can override it).
+    const [firstAbs, firstInfo] = positions.entries().next().value;
+    if (firstAbs % 12 === ci.bassPc) firstInfo.bass = true;
+  }
   const svg = pianoKeyboardSVG(2, (abs) => {
     const info = positions.get(abs);
-    return info ? { fill: info.root ? 'root' : 'hi', label: info.label } : { fill: 'plain', label: '' };
+    return info ? { fill: info.root ? 'root' : 'hi', label: info.label, bass: info.bass } : { fill: 'plain', label: '' };
   });
   return `<div class="chord-diagram piano-diagram">${head}${svg}${tail}</div>`;
 }
@@ -428,9 +537,13 @@ function fretVoicing(name, tuning, maxF) {
   const labels = chordToneLabels(name);
   const m = name.match(CHORD_RE);
   if (!labels || !m) return null;
-  const chordPcs = [...labels.keys()];
-  const chordSet = new Set(chordPcs);
   const rootPc = chordRootPc(m[1], m[2]);
+  let chordPcs = [...labels.keys()];
+  // More tones than strings (9th chords, slash basses): omit the 5th — the
+  // conventional sacrifice — so the defining tones all fit.
+  if (chordPcs.length > tuning.length) chordPcs = chordPcs.filter((pc) => pc !== (rootPc + 7) % 12);
+  if (chordPcs.length > tuning.length) return null;
+  const chordSet = new Set(chordPcs);
   const N = tuning.length;
   const cands = tuning.map((abs) => {
     const list = [];
@@ -458,7 +571,7 @@ function fretVoicing(name, tuning, maxF) {
   rec(0);
   return best ? best.frets : null;
 }
-function ukeVoicing(name) { return fretVoicing(name, UKE_ABS, 4); }
+function ukeVoicing(name) { return fretVoicing(name, UKE_ABS, 5); }
 function mandoVoicing(name) { return fretVoicing(name, MANDO_ABS, 7); }
 
 // A fretboard chord diagram for any number of strings. `cls` adds a modifier

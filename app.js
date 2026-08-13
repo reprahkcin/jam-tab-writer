@@ -1005,7 +1005,13 @@ function chordDiagramsFor(inst, chords, soundOf) {
     for (const c of chords) {
       const ci = chordIntervals(c.shape);
       const n = ci ? ci.iv.length : 0;
-      let inv = store[c.shape] || 0;
+      let inv = store[c.shape];
+      if (inv === undefined) {
+        // A slash chord defaults to the inversion that puts its bass on the
+        // bottom (when the bass is a chord tone); the dropdown still overrides.
+        const bi = ci && ci.bassPc !== null ? ci.iv.findIndex((t) => (ci.rootPc + t) % 12 === ci.bassPc) : -1;
+        inv = bi > 0 ? bi : 0;
+      }
       if (inv >= n) inv = 0;
       let select = '';
       if (n > 1) {
