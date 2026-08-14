@@ -99,6 +99,11 @@
       // instead would consume it and smash the words together ("one[G]word").
       let col = m.index;
       while (col < lyric.length && lyric[col] === ' ') col++;
+      // Clamp overhanging chords to the lyric end NOW, not at apply time: the
+      // string grows as brackets go in, so a late clamp lands each chord at a
+      // different spot — reversing a trailing turnaround and splitting brackets.
+      // Clamped to one column, they share it and seq keeps their order.
+      col = Math.min(col, lyric.length);
       for (const ch of chords) inserts.push([col, seq++, '[' + ch + ']']);
     }
     inserts.sort((a, b) => b[0] - a[0] || b[1] - a[1]);

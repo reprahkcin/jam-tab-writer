@@ -144,6 +144,11 @@ def merge(chord_text, lyric):
         col = m.start()
         while col < len(lyric) and lyric[col] == ' ':
             col += 1
+        # Clamp overhanging chords to the lyric end NOW, not at apply time: the
+        # string grows as brackets go in, so a late clamp lands each chord at a
+        # different spot -- reversing a trailing turnaround and splitting
+        # brackets. Clamped to one column, they share it and seq keeps order.
+        col = min(col, len(lyric))
         for ch in chords:  # merged blob -> chords share the column, stay grouped
             inserts.append((col, seq, '[' + ch + ']')); seq += 1
     s = lyric
