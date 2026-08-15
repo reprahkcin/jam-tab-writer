@@ -630,6 +630,8 @@ const el = {
   printHeader: document.getElementById('print-header'),
   trAmount: document.getElementById('tr-amount'),
   capoAmount: document.getElementById('capo-amount'),
+  shapeGoal: document.getElementById('shape-goal'),
+  shapeGoalWrap: document.getElementById('shape-goal-wrap'),
   tempoInput: document.getElementById('tempo-input'),
   status: document.getElementById('save-status'),
   breadcrumb: document.getElementById('save-breadcrumb'),
@@ -765,6 +767,7 @@ function renderPreview() {
   updatePrintHeader(s);
   renderTuningBanner(s);
   renderCapoBanner(s);
+  renderShapeGoal(s);
   renderInstrumentBar();
   renderTheory(s);
   renderInstruments(s);
@@ -2055,6 +2058,71 @@ function setCapo(delta) {
   renderPreview();
 }
 
+// ---- Goal open chords ------------------------------------------------------
+// "Put this song under my fingers as G shapes." The dropdown picks the
+// open-chord family you're comfortable in, and transpose + capo move as a
+// pair — transpose rewrites the shapes into the goal key, the capo makes up
+// the difference — so the song keeps sounding in the key it always did.
+// Each option shows the capo it would land on, so a goal that needs the capo
+// at fret 9 announces itself before you commit to it.
+
+const SHAPE_GOALS_MAJOR = ['C', 'G', 'D', 'A', 'E'];
+const SHAPE_GOALS_MINOR = ['Am', 'Em', 'Dm'];
+
+// The tonic of the shapes as fretted: inferKey on what the hands play, so an
+// "Am F C G" song offers minor-shape goals rather than calling itself A major.
+function shapeTonic(s) {
+  const pc = theoryKeyPc(s);
+  if (pc === null) return null;
+  const T = window.Learn && window.Learn.theory;
+  if (!T) return { pc, minor: false };
+  const key = T.inferKey(uniqueShapes(s), pc);
+  return { pc: T.keyPcOf(key.tonicName), minor: key.minor };
+}
+
+function renderShapeGoal(s) {
+  if (!el.shapeGoal) return;
+  const cur = s && s.body ? shapeTonic(s) : null;
+  el.shapeGoalWrap.hidden = !cur;
+  if (!cur) return;
+  const goals = cur.minor ? SHAPE_GOALS_MINOR : SHAPE_GOALS_MAJOR;
+  let hit = false;
+  const opts = goals.map((name) => {
+    const pc = NOTE_INDEX[name[0]];
+    const d = (((pc - cur.pc) % 12) + 12) % 12;
+    const capo = ((((s.capo || 0) - d) % 12) + 12) % 12;
+    const sel = pc === cur.pc;
+    hit = hit || sel;
+    return `<option value="${pc}"${sel ? ' selected' : ''}>` +
+      `${name} shapes &middot; ${capo ? 'capo ' + capo : 'no capo'}</option>`;
+  });
+  // Current shapes outside the goal list (a Bb song as written): an inert
+  // placeholder holds the slot so the select doesn't claim a goal it isn't at.
+  const placeholder = hit ? '' : '<option value="" selected disabled>Play in&hellip;</option>';
+  el.shapeGoal.innerHTML = placeholder + opts.join('');
+}
+
+function applyShapeGoal(goalPc) {
+  const s = currentSong();
+  if (!s) return;
+  const cur = shapeTonic(s);
+  if (cur === null) return;
+  const d = (((goalPc - cur.pc) % 12) + 12) % 12;
+  if (!d) return;
+  // Opposite moves of the same size keep transpose + capo — the sounding key —
+  // unchanged (mod 12), which is the entire point of the control.
+  s.capo = ((((s.capo || 0) - d) % 12) + 12) % 12;
+  let t = s.transpose + d;
+  while (t > 6) t -= 12;
+  while (t <= -6) t += 12;
+  s.transpose = t;
+  el.trAmount.textContent = (s.transpose > 0 ? '+' : '') + s.transpose;
+  el.capoAmount.textContent = s.capo;
+  s.updated = Date.now();
+  schedulePersist();
+  renderPreview();
+}
+
 // ---- Per-song tempo + count-in ---------------------------------------------
 const DEFAULT_TEMPO = 120;
 function setTempo(bpm) {
@@ -2526,6 +2594,10 @@ document.getElementById('tr-up').addEventListener('click', () => setTranspose(1)
 document.getElementById('tr-down').addEventListener('click', () => setTranspose(-1));
 document.getElementById('capo-up').addEventListener('click', () => setCapo(1));
 document.getElementById('capo-down').addEventListener('click', () => setCapo(-1));
+el.shapeGoal.addEventListener('change', () => {
+  const pc = parseInt(el.shapeGoal.value, 10);
+  if (!isNaN(pc)) applyShapeGoal(pc);
+});
 document.getElementById('tempo-up').addEventListener('click', () => bumpTempo(5));
 document.getElementById('tempo-down').addEventListener('click', () => bumpTempo(-5));
 document.getElementById('count-in-btn').addEventListener('click', countIn);
