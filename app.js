@@ -82,11 +82,11 @@ function renderLine(raw, semitones, numKey, li) {
   // Line number of the source text, so a dragged chord knows which line to edit.
   const lat = li == null ? '' : ` data-l="${li}"`;
 
-  if (trimmed === '') return '<div class="blank"></div>';
+  if (trimmed === '') return `<div class="blank"${lat}></div>`;
 
   // Page break: {page} / {pagebreak} / {newpage} on their own line.
   if (/^\{(page|pagebreak|newpage|page break)\}$/i.test(trimmed)) {
-    return '<div class="page-break"></div>';
+    return `<div class="page-break"${lat}></div>`;
   }
 
   // Section labels: {Verse 1}  or a single lone bracket token that isn't a
@@ -96,7 +96,7 @@ function renderLine(raw, semitones, numKey, li) {
   const loneBracket = trimmed.match(/^\[([^\[\]]+)\]$/);
   if (!sectionMatch && loneBracket && !isChord(loneBracket[1])) sectionMatch = loneBracket;
   if (sectionMatch) {
-    return `<div class="section">${escapeHtml(sectionMatch[1])}</div>`;
+    return `<div class="section"${lat}>${escapeHtml(sectionMatch[1])}</div>`;
   }
 
   // Walk the line, pulling out [chords] and tracking their column in the lyric.
@@ -802,6 +802,35 @@ function renderPreview() {
   // when you switch — otherwise it sits there describing the last one.
   if (typeof learn !== 'undefined' && learn.open) renderLearn();
   updateFrontMatter();
+  highlightCaretLine(); // a render wipes the caret echo's classes; re-mark
+}
+
+// ---- Caret echo ------------------------------------------------------------
+// In split view the two panes drift apart — chord rows and hidden directives
+// mean line N of the editor isn't line N of the chart. While the editor has
+// focus, tint the preview line the caret is on and keep it scrolled into view,
+// so the eye can hop between panes without hunting.
+function highlightCaretLine() {
+  const body = el.previewBody;
+  if (!body) return;
+  body.querySelectorAll('.pv-cur').forEach((n) => n.classList.remove('pv-cur'));
+  if (document.activeElement !== el.editor || !currentSong()) return;
+  const li = el.editor.value.slice(0, el.editor.selectionStart).split('\n').length - 1;
+  const node = body.querySelector(`[data-l="${li}"]`);
+  if (!node) return; // wrapped (phone) renderer — no line map, no echo
+  node.classList.add('pv-cur');
+  // A lyric line renders as its chord row's next sibling; tint the pair.
+  const sib = node.nextElementSibling;
+  const pair = sib && sib.classList.contains('lyricline') ? sib : node;
+  if (pair !== node) pair.classList.add('pv-cur');
+  // Nudge only the preview pane's own scroll — never the page.
+  const box = el.preview;
+  const br = box.getBoundingClientRect();
+  const top = node.getBoundingClientRect().top - br.top + box.scrollTop;
+  const bottom = pair.getBoundingClientRect().bottom - br.top + box.scrollTop;
+  const pad = 24;
+  if (top < box.scrollTop + pad) box.scrollTop = top - pad;
+  else if (bottom > box.scrollTop + box.clientHeight - pad) box.scrollTop = bottom - box.clientHeight + pad;
 }
 
 // Is there anything above the chart worth giving page 1 to? Reference panels
@@ -2676,7 +2705,23 @@ el.editor.addEventListener('input', () => {
   clearTimeout(auxTimer);
   auxTimer = setTimeout(() => { if (currentSong()) renderPreview(); }, 250);
   if (chordPopup) renderChordPopup(); // re-filter as you type inside [ … ]
+  highlightCaretLine(); // the instant re-render above wiped the caret echo
 });
+
+// Keep the preview's caret echo tracking the editor caret. selectionchange
+// covers held-down arrow keys and drags; click/keyup are the belt to its
+// braces on engines where it doesn't fire for textareas. The blur clear is
+// delayed so a palette-chip click (which refocuses the editor) doesn't blink.
+let caretEchoTimer = null;
+document.addEventListener('selectionchange', () => {
+  if (document.activeElement !== el.editor) return;
+  clearTimeout(caretEchoTimer);
+  caretEchoTimer = setTimeout(highlightCaretLine, 40);
+});
+el.editor.addEventListener('click', highlightCaretLine);
+el.editor.addEventListener('keyup', highlightCaretLine);
+el.editor.addEventListener('focus', highlightCaretLine);
+el.editor.addEventListener('blur', () => setTimeout(highlightCaretLine, 120));
 el.title.addEventListener('input', () => updatePrintHeader({ title: el.title.value, artist: el.artist.value }));
 el.artist.addEventListener('input', () => updatePrintHeader({ title: el.title.value, artist: el.artist.value }));
 el.title.addEventListener('input', commit);
