@@ -544,6 +544,24 @@ main { display: flex; flex: 1; min-height: 0; }
 }
 .palette-hint { margin-left: auto; color: var(--muted); font-size: 11px; white-space: nowrap; }
 
+/* Build-ahead box: pin chords onto the palette before the chart uses them. */
+.palette-add {
+  width: 90px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.palette-add:focus { outline: none; border-color: var(--accent); }
+.chip-x { margin-left: 6px; color: var(--muted); font-weight: 400; }
+.chip:hover .chip-x { color: var(--text); }
+
+/* A field holding a rejected value: flash rather than silently ignore. */
+.invalid-flash { border-color: #c85c68 !important; box-shadow: 0 0 0 1px #c85c68; }
+
 /* Type-ahead chord popup anchored at the caret. */
 .chord-pop {
   position: absolute;
