@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Jam Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=97" />
+  <link rel="stylesheet" href="styles.css?v=98" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -115,6 +115,8 @@
       <div id="folder-bar" class="folder-bar" hidden></div>
       <ul id="song-list"></ul>
     </aside>
+    <!-- Desktop only: drag to resize the song list; double-click resets. -->
+    <div id="sidebar-resizer" class="sidebar-resizer" title="Drag to resize the song list — double-click to reset"></div>
 
     <section id="workspace">
       <div class="meta-row">
@@ -512,11 +514,11 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=97"></script>
+  <script src="chords.js?v=98"></script>
   <!-- After chords.js: the theory charts are drawn with its renderers. -->
-  <script src="learn.js?v=97"></script>
-  <script src="pdf2cho.js?v=97"></script>
-  <script src="qr.js?v=97"></script>
-  <script src="app.js?v=97"></script>
+  <script src="learn.js?v=98"></script>
+  <script src="pdf2cho.js?v=98"></script>
+  <script src="qr.js?v=98"></script>
+  <script src="app.js?v=98"></script>
 </body>
 </html>

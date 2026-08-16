@@ -124,7 +124,10 @@ button:active { transform: translateY(1px); }
 main { display: flex; flex: 1; min-height: 0; }
 
 #sidebar {
-  width: 240px;
+  /* Set by the resizer drag (persisted in prefs); falls back to the default.
+     A CSS variable rather than an inline style, so the phone drawer's
+     width: 100% below still wins without a specificity fight. */
+  width: var(--sidebar-w, 240px);
   flex-shrink: 0;
   background: var(--panel);
   border-right: 1px solid var(--line);
@@ -132,6 +135,16 @@ main { display: flex; flex: 1; min-height: 0; }
   flex-direction: column;
   min-height: 0;
 }
+
+/* Grab strip between the song list and the workspace. Sits over the sidebar's
+   own border so it costs no layout width; paints only while usable. */
+.sidebar-resizer {
+  flex: 0 0 6px;
+  margin-left: -6px;
+  cursor: col-resize;
+  z-index: 5;
+}
+.sidebar-resizer:hover, .sidebar-resizer.dragging { background: var(--accent); opacity: 0.4; }
 
 .sidebar-head {
   display: flex;
@@ -1209,6 +1222,7 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
     border-right: none;
     border-bottom: 1px solid var(--line);
   }
+  .sidebar-resizer { display: none; } /* the drawer has no width to drag */
 
   /* Song list is a drawer: the "Songs" header toggles it, and it starts
      collapsed so the editor is front and centre. */

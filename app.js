@@ -685,6 +685,7 @@ function loadPrefs() {
     ensemble: Object.assign({}, ENSEMBLE_DEFAULTS),
     perform: { cols: 4, font: 22, autoSecs: 25, scrollSpeed: 30, autoFit: true, panels: { instruments: true, harp: true } },
     layout: 'split',   // 'split' | 'editor' | 'preview' (desktop only)
+    sidebarWidth: null, // song-list width in px (desktop); null = the CSS default
     printCols: 1,
     capture: { deviceId: null, deviceLabel: '', format: 'wav' },
     metro: { bpm: 100, steps: 16, click: true, pattern: null },
@@ -2901,6 +2902,44 @@ document.getElementById('share-copy').addEventListener('click', async () => {
   });
   head.addEventListener('keydown', (e) => { if (isPhone() && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setOpen(!sidebar.classList.contains('drawer-open')); } });
   list.addEventListener('click', (e) => { if (isPhone() && e.target.closest('li')) setOpen(false); });
+})();
+
+// Desktop: the strip on the song list's right edge drags its width, which is
+// kept as a CSS variable (not an inline style) so the phone drawer's
+// width: 100% still applies untouched. Double-click resets to the default.
+(function wireSidebarResize() {
+  const rz = document.getElementById('sidebar-resizer');
+  const sb = document.getElementById('sidebar');
+  if (!rz || !sb) return;
+  const MIN = 170, MAX = 560;
+  const apply = (w) => {
+    w = Math.round(Math.max(MIN, Math.min(MAX, w)));
+    document.documentElement.style.setProperty('--sidebar-w', w + 'px');
+    return w;
+  };
+  if (prefs.sidebarWidth) apply(prefs.sidebarWidth);
+  let startX = 0, startW = 0;
+  rz.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    startX = e.clientX;
+    startW = sb.getBoundingClientRect().width;
+    rz.classList.add('dragging');
+    rz.setPointerCapture(e.pointerId);
+  });
+  rz.addEventListener('pointermove', (e) => {
+    if (!rz.classList.contains('dragging')) return;
+    prefs.sidebarWidth = apply(startW + e.clientX - startX);
+  });
+  rz.addEventListener('pointerup', (e) => {
+    rz.classList.remove('dragging');
+    rz.releasePointerCapture(e.pointerId);
+    savePrefs();
+  });
+  rz.addEventListener('dblclick', () => {
+    document.documentElement.style.removeProperty('--sidebar-w');
+    prefs.sidebarWidth = null;
+    savePrefs();
+  });
 })();
 
 document.getElementById('add-strum-btn').addEventListener('click', () => {
