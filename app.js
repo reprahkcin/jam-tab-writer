@@ -23,6 +23,24 @@ function isChord(token) {
   return CHORD_RE.test(token);
 }
 
+// Forgive typed case at the input boundaries ('c#' -> 'C#', 'em' -> 'Em',
+// 'g/b' -> 'G/B'). Only the root and bass letters are touched — the suffix is
+// left as written, since its case is meaningful ('m' minor vs 'M' major).
+// Chart text itself stays strict; this runs where chords are typed in.
+function normalizeChordInput(tok) {
+  tok = String(tok).trim();
+  const fix = (part) => part.charAt(0).toUpperCase() + part.slice(1);
+  const i = tok.indexOf('/');
+  return i === -1 ? fix(tok) : fix(tok.slice(0, i)) + '/' + fix(tok.slice(i + 1));
+}
+
+// Reject a typed value visibly: the field flashes instead of the app silently
+// doing nothing (or worse, installing the bad value).
+function flashInvalid(input) {
+  input.classList.add('invalid-flash');
+  setTimeout(() => input.classList.remove('invalid-flash'), 900);
+}
+
 function shiftNote(letter, accidental, semitones, preferFlat) {
   let idx = NOTE_INDEX[letter];
   if (accidental === '#') idx += 1;
@@ -698,7 +716,7 @@ function currentSong() {
 }
 
 function blankSong() {
-  return { id: newId(), title: '', artist: '', body: '', transpose: 0, capo: 0, key: null, scaleRoot: null, focusChord: null, riffs: [], strums: [], tempo: null, tuning: null, updated: Date.now() };
+  return { id: newId(), title: '', artist: '', body: '', transpose: 0, capo: 0, key: null, scaleRoot: null, focusChord: null, palette: [], riffs: [], strums: [], tempo: null, tuning: null, updated: Date.now() };
 }
 
 function selectSong(id) {
@@ -1413,7 +1431,10 @@ function renderChordPopup() {
   if (/[\s[\]]/.test(query)) { closeChordPopup(); return; }
   const q = query.toLowerCase();
   let items = chordCandidates().filter((c) => c.toLowerCase().startsWith(q));
-  if (query && isChord(query) && !items.some((c) => c.toLowerCase() === q)) items.unshift(query);
+  // A typed chord that isn't among the candidates is offered normalized, so
+  // 'c#' suggests (and inserts) C# rather than falling into the chart as-is.
+  const norm = normalizeChordInput(query);
+  if (query && isChord(norm) && !items.some((c) => c.toLowerCase() === q)) items.unshift(norm);
   cp.items = items.slice(0, 8);
   if (cp.active >= cp.items.length) cp.active = Math.max(0, cp.items.length - 1);
   if (!cp.items.length) { if (cp.el) cp.el.hidden = true; return; }
@@ -1442,7 +1463,9 @@ function acceptActiveChord() {
   const ta = el.editor;
   const close = ta.value.indexOf(']', cp.bracketStart);
   if (close === -1) { closeChordPopup(); return; }
-  const chosen = cp.items[cp.active] != null ? cp.items[cp.active] : ta.value.slice(cp.bracketStart + 1, close);
+  let chosen = cp.items[cp.active] != null ? cp.items[cp.active] : ta.value.slice(cp.bracketStart + 1, close);
+  const cn = normalizeChordInput(chosen);
+  if (isChord(cn)) chosen = cn;
   const before = ta.value.slice(0, cp.bracketStart);
   const tok = '[' + chosen + ']';
   ta.value = before + tok + ta.value.slice(close + 1);
@@ -1473,34 +1496,98 @@ function closeChordPopup() {
   chordPopup = null;
 }
 
+// Pin chords onto the palette before the chart mentions them. Returns true if
+// every token was a chord (all-or-nothing, so one typo in a pasted row doesn't
+// half-apply); duplicates are folded in silently.
+function addPaletteChords(raw) {
+  ensureSongForTyping();
+  const s = currentSong();
+  if (!s) return false;
+  const toks = String(raw).split(/[\s,]+/).filter(Boolean);
+  if (!toks.length) return false;
+  const norm = toks.map(normalizeChordInput);
+  if (!norm.every(isChord)) return false;
+  s.palette = s.palette || [];
+  const have = new Set(s.palette);
+  for (const c of norm) if (!have.has(c)) { have.add(c); s.palette.push(c); }
+  s.updated = Date.now();
+  schedulePersist();
+  return true;
+}
+
+function unpinPaletteChord(chord) {
+  const s = currentSong();
+  if (!s || !s.palette) return;
+  s.palette = s.palette.filter((c) => c !== chord);
+  s.updated = Date.now();
+  schedulePersist();
+  renderPalette();
+}
+
 function renderPalette() {
+  const s = currentSong();
   const re = /\[([^\]]*)\]/g;
   const seen = new Set();
-  const list = [];
+  const textList = [];
   let m;
   while ((m = re.exec(el.editor.value)) !== null) {
-    if (isChord(m[1]) && !seen.has(m[1])) { seen.add(m[1]); list.push(m[1]); }
+    if (isChord(m[1]) && !seen.has(m[1])) { seen.add(m[1]); textList.push(m[1]); }
   }
+  // Pinned chords lead, in the order they were pinned, so the Alt+N numbers
+  // match the palette as the user built it; chords the chart uses that were
+  // never pinned follow in order of first appearance.
+  const pinned = (s && s.palette ? s.palette : []).filter(isChord);
+  const pinSet = new Set(pinned);
+  const list = pinned.concat(textList.filter((c) => !pinSet.has(c)));
   paletteChords = list; // Alt+1..9 map onto these, in order
+
+  // The add box is rebuilt with everything else; carry its half-typed text and
+  // focus across so a render mid-thought doesn't eat the user's input.
+  const prevAdd = document.getElementById('palette-add');
+  const addVal = prevAdd ? prevAdd.value : '';
+  const addFocus = prevAdd && document.activeElement === prevAdd;
+
   const emptyBtn = '<button class="chip chip-empty" id="empty-chord-btn" title="Insert empty [ ] — or just type [ to search chords">[ ]</button>';
-  el.palette.innerHTML = emptyBtn + list.map((c, i) => {
+  const addBox = '<input id="palette-add" class="palette-add" type="text" placeholder="add chords…" spellcheck="false" ' +
+    'title="Build the palette ahead of the song: type chords (space-separated) and press Enter to pin them here — chips and hotkeys work before the chart mentions them" />';
+  el.palette.innerHTML = emptyBtn + addBox + list.map((c, i) => {
     const key = i < 9 ? `<span class="chip-key">${i + 1}</span>` : '';
     const hint = i < 9 ? `  (${ALT_LABEL}${i + 1})` : '';
-    return `<button class="chip" data-chord="${escapeHtml(c)}" title="Insert [${escapeHtml(c)}]${hint}">${key}${escapeHtml(c)}</button>`;
+    const x = pinSet.has(c) ? `<span class="chip-x" data-chord="${escapeHtml(c)}" title="Unpin ${escapeHtml(c)} from the palette">&times;</span>` : '';
+    return `<button class="chip" data-chord="${escapeHtml(c)}" title="Insert [${escapeHtml(c)}]${hint}">${key}${escapeHtml(c)}${x}</button>`;
   }).join('') +
     `<span class="palette-hint" title="Alt/Option + a number drops that chord; typing [ opens a chord search">${ALT_LABEL}1–9 · type [ to search</span>`;
   el.palette.querySelectorAll('.chip[data-chord]').forEach((b) =>
     b.addEventListener('click', () => insertAtCursor('[' + b.dataset.chord + ']')));
+  el.palette.querySelectorAll('.chip-x').forEach((x) =>
+    x.addEventListener('click', (e) => { e.stopPropagation(); unpinPaletteChord(x.dataset.chord); }));
   document.getElementById('empty-chord-btn').addEventListener('click', insertEmptyChord);
 
-  // Keep the "Replace" dropdown in sync with the chords in use.
+  const add = document.getElementById('palette-add');
+  add.value = addVal;
+  if (addFocus) add.focus();
+  add.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (addPaletteChords(add.value)) {
+      renderPalette(); // rebuilds the box empty; re-focus it for the next chord
+      const next = document.getElementById('palette-add');
+      next.value = '';
+      next.focus();
+    } else if (add.value.trim()) {
+      flashInvalid(add);
+    }
+  });
+
+  // Keep the "Replace" dropdown in sync with the chords in use — the ones the
+  // chart actually contains, not pinned-only chords with nothing to replace.
   const sel = document.getElementById('replace-from');
   if (sel) {
     const prev = sel.value;
-    sel.innerHTML = list.length
-      ? list.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')
+    sel.innerHTML = textList.length
+      ? textList.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')
       : '<option value="">—</option>';
-    if (list.includes(prev)) sel.value = prev;
+    if (textList.includes(prev)) sel.value = prev;
   }
 }
 
@@ -1734,10 +1821,13 @@ function transposeEditorText(semi) {
 function replaceChordAll() {
   if (!currentSong()) return;
   const from = document.getElementById('replace-from').value;
-  const to = document.getElementById('replace-to').value.trim();
+  const toInput = document.getElementById('replace-to');
+  const to = normalizeChordInput(toInput.value);
   if (!from || !to || !el.editor.value.includes('[' + from + ']')) return;
+  // 'em' arrives as Em; what still isn't a chord gets flagged, not installed.
+  if (!isChord(to)) { flashInvalid(toInput); return; }
   replaceEditorText(replaceChordText(el.editor.value, from, to));
-  document.getElementById('replace-to').value = '';
+  toInput.value = '';
 }
 
 // Insert text at the cursor. cursorOffset (optional) places the caret that many
@@ -2419,6 +2509,7 @@ function songToCho(s) {
   if (s.capo) out += `{capo: ${s.capo}}\n`;
   if (s.tempo) out += `{tempo: ${s.tempo}}\n`;
   if (s.tuning && s.tuning !== 'standard') out += `{tuning: ${s.tuning}}\n`;
+  if (s.palette && s.palette.length) out += `{palette: ${s.palette.join(' ')}}\n`;
   if (out) out += '\n';
   out += s.body;
   if (s.strums && s.strums.length) {
@@ -2461,7 +2552,7 @@ function parseCho(text, fallbackTitle) {
     if (sot) { sawDirective = true; tabLabel = sot[1].trim() || 'Riff'; tabLines = []; continue; }
     const sos = line.match(/^\{start_of_strum\s*:?\s*(.*)\}\s*$/i);
     if (sos) { sawDirective = true; strumLabel = sos[1].trim() || 'Strum'; strumLines = []; continue; }
-    const t = line.match(/^\{(title|artist|transpose|capo|key|tempo|tuning)\s*:\s*(.*)\}\s*$/i);
+    const t = line.match(/^\{(title|artist|transpose|capo|key|tempo|tuning|palette)\s*:\s*(.*)\}\s*$/i);
     if (t) {
       sawDirective = true;
       const key = t[1].toLowerCase();
@@ -2472,6 +2563,7 @@ function parseCho(text, fallbackTitle) {
       else if (key === 'key') s.key = noteToPc(t[2]);
       else if (key === 'tempo') s.tempo = Math.max(20, Math.min(400, parseInt(t[2], 10))) || null;
       else if (key === 'tuning') { const v = t[2].trim(); s.tuning = isSongTuning(v) ? v : null; }
+      else if (key === 'palette') s.palette = t[2].trim().split(/\s+/).map(normalizeChordInput).filter(isChord);
     } else {
       body.push(line);
     }
