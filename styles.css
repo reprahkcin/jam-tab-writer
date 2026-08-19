@@ -1936,6 +1936,54 @@ body.performing { overflow: hidden; }
 .sl-actions .tool-start { padding: 5px 12px; border-radius: 6px; cursor: pointer; }
 .sl-actions .tool-start:disabled { opacity: 0.4; cursor: default; }
 
+/* Per-song "add to setlist" button on the list rows, and its picker popup. */
+.song-item .add-set {
+  opacity: 0;
+  flex: none;
+  display: inline-flex;
+  background: none;
+  border: none;
+  color: var(--muted);
+  padding: 2px 4px;
+  cursor: pointer;
+}
+.song-item:hover .add-set, .song-item .add-set:focus-visible { opacity: 1; }
+.song-item .add-set:hover { color: var(--accent); }
+.song-item .add-set .ico { width: 13px; height: 13px; }
+@media (hover: none) { .song-item .add-set { opacity: 1; } } /* no hover to reveal it on touch */
+
+.setlist-pop {
+  position: fixed;
+  z-index: 1300;
+  min-width: 160px;
+  max-width: 240px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  font-size: 13px;
+}
+.setlist-pop-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.setlist-pop-item:hover { background: var(--panel-2); }
+.setlist-pop-item .sl-count { margin-left: auto; padding-left: 10px; }
+.setlist-pop-item.done { color: var(--accent); justify-content: center; cursor: default; }
+.setlist-pop-new { color: var(--muted); }
+.setlist-pop-new:hover { color: var(--text); }
+.sp-check { color: var(--accent); }
+
 /* ---- PDF drop / conversion overlay --------------------------------------- */
 .pdf-overlay {
   position: fixed;

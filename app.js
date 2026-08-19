@@ -1926,8 +1926,10 @@ function songItem(s, deletable, depth) {
   li.innerHTML =
     `<span class="st"><b>${escapeHtml(s.title || 'Untitled')}</b>` +
     `<small>${escapeHtml(sub)}</small></span>` +
+    `<button class="add-set" title="Add to setlist"><svg class="ico"><use href="#i-setlist"/></svg></button>` +
     (deletable ? `<button class="del" title="Delete">&times;</button>` : '');
   li.querySelector('.st').addEventListener('click', () => selectSong(s.id));
+  li.querySelector('.add-set').addEventListener('click', (e) => { e.stopPropagation(); openSetlistPicker(s, e.currentTarget); });
   const delBtn = li.querySelector('.del');
   if (delBtn) delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteSong(s.id); });
   return li;
@@ -2015,8 +2017,10 @@ function renderFiltered(q) {
     li.className = 'song-item' + (s.id === currentId ? ' active' : '');
     let sub = s.artist || '';
     if (mode === 'folder') { const lib = libraries.find((l) => l.id === s.libId); sub = (lib ? lib.name + '/' : '') + (s.path || ''); }
-    li.innerHTML = `<span class="st"><b>${escapeHtml(s.title || 'Untitled')}</b><small>${escapeHtml(sub)}</small></span>`;
+    li.innerHTML = `<span class="st"><b>${escapeHtml(s.title || 'Untitled')}</b><small>${escapeHtml(sub)}</small></span>` +
+      `<button class="add-set" title="Add to setlist"><svg class="ico"><use href="#i-setlist"/></svg></button>`;
     li.querySelector('.st').addEventListener('click', () => selectSong(s.id));
+    li.querySelector('.add-set').addEventListener('click', (e) => { e.stopPropagation(); openSetlistPicker(s, e.currentTarget); });
     el.list.appendChild(li);
   }
 }
@@ -3618,6 +3622,66 @@ function resolveKey(key) {
     return songs.find((s) => s.libId === libId && (s.path || '') === path);
   }
   return songs.find((s) => s.id === key.slice(6));
+}
+
+// Per-song picker: every song row carries a small setlist button that opens
+// this popup, so a set can be built straight from the list without opening the
+// builder modal. Clicking a set adds the song (again, if need be — sets may
+// repeat a tune); ✓ marks sets that already hold it.
+let setPop = null; // the open picker element, if any
+
+function closeSetlistPicker() {
+  if (!setPop) return;
+  setPop.remove(); setPop = null;
+  document.removeEventListener('mousedown', onSetPopDismiss, true);
+  document.removeEventListener('keydown', onSetPopKey, true);
+  document.removeEventListener('scroll', onSetPopScroll, true);
+}
+function onSetPopDismiss(e) {
+  if (setPop && !setPop.contains(e.target) && !setPop.anchor.contains(e.target)) closeSetlistPicker();
+}
+function onSetPopKey(e) { if (e.key === 'Escape') { e.stopPropagation(); closeSetlistPicker(); } }
+function onSetPopScroll(e) { if (setPop && !setPop.contains(e.target)) closeSetlistPicker(); }
+
+function openSetlistPicker(song, anchor) {
+  if (setPop && setPop.anchor === anchor) { closeSetlistPicker(); return; } // same button toggles
+  closeSetlistPicker();
+  const pop = document.createElement('div');
+  pop.className = 'setlist-pop';
+  pop.anchor = anchor;
+  pop.innerHTML = setlists.map((sl) => {
+    const has = sl.items.some((it) => it.key === songKey(song));
+    return `<div class="setlist-pop-item" data-id="${sl.id}">${has ? '<span class="sp-check">✓</span>' : ''}` +
+      `${escapeHtml(sl.name)}<span class="sl-count">${sl.items.length}</span></div>`;
+  }).join('') + '<div class="setlist-pop-item setlist-pop-new">+ New setlist…</div>';
+  document.body.appendChild(pop);
+  // Anchor beside the button; flip above when the viewport bottom would clip it.
+  const r = anchor.getBoundingClientRect();
+  pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8)) + 'px';
+  pop.style.top = (r.bottom + 4 + pop.offsetHeight > window.innerHeight - 8
+    ? Math.max(8, r.top - pop.offsetHeight - 4) : r.bottom + 4) + 'px';
+  setPop = pop;
+
+  const addTo = (rowEl, sl) => {
+    sl.items.push({ key: songKey(song), title: song.title || 'Untitled' });
+    saveSetlists();
+    if (!document.getElementById('setlist-modal').hidden) renderSetlistModal();
+    rowEl.textContent = 'Added ✓'; // flash confirmation in place, then close
+    rowEl.classList.add('done');
+    setTimeout(() => { if (setPop === pop) closeSetlistPicker(); }, 500);
+  };
+  pop.querySelectorAll('.setlist-pop-item[data-id]').forEach((it) =>
+    it.addEventListener('click', () => addTo(it, setlists.find((x) => x.id === it.dataset.id))));
+  pop.querySelector('.setlist-pop-new').addEventListener('click', function () {
+    const name = prompt('New setlist name:', 'Set ' + (setlists.length + 1));
+    if (name === null) { closeSetlistPicker(); return; }
+    const sl = { id: newId(), name: name.trim() || 'Set ' + (setlists.length + 1), items: [] };
+    setlists.push(sl); editingSetId = sl.id;
+    addTo(this, sl);
+  });
+  document.addEventListener('mousedown', onSetPopDismiss, true);
+  document.addEventListener('keydown', onSetPopKey, true);
+  document.addEventListener('scroll', onSetPopScroll, true);
 }
 
 function openSetlistModal() {
