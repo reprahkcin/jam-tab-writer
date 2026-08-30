@@ -751,6 +751,10 @@ function selectSong(id) {
   renderBreadcrumb();
   renderRiffEditor(s);
   renderStrumEditor(s);
+  // The takes list is a view on the open song, so it follows the selection
+  // whenever the capture panel is showing. (renderTakes is defined later.)
+  const capPanel = document.getElementById('capture-panel');
+  if (capPanel && !capPanel.hidden) renderTakes();
 }
 
 // Two views of every chord:
@@ -5311,6 +5315,7 @@ function captureToggle() { return cap.on ? captureStop() : captureStart(); }
 
 // ---- Takes list ------------------------------------------------------------
 let takeUrls = [];   // object URLs to revoke on the next render
+let capUnfiledOpen = false; // unfiled takes are folded away while a song is open
 
 async function renderTakes() {
   const box = capEl('cap-takes');
@@ -5323,7 +5328,7 @@ async function renderTakes() {
   const mine = all.filter((t) => t.songKey && t.songKey === curKey);
   const unfiled = all.filter((t) => !t.songKey);
   const countEl = capEl('cap-takes-count');
-  if (countEl) countEl.textContent = all.length ? `${all.length} total` : '';
+  if (countEl) countEl.textContent = mine.length ? `${mine.length} for this song` : '';
 
   const row = (t) => {
     const url = URL.createObjectURL(t.blob);
@@ -5340,29 +5345,28 @@ async function renderTakes() {
       `<button class="cap-del" data-id="${t.id}" title="Delete this take">&#10005;</button></div></div>`;
   };
 
-  // Every song's takes, grouped: the open song first (even when empty, so the
-  // record target is obvious), then the other songs by their newest take,
-  // then the unfiled bin. `all` is sorted newest-first, so first appearance
-  // orders the groups by recency.
-  const bySong = new Map();
-  for (const t of all) {
-    if (!t.songKey || t.songKey === curKey) continue;
-    if (!bySong.has(t.songKey)) bySong.set(t.songKey, { title: t.songTitle || 'Untitled', takes: [] });
-    bySong.get(t.songKey).takes.push(t);
-  }
+  // Only the open song's takes — the list is a view on the song, not a bin of
+  // everything ever recorded. The unfiled group stays so a stray take can be
+  // filed here (that's the only place the File button lives).
   let html = '';
   if (cur) {
     html += `<div class="cap-group">${escapeHtml(cur.title || 'Untitled')}</div>`;
     html += mine.length ? mine.map(row).join('') : '<div class="cap-empty">No takes for this song yet.</div>';
   }
-  for (const g of bySong.values()) {
-    html += `<div class="cap-group">${escapeHtml(g.title)}</div>` + g.takes.map(row).join('');
-  }
+  // Unfiled takes (recorded with no song open) stay out of the way behind a
+  // one-line toggle — they must remain reachable, since this is the only
+  // place a stray take can be filed under a song.
   if (unfiled.length) {
-    html += `<div class="cap-group">Unfiled</div>` + unfiled.map(row).join('');
+    const open = cur ? capUnfiledOpen : true;
+    html += `<div class="cap-group cap-unfiled-toggle" title="${open ? 'Hide' : 'Show'} unfiled takes">` +
+      `${open ? '&#9662;' : '&#9656;'} ${unfiled.length} unfiled take${unfiled.length === 1 ? '' : 's'}</div>`;
+    if (open) html += unfiled.map(row).join('');
   }
   if (!html) html = '<div class="cap-empty">No takes yet. Hit Record.</div>';
   box.innerHTML = html;
+
+  const tog = box.querySelector('.cap-unfiled-toggle');
+  if (tog && cur) tog.addEventListener('click', () => { capUnfiledOpen = !capUnfiledOpen; renderTakes(); });
 
   box.querySelectorAll('.cap-del').forEach((b) => b.addEventListener('click', async () => {
     await takesDelete(b.dataset.id);
