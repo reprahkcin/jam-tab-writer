@@ -5060,6 +5060,33 @@ function encodeWav(chunks, frames, channels, sampleRate) {
   return new Blob([buf], { type: 'audio/wav' });
 }
 
+// Decode a compressed take and re-wrap it as WAV. The browser that just
+// recorded the blob can always decode it, so this only fails on truly
+// broken data — in which case the caller keeps the original.
+async function capBlobToWav(blob) {
+  let ctx = null;
+  try {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const audio = await ctx.decodeAudioData(await blob.arrayBuffer());
+    const ch = audio.numberOfChannels, n = audio.length;
+    const chans = [];
+    for (let c = 0; c < ch; c++) chans.push(audio.getChannelData(c));
+    const out = new Int16Array(n * ch);
+    for (let i = 0; i < n; i++) {
+      for (let c = 0; c < ch; c++) {
+        let v = chans[c][i];
+        v = v < -1 ? -1 : v > 1 ? 1 : v;
+        out[i * ch + c] = v < 0 ? v * 0x8000 : v * 0x7fff;
+      }
+    }
+    return encodeWav([out], n, ch, audio.sampleRate);
+  } catch {
+    return null;
+  } finally {
+    if (ctx) { try { ctx.close(); } catch { /* already closed */ } }
+  }
+}
+
 // Device labels stay blank until mic permission has been granted once, so the
 // list is only meaningful after the first successful getUserMedia.
 async function capLoadDevices() {
@@ -5133,7 +5160,11 @@ async function captureStart() {
   cap.chunks = [];
   cap.frames = 0;
 
-  if (prefs.capture.format === 'wav') {
+  // Session-local: a worklet failure downgrades this take, never the saved
+  // preference. Persisting the fallback once left the selector saying WAV
+  // while every take quietly came out webm.
+  let fmt = prefs.capture.format;
+  if (fmt === 'wav') {
     try {
       if (!cap.workletUrl) {
         cap.workletUrl = URL.createObjectURL(new Blob([CAPTURE_WORKLET_SRC], { type: 'application/javascript' }));
@@ -5143,14 +5174,14 @@ async function captureStart() {
       cap.node.port.onmessage = (e) => { if (cap.on) capPushPcm(e.data); };
       cap.src.connect(cap.node);
     } catch {
-      capSetStatus('Uncompressed capture isn’t available here — recording Opus instead.');
-      prefs.capture.format = 'opus';
-      capEl('cap-format').value = 'opus';
-      savePrefs();
+      capSetStatus('Uncompressed capture isn’t available here — recording compressed for this take.');
+      fmt = 'opus';
     }
   }
-  if (prefs.capture.format === 'opus') {
-    const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((t) => MediaRecorder.isTypeSupported(t));
+  if (fmt === 'opus') {
+    // M4A/AAC opens everywhere — Messages, Logic, QuickTime. WebM is the
+    // last resort, and captureStop rewraps it as WAV so it never ships.
+    const mime = ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'].find((t) => MediaRecorder.isTypeSupported(t));
     cap.recorder = new MediaRecorder(cap.stream, mime ? { mimeType: mime } : undefined);
     cap.recorder.ondataavailable = (e) => { if (e.data && e.data.size) cap.chunks.push(e.data); };
     cap.recorder.start(1000);
@@ -5212,6 +5243,12 @@ async function captureStop() {
       rec.stop();
     });
     ext = (rec.mimeType || '').includes('mp4') ? 'm4a' : 'webm';
+    if (ext === 'webm') {
+      // WebM is the one container the rest of the world bounces — Messages,
+      // Logic, QuickTime. Decode it and re-wrap as WAV so it never leaves.
+      const wav = await capBlobToWav(blob);
+      if (wav) { blob = wav; ext = 'wav'; }
+    }
   } else {
     blob = encodeWav(cap.pcm, cap.frames, cap.channels, cap.rate);
     ext = 'wav';
@@ -5680,6 +5717,9 @@ document.getElementById('cap-device').addEventListener('change', (e) => {
   savePrefs();
   capSetStatus(prefs.capture.deviceId ? `Armed: ${prefs.capture.deviceLabel}` : 'Armed: default input');
 });
+// Show the format that will actually be recorded — the selector used to sit
+// on its HTML default while the saved preference said otherwise.
+document.getElementById('cap-format').value = prefs.capture.format === 'opus' ? 'opus' : 'wav';
 document.getElementById('cap-format').addEventListener('change', (e) => {
   prefs.capture.format = e.target.value === 'opus' ? 'opus' : 'wav';
   savePrefs();
