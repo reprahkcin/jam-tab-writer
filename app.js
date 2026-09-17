@@ -674,8 +674,8 @@ const el = {
 let songs = loadSongs();
 let currentId = null;
 
-// Default jam: two guitars, uke, piano, harmonica on; mandolin + bass off.
-const ENSEMBLE_DEFAULTS = { guitar1: true, guitar2: true, ukulele: true, mandolin: false, piano: true, bass: false, harmonica: true };
+// Default jam: two guitars, uke, piano, harmonica on; lap steel, mandolin + bass off.
+const ENSEMBLE_DEFAULTS = { guitar1: true, guitar2: true, lapsteel: false, ukulele: true, mandolin: false, piano: true, bass: false, harmonica: true };
 
 function loadPrefs() {
   const defaults = {
@@ -690,6 +690,7 @@ function loadPrefs() {
     capture: { deviceId: null, deviceLabel: '', format: 'wav' },
     metro: { bpm: 100, steps: 16, click: true, pattern: null },
     tunerPreset: 'standard',
+    lapTuning: 'lapC6', // a TUNER_PRESETS id; checked when it's read (see lapTuning)
   };
   let p = defaults;
   try { p = Object.assign(defaults, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch { /* keep defaults */ }
@@ -855,6 +856,7 @@ function updateFrontMatter() {
 const INSTRUMENTS = [
   { id: 'guitar1', label: 'Guitar 1', kind: 'guitar', chords: true, scale: true, tuning: STRING_ABS, high: false },
   { id: 'guitar2', label: 'Guitar 2', kind: 'guitar', chords: true, scale: true, tuning: STRING_ABS, high: true },
+  { id: 'lapsteel', label: 'Lap steel', kind: 'lap', chords: true, scale: true },
   { id: 'mandolin', label: 'Mandolin', kind: 'fret', chords: true, scale: true, tuning: MANDO_ABS, voicing: mandoVoicing, diagram: mandoDiagramSVG },
   { id: 'ukulele', label: 'Ukulele', kind: 'fret', chords: true, scale: true, tuning: UKE_ABS, voicing: ukeVoicing, diagram: ukeDiagramSVG },
   { id: 'piano', label: 'Piano', kind: 'piano', chords: true, scale: true },
@@ -1049,29 +1051,36 @@ function renderInstruments(s) {
   const showScale = (inst) => prefs.showScales && inst.scale && pc !== null;
 
   const active = activeInstruments().filter((i) => i.kind !== 'harmonica');
+  const lap = active.some((i) => i.kind === 'lap') ? lapChordsFor(s, chords) : null;
   let html = '';
   if (pc !== null && prefs.showScales && active.some((i) => i.scale)) {
     html += scaleControlsHtml(s, pc, auto, scale, highlight);
   }
   for (const inst of active) {
     let body = '';
-    if (prefs.showChords && inst.chords) body += `<div class="inst-chords">${chordDiagramsFor(inst, chords, soundOf)}</div>`;
+    if (prefs.showChords && inst.chords) body += `<div class="inst-chords">${chordDiagramsFor(inst, chords, soundOf, lap)}</div>`;
     if (showScale(inst)) {
-      const map = inst.kind === 'piano'
-        ? pianoScaleSVG(pc, scale.iv, highlight)
-        : scaleDiagramSVG(pc, scale.iv, highlight, inst.tuning);
+      let map;
+      if (inst.kind === 'piano') map = pianoScaleSVG(pc, scale.iv, highlight);
+      else if (inst.kind === 'lap') {
+        map = scaleDiagramSVG(pc, scale.iv, highlight, lap.abs, { onWire: true, ruler: lapRuler(lap) }) +
+          `<div class="lap-ruler-note">Notes sit on the fret, where the bar goes. ` +
+          `Under the numbers: the chord a straight bar gives at each fret, this song’s in bold.</div>`;
+      } else map = scaleDiagramSVG(pc, scale.iv, highlight, inst.tuning);
       body += `<div class="inst-scale">${map}</div>`;
     }
     if (!body) continue;
-    html += `<section class="inst-panel" data-inst="${inst.id}"><div class="inst-head">${escapeHtml(inst.label)}</div>${body}</section>`;
+    const head = escapeHtml(inst.label) + (inst.kind === 'lap' ? lapTuningPickerHtml(lap) : '');
+    html += `<section class="inst-panel" data-inst="${inst.id}"><div class="inst-head">${head}</div>${body}</section>`;
   }
   el.instPanels.innerHTML = html ||
     '<span class="palette-empty">No instrument charts to show — add instruments above, or enable Chords / Scales.</span>';
   wireInstruments(s);
 }
 
-// Chord diagrams row for one instrument.
-function chordDiagramsFor(inst, chords, soundOf) {
+// Chord diagrams row for one instrument. `lap` is the lap steel's state from
+// lapChordsFor (only needed when that instrument is on).
+function chordDiagramsFor(inst, chords, soundOf, lap) {
   let out = '';
   if (inst.kind === 'guitar') {
     const store = prefs.voicings[inst.id] || (prefs.voicings[inst.id] = {});
@@ -1108,10 +1117,89 @@ function chordDiagramsFor(inst, chords, soundOf) {
       }
       out += pianoChordSVG(c.shape, inv, soundOf(c), select);
     }
+  } else if (inst.kind === 'lap') {
+    for (const c of lap.chords) {
+      let select = '';
+      if (c.list.length > 1) {
+        const opts = c.list.map((v, i) => `<option value="${i}"${i === c.idx ? ' selected' : ''}>${escapeHtml(lapVoicingLabel(v))}</option>`).join('');
+        select = `<select class="cd-voicing" data-inst="${escapeHtml(lap.store)}" data-chord="${escapeHtml(c.name)}">${opts}</select>`;
+      }
+      // With a capo the guitar's chart names shapes, so say which one this is.
+      const shape = c.name !== c.shape ? `<div class="cd-sound">guitar shape ${escapeHtml(c.shape)}</div>` : '';
+      out += lapDiagramSVG(c.name, c.v, lap.abs, c.shape, shape + select);
+    }
   } else { // generic fretted (ukulele, mandolin, …)
     for (const c of chords) out += inst.diagram(c.shape, inst.voicing(c.shape), soundOf(c), '');
   }
   return out;
+}
+
+// ---- Lap steel -------------------------------------------------------------
+// The tuning is the player's pick, made in the lap steel's own panel. The list
+// is the tuner's lap steel presets, so a tuning added there shows up here too
+// and the two can't disagree about the pitches.
+function lapTuningIds() {
+  return Object.keys(TUNER_PRESETS).filter((id) => TUNER_PRESETS[id].inst === 'Lap steel');
+}
+function lapTuning() {
+  const id = lapTuningIds().includes(prefs.lapTuning) ? prefs.lapTuning : 'lapC6';
+  const t = TUNER_PRESETS[id];
+  return { id, t, abs: t.strings.map(([note]) => noteToMidi(note)) };
+}
+
+// Everything the lap steel's charts need for this song. It plays what the band
+// hears — nobody capos a lap steel, and the bar moves anyway — so its chords
+// are the sounding ones, each with its grips best-first and the one chosen.
+// Choices are remembered per tuning, since a grip only means something in one.
+function lapChordsFor(s, chords) {
+  const tuning = lapTuning();
+  const store = `lapsteel:${tuning.id}`;
+  const picks = prefs.voicings[store] || {};
+  const list = chords.map((c) => {
+    const name = s.capo ? transposeChord(c.raw, soundShift(s)) : c.shape;
+    const grips = lapVoicings(name, tuning.abs);
+    let idx = picks[name] || 0;
+    if (idx >= grips.length) idx = 0;
+    return { shape: c.shape, name, list: grips, idx, v: grips[idx] || null };
+  });
+  return Object.assign(tuning, { store, chords: list });
+}
+
+// The tuning picker in the lap steel's heading. Paper gets the tuning as text:
+// every chart below depends on it and nothing else on the page says which.
+function lapTuningPickerHtml(lap) {
+  const opts = lapTuningIds().map((id) =>
+    `<option value="${id}"${id === lap.id ? ' selected' : ''}>${escapeHtml(TUNER_PRESETS[id].name)}</option>`).join('');
+  return `<select class="lap-tuning" title="Lap steel tuning">${opts}</select>` +
+    `<span class="lap-tuning-print">${escapeHtml(lap.t.name)}</span>`;
+}
+
+// Minor chords read better with these spellings (G#m, Bbm) than the key names.
+const MINOR_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'G#', 'A', 'Bb', 'B'];
+function isMinorChord(ci) { return ci.iv.includes(3) && !ci.iv.includes(4); }
+
+// Rows for under the lap steel's fret map: for each chord the tuning gives with
+// a straight bar (its `bars`), that chord's name at every fret 0–15. Where one
+// of this song's chords is played — same root, same major/minor, at the fret
+// its chosen grip uses — the cell shows the song's own name, highlighted.
+function lapRuler(lap) {
+  return (lap.t.bars || []).map((bar) => {
+    const ci = chordIntervals(bar);
+    const minor = isMinorChord(ci);
+    const suffix = bar.match(CHORD_RE)[3];
+    const row = [];
+    for (let f = 0; f <= 15; f++) {
+      const pc = (ci.rootPc + f) % 12;
+      const here = lap.chords.filter((c) => {
+        const cc = c.v && c.v.fret === f && chordIntervals(c.name);
+        return cc && cc.rootPc === pc && isMinorChord(cc) === minor;
+      }).map((c) => c.name);
+      row.push(here.length
+        ? { text: here.join(' '), hi: true }
+        : { text: (minor ? MINOR_NAMES : HARP_NAMES)[pc] + suffix, hi: false });
+    }
+    return row;
+  });
 }
 
 function wireInstruments(s) {
@@ -1119,6 +1207,11 @@ function wireInstruments(s) {
     (prefs.voicings[sel.dataset.inst] || (prefs.voicings[sel.dataset.inst] = {}))[sel.dataset.chord] = parseInt(sel.value, 10);
     savePrefs(); renderInstruments(currentSong());
   }));
+  const lapSel = el.instPanels.querySelector('.lap-tuning');
+  if (lapSel) lapSel.addEventListener('change', () => {
+    prefs.lapTuning = lapSel.value;
+    savePrefs(); renderInstruments(currentSong());
+  });
   el.instPanels.querySelectorAll('.pk-inv').forEach((sel) => sel.addEventListener('change', () => {
     (prefs.pianoInv.piano || (prefs.pianoInv.piano = {}))[sel.dataset.chord] = parseInt(sel.value, 10);
     savePrefs(); renderInstruments(currentSong());
@@ -4635,6 +4728,17 @@ const TUNER_PRESETS = {
   ukeC: { name: 'Standard C (gCEA, re-entrant)', inst: 'Ukulele', strings: [['G4', 0], ['C4', 0], ['E4', 0], ['A4', 0]] },
   ukeLowG: { name: 'Low G (GCEA)', inst: 'Ukulele', strings: [['G3', 0], ['C4', 0], ['E4', 0], ['A4', 0]] },
   ukeBaritone: { name: 'Baritone (DGBE)', inst: 'Ukulele', strings: [['D3', 0], ['G3', 0], ['B3', 0], ['E4', 0]] },
+  // Lap steel: these are also the tunings its chord charts and fret map offer.
+  // `bars` names the chords a straight bar gives at the nut, which the fret
+  // map carries up the neck.
+  lapC6: { name: 'C6 (C E G A C E)', inst: 'Lap steel', bars: ['C', 'Am'], strings: [['C3', 0], ['E3', 0], ['G3', 0], ['A3', 0], ['C4', 0], ['E4', 0]] },
+  lapA6: { name: 'A6 (C# E F# A C# E)', inst: 'Lap steel', bars: ['A', 'F#m'], strings: [['C#3', 0], ['E3', 0], ['F#3', 0], ['A3', 0], ['C#4', 0], ['E4', 0]] },
+  lapOpenG: { name: 'Open G, Dobro (G B D G B D)', inst: 'Lap steel', bars: ['G'], strings: [['G2', 0], ['B2', 0], ['D3', 0], ['G3', 0], ['B3', 0], ['D4', 0]] },
+  lapOpenGLow: { name: 'Open G, low bass (D G D G B D)', inst: 'Lap steel', bars: ['G'], strings: [['D2', 0], ['G2', 0], ['D3', 0], ['G3', 0], ['B3', 0], ['D4', 0]] },
+  lapOpenD: { name: 'Open D (D A D F# A D)', inst: 'Lap steel', bars: ['D'], strings: [['D2', 0], ['A2', 0], ['D3', 0], ['F#3', 0], ['A3', 0], ['D4', 0]] },
+  lapOpenE: { name: 'Open E (E B E G# B E)', inst: 'Lap steel', bars: ['E'], strings: [['E2', 0], ['B2', 0], ['E3', 0], ['G#3', 0], ['B3', 0], ['E4', 0]] },
+  lapE7: { name: 'E7 (B D E G# B E)', inst: 'Lap steel', bars: ['E7'], strings: [['B2', 0], ['D3', 0], ['E3', 0], ['G#3', 0], ['B3', 0], ['E4', 0]] },
+  lapE13: { name: 'E13 (B D E G# C# E)', inst: 'Lap steel', bars: ['E7', 'C#m'], strings: [['B2', 0], ['D3', 0], ['E3', 0], ['G#3', 0], ['C#4', 0], ['E4', 0]] },
 };
 
 // Autocorrelation pitch detector. Returns frequency in Hz, or -1 if unclear.
@@ -4689,12 +4793,16 @@ function freqToNote(freq) {
   };
 }
 
+// "E2" → 40 (MIDI note number), or null if it doesn't parse.
+function noteToMidi(spec) {
+  const m = /^([A-G]#?)(-?\d+)$/.exec(spec);
+  return m ? NOTE_NAMES_SHARP.indexOf(m[1]) + 12 * (Number(m[2]) + 1) : null;
+}
+
 // "E2" → 82.41 Hz.
 function noteToFreq(spec) {
-  const m = /^([A-G]#?)(-?\d+)$/.exec(spec);
-  if (!m) return 0;
-  const midi = NOTE_NAMES_SHARP.indexOf(m[1]) + 12 * (Number(m[2]) + 1);
-  return 440 * Math.pow(2, (midi - 69) / 12);
+  const midi = noteToMidi(spec);
+  return midi === null ? 0 : 440 * Math.pow(2, (midi - 69) / 12);
 }
 
 // How much signal this tuning needs. Bass fundamentals are too slow for the
