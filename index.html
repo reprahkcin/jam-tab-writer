@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Jam Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=103" />
+  <link rel="stylesheet" href="styles.css?v=104" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -498,6 +498,23 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
     </div>
   </div>
 
+  <!-- Lap steel neck insert: a true-size paper fretboard for a tuning + scale,
+       opened from the lap steel panel. The form is built by renderInsertForm(). -->
+  <div id="insert-modal" class="share-modal" hidden>
+    <div class="share-card insert-card">
+      <div class="share-head">Lap steel neck insert</div>
+      <div class="share-sub">A true-size paper fretboard to slide beneath the strings: one tuning, one scale, on your own neck's fret spacing. Print at 100%, cut on the outlines.</div>
+      <div class="insert-body">
+        <div id="insert-form" class="insert-form"></div>
+        <div id="insert-preview" class="insert-preview"></div>
+      </div>
+      <div class="share-actions">
+        <button id="insert-print" class="tool-start">Print</button>
+        <button id="insert-close">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Share-a-song link dialog. -->
   <div id="share-modal" class="share-modal" hidden>
     <div class="share-card">
@@ -514,11 +531,11 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=103"></script>
+  <script src="chords.js?v=104"></script>
   <!-- After chords.js: the theory charts are drawn with its renderers. -->
-  <script src="learn.js?v=103"></script>
-  <script src="pdf2cho.js?v=103"></script>
-  <script src="qr.js?v=103"></script>
-  <script src="app.js?v=103"></script>
+  <script src="learn.js?v=104"></script>
+  <script src="pdf2cho.js?v=104"></script>
+  <script src="qr.js?v=104"></script>
+  <script src="app.js?v=104"></script>
 </body>
 </html>
