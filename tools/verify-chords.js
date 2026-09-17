@@ -21,10 +21,10 @@ vm.runInContext(src + `
    chordToneLabels, ukeVoicing, mandoVoicing })`, ctx);
 const X = vm.runInContext(`({ OPEN_CHORDS, MOVABLE, TRIAD_TONES, TRIAD_SETS, INV_NAMES, UKE_ABS, MANDO_ABS,
    chordRootPc, parseQuality, resolveChord, chordVoicings, movableAt, triadShape,
-   chordToneLabels, ukeVoicing, mandoVoicing })`, ctx);
+   chordToneLabels, ukeVoicing, mandoVoicing, lapVoicings, chordIntervals, INTERVAL_LABELS })`, ctx);
 const { OPEN_CHORDS, MOVABLE, TRIAD_TONES, TRIAD_SETS, INV_NAMES, UKE_ABS, MANDO_ABS,
   chordRootPc, parseQuality, resolveChord, chordVoicings, movableAt, triadShape,
-  chordToneLabels, ukeVoicing, mandoVoicing } = X;
+  chordToneLabels, ukeVoicing, mandoVoicing, lapVoicings, chordIntervals, INTERVAL_LABELS } = X;
 
 // ---- ground truth ----------------------------------------------------------
 // Expected pitch-class interval sets for every suffix in the banks.
@@ -192,6 +192,49 @@ for (let rootPc = 0; rootPc < 12; rootPc++) {
       if (!setEq(act, exp) && !okWithout5(rootPc, iv, act)) bad(inst, name, describe(rootPc, act, exp));
     }
   }
+}
+
+// ---- 7. Lap steel grips in every lap steel tuning --------------------------
+// The tunings live with the tuner presets in app.js; pull those entries out.
+const appSrc = fs.readFileSync(require('path').join(__dirname, '..', 'app.js'), 'utf8');
+const LAP_TUNINGS = [...appSrc.matchAll(/^\s*(lap\w+): (\{ name: .*inst: 'Lap steel'.*\}),$/gm)]
+  .map(([, id, lit]) => ({ id, ...vm.runInNewContext(`(${lit})`) }));
+if (LAP_TUNINGS.length < 8) bad('lap', 'presets', `only ${LAP_TUNINGS.length} lap steel tunings found in app.js`);
+const midiOf = (n) => { const r = /^([A-G]#?)(\d)$/.exec(n); return SHARP.indexOf(r[1]) + 12 * (Number(r[2]) + 1); };
+const LAP_NAMES = [...SLASHES];
+for (let rootPc = 0; rootPc < 12; rootPc++) for (const suf of SUFFIXES) LAP_NAMES.push(SHARP[rootPc] + suf);
+for (const t of LAP_TUNINGS) {
+  const tuning = t.strings.map(([n]) => midiOf(n));
+  // Its straight-bar chords must really be whole at the nut.
+  for (const bar of t.bars) {
+    const best = lapVoicings(bar, tuning)[0];
+    if (!best || best.fret !== 0 || best.omit.length) bad('lap', `${t.id} bar ${bar}`, `not a whole open chord: ${JSON.stringify(best)}`);
+  }
+  let partial = 0;
+  for (const name of LAP_NAMES) {
+    const ci = chordIntervals(name);
+    const grips = lapVoicings(name, tuning);
+    if (!grips.length) { notes.push(`[lap ${t.id}] ${name}: no grip`); continue; }
+    if (grips[0].omit.length) partial++;
+    const allowed = new Set(ci.iv.map((i) => (ci.rootPc + i) % 12));
+    if (ci.bassPc !== null) allowed.add(ci.bassPc);
+    for (const g of grips) {
+      const label = `${name} ${t.id} @${g.fret}`;
+      const played = g.frets.map((f, i) => (f >= 0 ? tuning[i] + f : null)).filter((n) => n !== null);
+      if (g.frets.some((f) => f >= 0 && f !== g.fret)) { bad('lap', label, 'bar not straight'); continue; }
+      const act = pcSet(played);
+      const wrong = [...act].filter((pc) => !allowed.has(pc));
+      if (wrong.length) bad('lap', label, 'wrong notes ' + wrong.map(pcName).join(','));
+      if (!act.has(ci.rootPc)) bad('lap', label, 'no root');
+      if (act.size < 2) bad('lap', label, 'only one note');
+      const missing = ci.iv.filter((i) => !act.has((ci.rootPc + i) % 12)).map((i) => INTERVAL_LABELS[i]);
+      const said = g.omit.filter((o) => !o.endsWith(' bass'));
+      if (missing.join() !== said.join()) bad('lap', label, `omits ${missing} but says ${said}`);
+      const bassMet = !g.omit.some((o) => o.endsWith(' bass'));
+      if (ci.bassPc !== null && bassMet && Math.min(...played) % 12 !== ci.bassPc) bad('lap', label, 'bass not lowest');
+    }
+  }
+  notes.push(`[lap ${t.id}] ${partial}/${LAP_NAMES.length} chords fall back to a partial grip`);
 }
 
 console.log('\n--- PROBLEMS (' + problems.length + ') ---');

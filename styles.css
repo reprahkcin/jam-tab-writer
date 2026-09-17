@@ -784,6 +784,19 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   margin: 2px 0 8px;
 }
 .inst-chords { display: flex; flex-wrap: wrap; gap: 10px; }
+/* The lap steel's tuning picker rides in its heading. */
+.inst-head .lap-tuning {
+  margin-left: 8px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 2px 6px;
+  font: 400 12px system-ui, sans-serif;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.lap-tuning-print { display: none; }
 .inst-scale { margin-top: 8px; overflow-x: auto; }
 .inst-scale:empty { display: none; }
 
@@ -835,6 +848,10 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
 .chord-diagram svg .cd-dot { fill: var(--text); }
 .chord-diagram svg .cd-mark { fill: var(--muted); font-size: 8px; font-family: system-ui, sans-serif; }
 .chord-diagram svg .cd-fretnum { fill: var(--muted); font-size: 7px; font-family: system-ui, sans-serif; }
+/* Lap steel: the bar across the strings, and the chord tone under each picked string. */
+.chord-diagram svg .lap-bar { fill: var(--muted); opacity: 0.45; }
+.chord-diagram svg .lap-tone { fill: var(--muted); font-size: 6.5px; font-weight: 700; font-family: system-ui, sans-serif; }
+.cd-omit { font-family: system-ui, sans-serif; font-size: 10px; color: var(--muted); margin-top: 1px; }
 
 /* Piano keyboards (chord charts + scale roll) */
 /* Same cell width as guitar/uke so chord columns line up vertically. */
@@ -908,6 +925,10 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
 .scale-svg.has-hi .sc-root:not(.sc-hi) { opacity: 0.45; }
 .scale-svg .sc-label { fill: #1c1e26; font-size: 7px; font-weight: 700; font-family: system-ui, sans-serif; pointer-events: none; }
 .scale-svg .sc-label-open { fill: #ffe08a; font-size: 7px; font-weight: 700; font-family: system-ui, sans-serif; pointer-events: none; }
+/* Lap steel fret map: the straight-bar chord at each fret, the song's picked out. */
+.scale-svg .sc-bar { fill: var(--muted); font-size: 8px; font-family: system-ui, sans-serif; }
+.scale-svg .sc-bar-hi { fill: var(--chord); font-weight: 700; }
+.lap-ruler-note { font: 10px system-ui, sans-serif; color: var(--muted); margin-top: 2px; }
 
 /* Harmonica panel */
 /* Compact single-line harmonica bar, sitting up near the header. */
@@ -1073,6 +1094,12 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   /* The per-instrument headings kept the screen's teal on paper — the last
      coloured text left in a printout that is otherwise black on white. */
   .inst-label, .inst-head { color: #000; }
+  .inst-head .lap-tuning { display: none; }
+  .lap-tuning-print { display: inline; margin-left: 6px; text-transform: none; letter-spacing: normal; font-weight: 400; }
+  .chord-diagram svg .lap-bar { fill: #999; opacity: 1; }
+  .chord-diagram svg .lap-tone, .cd-omit, .lap-ruler-note { fill: #333; color: #333; }
+  .scale-svg .sc-bar { fill: #666; }
+  .scale-svg .sc-bar-hi { fill: #000; }
   /* Piano in print: grayscale fills, labels stay legible. */
   .pk-white { fill: #fff; stroke: #000; }
   .pk-black { fill: #333; stroke: #000; }
@@ -1092,6 +1119,7 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   .cd-name { font-size: 11px; margin-bottom: 2px; }
   .cd-sound { font-size: 9px; }
   .chord-diagram > svg { width: 66px; height: auto; }     /* guitar / uke fretboards */
+  .lap-diagram > svg { width: 80px; }                     /* wider cells: same scale as guitar */
   .piano-diagram { min-width: 0; }
   .piano-diagram .piano-svg { width: 128px; }             /* two-octave piano */
   .scale-svg { max-width: 480px; }

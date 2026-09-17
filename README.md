@@ -292,6 +292,8 @@ button lights up while the panel is open):
     - *Bass* — Standard (EADG), 5-string (BEADG), Drop D (DADG)
     - *Mandolin* — Standard (GDAE), Cross G (GDGD)
     - *Ukulele* — Standard C (gCEA, re-entrant), Low G (GCEA), Baritone (DGBE)
+    - *Lap steel* — C6, A6, Open G (Dobro, GBDGBD), Open G low bass (DGDGBD),
+      Open D, Open E, E7, E13 — the same list the lap steel's charts offer
   - **String row** — each chip shows a string over the pitch it's aiming at in
     Hz, in string order: the thickest string first, which is the 6th on a guitar
     and the 4th on a bass, mandolin or ukulele. (On a re-entrant ukulele that
@@ -574,6 +576,22 @@ you can see the whole band at once. Two global toggles, **Chords** and
   automatically; anything unreachable shows "shape n/a".
 - **Mandolin** — a 4-course (GDAE, fifths) diagram per chord, plus a mandolin
   scale map.
+- **Lap steel** — pick the tuning in the panel's heading: **C6**, **A6**,
+  **Open G** (Dobro *GBDGBD* or low-bass *DGDGBD*), **Open D**, **Open E**,
+  **E7** or **E13**. Nothing is fretted on a lap steel, so each chord diagram is
+  a **bar position** — the bar drawn across the strings at its fret (or open
+  strings at the nut) — with dots on the strings to pick, crosses on the ones to
+  leave alone, and each picked string's chord tone (R/3/5 …) underneath. Grips
+  are straight-bar only: where a tuning can't give the whole chord that way (a
+  dominant 7th in C6, a minor in an open major tuning) the best partial is shown
+  and labelled with what it leaves out ("no b7"). The dropdown lists the other
+  bar positions that give the chord, and your pick is remembered per tuning.
+  The lap steel charts **sounding chords** — nobody capos a lap steel — so with
+  a capo on, each diagram also names the guitar shape it goes with.
+  Its **fret map** is the scale map drawn in that tuning with the notes sitting
+  **on** the frets, where the bar goes, and a row under the fret numbers naming
+  the chord a straight bar gives at every fret (C / Am up the neck in C6), with
+  this song's chords picked out in bold. The printout names the tuning.
 - **Piano** — a keyboard per chord with the chord tones highlighted (root
   orange, other tones gold) and labelled by interval degree (R/3/5/7 …), plus a
   piano scale roll.

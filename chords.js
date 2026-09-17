@@ -373,15 +373,22 @@ function chordToneLabels(name) {
 // (a Map of pitch class -> interval label) is given, those chord tones get a
 // ring with the interval label (R/3/5/7 …); chord tones that fall outside the
 // scale are drawn as hollow labelled markers so the whole chord is visible.
-function scaleDiagramSVG(rootPc, intervals, highlight, tuning = STRING_ABS) {
+// `opts.onWire` puts each note on its fret line instead of behind it — where a
+// lap steel's bar goes. `opts.ruler` adds rows of text under the fret numbers,
+// one cell per fret 0..15: [[{ text, hi }, …], …].
+function scaleDiagramSVG(rootPc, intervals, highlight, tuning = STRING_ABS, opts = {}) {
   const set = new Set(intervals.map((i) => (rootPc + i) % 12));
   const hi = highlight && highlight.size ? highlight : null;
   const N = tuning.length;
-  const FR = 15, left = 26, top = 14, rowH = 18, colW = 30;
+  const FR = 15, left = 26, top = 14, rowH = 18, colW = 30, rulerH = 11;
+  const ruler = opts.ruler || [];
   const width = left + FR * colW + 12;
-  const height = top + (N - 1) * rowH + 24;
+  const numY = top + (N - 1) * rowH + 16;
+  const height = numY + 8 + ruler.length * rulerH;
   const x = (f) => left + f * colW;
   const y = (i) => top + (N - 1 - i) * rowH; // string 0 (lowest) at the bottom
+  // Where fret f's note is drawn: behind the fret for fingers, on it for a bar.
+  const at = (f) => (f === 0 ? left - 12 : opts.onWire ? x(f) : x(f) - colW / 2);
   const markers = [3, 5, 7, 9, 12, 15];
 
   let p = '';
@@ -390,12 +397,17 @@ function scaleDiagramSVG(rootPc, intervals, highlight, tuning = STRING_ABS) {
     const cls = f === 0 ? 'sc-nut' : 'sc-fret';
     p += `<line class="${cls}" x1="${x(f)}" y1="${y(N - 1)}" x2="${x(f)}" y2="${y(0)}"/>`;
   }
-  for (const f of markers) p += `<text class="sc-fretnum" x="${x(f) - colW / 2}" y="${height - 8}" text-anchor="middle">${f}</text>`;
+  for (const f of markers) p += `<text class="sc-fretnum" x="${at(f)}" y="${numY}" text-anchor="middle">${f}</text>`;
+  ruler.forEach((row, r) => row.forEach((cell, f) => {
+    if (!cell || !cell.text || f > FR) return;
+    p += `<text class="${cell.hi ? 'sc-bar sc-bar-hi' : 'sc-bar'}" x="${at(f)}" y="${numY + (r + 1) * rulerH}" ` +
+      `text-anchor="middle">${escapeHtml(cell.text)}</text>`;
+  }));
 
   for (let i = 0; i < N; i++) {
     for (let f = 0; f <= FR; f++) {
       const pc = (tuning[i] + f) % 12;
-      const cx = f === 0 ? left - 12 : x(f) - colW / 2;
+      const cx = at(f);
       const cy = y(i);
       const inScale = set.has(pc);
       const isChordTone = hi && hi.has(pc);
@@ -611,6 +623,118 @@ function ukeDiagramSVG(displayName, frets, soundingName, extra) {
 }
 function mandoDiagramSVG(displayName, frets, soundingName, extra) {
   return fretDiagramSVG(displayName, frets, 4, soundingName, extra, 'mando-diagram');
+}
+
+// ---- Lap steel -------------------------------------------------------------
+// Nothing is fretted on a lap steel: a bar laid straight across the strings
+// stops every one of them at the same fret, and the chord is whichever strings
+// you pick there. So a chord shape is a bar position plus a grip, and what a
+// position gives depends entirely on the tuning. Slants are left to the player
+// — a straight bar covers what a chart needs, and when a tuning can't give the
+// whole chord that way, the grip says which tones it leaves out.
+
+// An octave of bar positions reaches every chord; open-string ones come round
+// again at 12.
+const LAP_FRETS = 12;
+
+// What leaving a tone out costs a grip. The root is required outright; the 3rd
+// (or a sus tone standing in for it) is what makes the chord what it is; 7ths,
+// 6ths, 9ths and altered 5ths come next; a plain 5th matters least. Frets cost
+// half a point each: the bar slides anywhere, so height only breaks ties, and
+// a whole chord up the neck beats a partial one at the nut.
+const LAP_FRET_COST = 0.5;
+function lapOmitCost(t) {
+  if (t === 7) return 8;
+  if (t === 3 || t === 4) return 40;
+  return 25;
+}
+
+// Every straight-bar grip for a chord in a tuning (absolute semitones, low
+// string first), best first: [{ fret, frets, omit }]. `frets` is the per-string
+// array the diagrams take (-1 = leave it unpicked); `omit` names the chord
+// tones the grip goes without ('b7', '5', 'E bass' …).
+function lapVoicings(name, tuning) {
+  const ci = chordIntervals(name);
+  if (!ci) return [];
+  const tones = new Set(ci.iv.map((t) => (ci.rootPc + t) % 12));
+  const slash = ci.bassPc !== null;
+  if (slash) tones.add(ci.bassPc);
+  const bassName = slash ? name.slice(name.lastIndexOf('/') + 1) : '';
+  const out = [];
+  for (let f = 0; f <= LAP_FRETS; f++) {
+    const pcs = tuning.map((abs) => (abs + f) % 12);
+    const all = pcs.map((pc) => (tones.has(pc) ? f : -1));
+    // A slash chord wants its bass at the bottom, so nothing under the lowest
+    // string that sounds it gets picked — unless that leaves no chord, in which
+    // case the whole grip stands and the bass goes unmet.
+    let frets = all, bassOk = !slash;
+    if (slash) {
+      const lo = pcs.findIndex((pc, i) => all[i] >= 0 && pc === ci.bassPc);
+      if (lo >= 0) {
+        const trimmed = all.map((x, i) => (i < lo ? -1 : x));
+        const kept = pcs.filter((pc, i) => trimmed[i] >= 0);
+        if (kept.length >= 2 && kept.includes(ci.rootPc)) { frets = trimmed; bassOk = true; }
+      }
+    }
+    const picked = pcs.filter((pc, i) => frets[i] >= 0);
+    // Two different notes at least: the root in two octaves isn't a chord.
+    if (new Set(picked).size < 2 || !picked.includes(ci.rootPc)) continue;
+    const omitted = ci.iv.filter((t) => !picked.includes((ci.rootPc + t) % 12));
+    let score = f * LAP_FRET_COST + omitted.reduce((sum, t) => sum + lapOmitCost(t), 0);
+    if (!bassOk) score += 20;
+    if (picked.length < 3) score += 6;              // a bare two-string dyad
+    if (!slash && picked[0] !== ci.rootPc) score += 2; // root not on the bottom
+    const omit = omitted.map((t) => INTERVAL_LABELS[t]);
+    if (!bassOk) omit.push(`${bassName} bass`);
+    out.push({ fret: f, frets, omit, score });
+  }
+  return out.sort((a, b) => a.score - b.score || a.fret - b.fret);
+}
+
+// "bar 5", "open", "bar 3 · no b7" — what a grip is, in a player's words.
+function lapVoicingLabel(v) {
+  return (v.fret === 0 ? 'open' : `bar ${v.fret}`) + (v.omit.length ? ` · no ${v.omit.join(', ')}` : '');
+}
+
+// A lap steel chord diagram: the bar lying across every string on its fret,
+// dots on the strings to pick and crosses over the rest, and each picked
+// string's chord tone (R/3/5 …) underneath, so a grip can be thinned by ear.
+// `focusName` is the chord the name click focuses on the scale maps — the
+// guitar shape, which is what the song's focus chord is stored as.
+function lapDiagramSVG(displayName, v, tuning, focusName, extra) {
+  const head = `<div class="cd-name" data-chord="${escapeHtml(focusName)}">${escapeHtml(displayName)}</div>`;
+  const dcls = 'chord-diagram lap-diagram';
+  if (!v) return `<div class="${dcls}">${head}<div class="cd-na">no straight-bar grip</div>${extra || ''}</div>`;
+  const labels = chordToneLabels(displayName) || new Map();
+  const S = v.frets.length, rows = 3, cellW = 11, cellH = 12, left = 20, top = 18;
+  const width = left * 2 + (S - 1) * cellW;
+  const x = (i) => left + i * cellW;
+  const y = (k) => top + k * cellH;
+  const toneY = y(rows) + 9;
+  const height = toneY + 3;
+  let p = '';
+  for (let k = 0; k <= rows; k++) p += `<line x1="${x(0)}" y1="${y(k)}" x2="${x(S - 1)}" y2="${y(k)}"/>`;
+  for (let i = 0; i < S; i++) p += `<line x1="${x(i)}" y1="${y(0)}" x2="${x(i)}" y2="${y(rows)}"/>`;
+  // The top line is the nut when the bar is at the 1st fret or the strings are
+  // open; further up it's the fret below the bar.
+  if (v.fret <= 1) p += `<rect class="cd-nut" x="${x(0) - 1}" y="${top - 3}" width="${(S - 1) * cellW + 2}" height="3"/>`;
+  if (v.fret > 0) {
+    // The bar sits right over the fret, not behind it as a fingertip would,
+    // so it lies on the fret line.
+    const by = y(1);
+    p += `<rect class="lap-bar" x="${x(0) - 4}" y="${by - 3}" width="${(S - 1) * cellW + 8}" height="6" rx="3"/>`;
+    p += `<text class="cd-fretnum" x="0" y="${by + 2.5}" text-anchor="start">${v.fret}fr</text>`;
+  }
+  for (let i = 0; i < S; i++) {
+    const f = v.frets[i], cx = x(i);
+    if (f < 0) { p += `<text class="cd-mark" x="${cx}" y="${top - 5}" text-anchor="middle">&#215;</text>`; continue; }
+    if (f === 0) p += `<text class="cd-mark" x="${cx}" y="${top - 5}" text-anchor="middle">&#9675;</text>`;
+    else p += `<circle class="cd-dot" cx="${cx}" cy="${y(1)}" r="3.2"/>`;
+    const tone = labels.get((tuning[i] + f) % 12) || '';
+    p += `<text class="lap-tone" x="${cx}" y="${toneY}" text-anchor="middle">${tone}</text>`;
+  }
+  const omit = v.omit.length ? `<div class="cd-omit">no ${escapeHtml(v.omit.join(', '))}</div>` : '';
+  return `<div class="${dcls}">${head}<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${p}</svg>${omit}${extra || ''}</div>`;
 }
 
 // Harmonica keys the common players' spelling.
