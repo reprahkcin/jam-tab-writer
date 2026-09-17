@@ -677,6 +677,10 @@ let currentId = null;
 // Default jam: two guitars, uke, piano, harmonica on; lap steel, mandolin + bass off.
 const ENSEMBLE_DEFAULTS = { guitar1: true, guitar2: true, lapsteel: false, ukulele: true, mandolin: false, piano: true, bass: false, harmonica: true };
 
+// The neck a lap steel insert is drawn for, in inches: a 22.5 in six-string
+// until the player measures their own (see the neck insert dialog).
+const LAP_NECK_DEFAULTS = { scale: 22.5, length: 18.375, frets: 28, nutW: 1.8, endW: 2.6, nutSpan: 1.45, endSpan: 1.95 };
+
 function loadPrefs() {
   const defaults = {
     showChords: true, showScales: true, showTheory: true, harmonica: true, chordMode: 'shapes', nashville: false,
@@ -709,6 +713,8 @@ function loadPrefs() {
   p.metro = Object.assign({ bpm: 100, steps: 16, click: true, pattern: null }, p.metro);
   p.learn = Object.assign({ topic: 'chords', lens: true }, p.learn);
   p.capture = Object.assign({ deviceId: null, deviceLabel: '', format: 'wav' }, p.capture);
+  p.lapNeck = Object.assign({}, LAP_NECK_DEFAULTS, p.lapNeck);
+  p.lapInsert = Object.assign({ labels: 'both', color: true, bars: true }, p.lapInsert);
   return p;
 }
 let prefs = loadPrefs();
@@ -1171,6 +1177,7 @@ function lapTuningPickerHtml(lap) {
   const opts = lapTuningIds().map((id) =>
     `<option value="${id}"${id === lap.id ? ' selected' : ''}>${escapeHtml(TUNER_PRESETS[id].name)}</option>`).join('');
   return `<select class="lap-tuning" title="Lap steel tuning">${opts}</select>` +
+    `<button class="inline-btn lap-insert-btn" title="Print a true-size paper fretboard for a tuning and scale, to slide beneath the strings">Neck insert…</button>` +
     `<span class="lap-tuning-print">${escapeHtml(lap.t.name)}</span>`;
 }
 
@@ -1182,11 +1189,16 @@ function isMinorChord(ci) { return ci.iv.includes(3) && !ci.iv.includes(4); }
 // a straight bar (its `bars`), that chord's name at every fret 0–15. Where one
 // of this song's chords is played — same root, same major/minor, at the fret
 // its chosen grip uses — the cell shows the song's own name, highlighted.
+// The chord a tuning's straight-bar chord `bar` becomes with the bar at fret f.
+function lapBarNameAt(bar, f) {
+  const ci = chordIntervals(bar);
+  return (isMinorChord(ci) ? MINOR_NAMES : HARP_NAMES)[(ci.rootPc + f) % 12] + bar.match(CHORD_RE)[3];
+}
+
 function lapRuler(lap) {
   return (lap.t.bars || []).map((bar) => {
     const ci = chordIntervals(bar);
     const minor = isMinorChord(ci);
-    const suffix = bar.match(CHORD_RE)[3];
     const row = [];
     for (let f = 0; f <= 15; f++) {
       const pc = (ci.rootPc + f) % 12;
@@ -1194,13 +1206,167 @@ function lapRuler(lap) {
         const cc = c.v && c.v.fret === f && chordIntervals(c.name);
         return cc && cc.rootPc === pc && isMinorChord(cc) === minor;
       }).map((c) => c.name);
-      row.push(here.length
-        ? { text: here.join(' '), hi: true }
-        : { text: (minor ? MINOR_NAMES : HARP_NAMES)[pc] + suffix, hi: false });
+      row.push(here.length ? { text: here.join(' '), hi: true } : { text: lapBarNameAt(bar, f), hi: false });
     }
     return row;
   });
 }
+
+// ---- Lap steel neck insert -------------------------------------------------
+// A printable, true-size paper fretboard (drawn by lapInsertPages in chords.js)
+// for one tuning, key and scale. The dialog opens on whatever the lap steel
+// panel is showing but keeps its own picks from there: inserts get printed in
+// batches, and that shouldn't drag the open song's scale around with it. The
+// neck's measurements and the look of the strips are remembered; they belong
+// to the instrument, not the song.
+const INSERT_SCALES = SCALES.concat([{ id: 'chromatic', name: 'All notes', iv: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] }]);
+const insert = { tuning: 'lapC6', root: 0, scale: 'majPent' };
+
+// [pref key, label, what to measure, min, max] — all inches but the fret count.
+const LAP_NECK_FIELDS = [
+  ['scale', 'Scale length', 'Nut to bridge: twice the distance from the nut to the 12th fret line', 15, 30],
+  ['length', 'Board length', 'From the nut to the end of the fretboard', 5, 26],
+  ['frets', 'Frets', 'How many fret lines the board has', 5, 36],
+  ['nutW', 'Width at the nut', '', 1, 4],
+  ['endW', 'Width at the far end', '', 1, 4],
+  ['nutSpan', 'String spread at the nut', 'Outer string to outer string, centre to centre', 0.5, 3.8],
+  ['endSpan', 'String spread at the far end', 'The same, where the board ends', 0.5, 3.8],
+];
+
+// Note names for a scale, by pitch class. Scale tones are spelled by degree —
+// the b3 of G is Bb, never A# — then put back in everyday terms where that
+// lands on a Cb or an E#: a fretboard is for finding notes, not parsing them.
+const MAJOR_KEY_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+const SCALE_LETTER_STEPS = [0, 1, 1, 2, 2, 3, 4, 4, 5, 5, 6, 6]; // letters up from the root, by semitone
+const PLAIN_NOTE = { Cb: 'B', Fb: 'E', 'E#': 'F', 'B#': 'C' };
+function lapInsertNoteNames(rootPc, scale) {
+  const minor = scale.iv.includes(3) && !scale.iv.includes(4);
+  const rootName = (minor ? MINOR_NAMES : MAJOR_KEY_NAMES)[rootPc];
+  const flatKey = /b/.test(rootName) || (minor ? [0, 2, 5, 7] : [5]).includes(rootPc);
+  const names = (flatKey ? FLAT : SHARP).slice();
+  const T = window.Learn && window.Learn.theory;
+  if (T && scale.iv.length < 12) {
+    for (const t of scale.iv) {
+      const spelled = T.spellFrom(rootName, t, SCALE_LETTER_STEPS[t]);
+      if (spelled) names[(rootPc + t) % 12] = PLAIN_NOTE[spelled] || spelled;
+    }
+  }
+  return names;
+}
+
+// Everything lapInsertPages needs for the dialog's current picks.
+function lapInsertOptions() {
+  const id = lapTuningIds().includes(insert.tuning) ? insert.tuning : 'lapC6';
+  const t = TUNER_PRESETS[id];
+  const scale = INSERT_SCALES.find((sc) => sc.id === insert.scale) || INSERT_SCALES[0];
+  const names = lapInsertNoteNames(insert.root, scale);
+  const all = scale.id === 'chromatic';
+  return {
+    neck: prefs.lapNeck,
+    tuning: t.strings.map(([note]) => noteToMidi(note)),
+    tuningName: t.name,
+    shortName: t.name.split(' (')[0],
+    rootPc: insert.root,
+    scale,
+    scaleTitle: all ? `All notes · ${names[insert.root]} marked` : `${names[insert.root]} ${scale.name}`,
+    names,
+    // With every note on the neck, the sharps and flats step back so the
+    // naturals read as the landmarks they are.
+    dimPcs: all ? new Set([1, 3, 6, 8, 10].filter((pc) => pc !== insert.root)) : null,
+    labels: prefs.lapInsert.labels,
+    color: prefs.lapInsert.color,
+    bars: prefs.lapInsert.bars ? (n) => (t.bars || []).map((bar) => lapBarNameAt(bar, n)) : null,
+  };
+}
+
+// The sheets as a document of their own, so they print on their own terms —
+// bare pages at true size — whatever the app's print styles are doing.
+function lapInsertDocHtml() {
+  const o = lapInsertOptions();
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">` +
+    `<title>${escapeHtml(`Lap steel insert - ${o.shortName} - ${o.scaleTitle}`)}</title><style>` +
+    `@page { size: ${LAP_SHEET.w}in ${LAP_SHEET.h}in; margin: 0; }` +
+    `html, body { margin: 0; padding: 0; background: #fff; }` +
+    `svg { display: block; break-after: page; } svg:last-child { break-after: auto; }` +
+    `</style></head><body>${lapInsertPages(o).join('')}</body></html>`;
+}
+
+function printLapInsert() {
+  const old = document.getElementById('insert-print-frame');
+  if (old) old.remove();
+  const frame = document.createElement('iframe');
+  frame.id = 'insert-print-frame';
+  frame.setAttribute('aria-hidden', 'true');
+  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+  frame.addEventListener('load', () => { frame.contentWindow.focus(); frame.contentWindow.print(); });
+  frame.srcdoc = lapInsertDocHtml();
+  document.body.appendChild(frame);
+}
+
+function renderInsertPreview() {
+  document.getElementById('insert-preview').innerHTML = lapInsertPages(lapInsertOptions()).join('');
+  // Two landmarks to hold a ruler to, since everything hangs on the scale length.
+  const g = lapInsertGeometry(prefs.lapNeck, 6), last = g.d.length - 1;
+  document.getElementById('insert-check').textContent = last >= 12
+    ? `Check it against the board: fret 12 should sit ${g.d[12].toFixed(2)} in from the nut, fret ${last} at ${g.d[last].toFixed(2)} in.`
+    : '';
+}
+
+function renderInsertForm() {
+  const opt = (value, label, on) => `<option value="${value}"${on ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+  const pi = prefs.lapInsert;
+  document.getElementById('insert-form').innerHTML =
+    `<label class="in-row"><span>Tuning</span><select id="insert-tuning">` +
+      lapTuningIds().map((id) => opt(id, TUNER_PRESETS[id].name, id === insert.tuning)).join('') + `</select></label>` +
+    `<label class="in-row"><span>Key</span><select id="insert-root">` +
+      HARP_NAMES.map((nm, i) => opt(i, nm, i === insert.root)).join('') + `</select></label>` +
+    `<label class="in-row"><span>Scale</span><select id="insert-scale">` +
+      INSERT_SCALES.map((sc) => opt(sc.id, sc.name, sc.id === insert.scale)).join('') + `</select></label>` +
+    `<label class="in-row"><span>Dots show</span><select id="insert-labels">` +
+      [['both', 'Note + degree'], ['notes', 'Note names'], ['degrees', 'Scale degrees']]
+        .map(([v, l]) => opt(v, l, v === pi.labels)).join('') + `</select></label>` +
+    `<label class="in-check"><input type="checkbox" id="insert-color"${pi.color ? ' checked' : ''}/> Colour (off for a black-and-white printer)</label>` +
+    `<label class="in-check"><input type="checkbox" id="insert-bars"${pi.bars ? ' checked' : ''}/> Straight-bar chords beside the fret numbers</label>` +
+    `<div class="in-neck"><div class="in-neck-head">Your neck <span class="muted">inches</span></div>` +
+      LAP_NECK_FIELDS.map(([key, label, tip]) =>
+        `<label class="in-row" title="${escapeHtml(tip)}"><span>${escapeHtml(label)}</span>` +
+        `<input type="number" step="any" data-neck="${key}" value="${prefs.lapNeck[key]}"/></label>`).join('') +
+      `<div id="insert-check" class="in-note"></div>` +
+    `</div>`;
+
+  const form = document.getElementById('insert-form');
+  const pick = (id, apply) => form.querySelector(id).addEventListener('change', (e) => { apply(e.target); savePrefs(); renderInsertPreview(); });
+  pick('#insert-tuning', (t) => { insert.tuning = t.value; });
+  pick('#insert-root', (t) => { insert.root = parseInt(t.value, 10); });
+  pick('#insert-scale', (t) => { insert.scale = t.value; });
+  pick('#insert-labels', (t) => { prefs.lapInsert.labels = t.value; });
+  pick('#insert-color', (t) => { prefs.lapInsert.color = t.checked; });
+  pick('#insert-bars', (t) => { prefs.lapInsert.bars = t.checked; });
+  form.querySelectorAll('[data-neck]').forEach((input) => input.addEventListener('change', () => {
+    const [key, , , min, max] = LAP_NECK_FIELDS.find((f) => f[0] === input.dataset.neck);
+    const v = key === 'frets' ? parseInt(input.value, 10) : parseFloat(input.value);
+    if (!(v >= min && v <= max)) { flashInvalid(input); input.value = prefs.lapNeck[key]; return; }
+    prefs.lapNeck[key] = v;
+    savePrefs(); renderInsertPreview();
+  }));
+}
+
+function openLapInsert() {
+  const s = currentSong();
+  insert.tuning = lapTuning().id;
+  const pc = s ? (s.scaleRoot === null || s.scaleRoot === undefined ? soundingKeyPc(s) : s.scaleRoot) : null;
+  insert.root = pc === null ? 0 : pc;
+  insert.scale = prefs.scaleType;
+  renderInsertForm();
+  renderInsertPreview();
+  document.getElementById('insert-modal').hidden = false;
+}
+function closeLapInsert() { document.getElementById('insert-modal').hidden = true; }
+document.getElementById('insert-print').addEventListener('click', printLapInsert);
+document.getElementById('insert-close').addEventListener('click', closeLapInsert);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !document.getElementById('insert-modal').hidden) closeLapInsert();
+});
 
 function wireInstruments(s) {
   el.instPanels.querySelectorAll('.cd-voicing').forEach((sel) => sel.addEventListener('change', () => {
@@ -1212,6 +1378,8 @@ function wireInstruments(s) {
     prefs.lapTuning = lapSel.value;
     savePrefs(); renderInstruments(currentSong());
   });
+  const lapInsertBtn = el.instPanels.querySelector('.lap-insert-btn');
+  if (lapInsertBtn) lapInsertBtn.addEventListener('click', openLapInsert);
   el.instPanels.querySelectorAll('.pk-inv').forEach((sel) => sel.addEventListener('change', () => {
     (prefs.pianoInv.piano || (prefs.pianoInv.piano = {}))[sel.dataset.chord] = parseInt(sel.value, 10);
     savePrefs(); renderInstruments(currentSong());

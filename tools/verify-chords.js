@@ -21,10 +21,12 @@ vm.runInContext(src + `
    chordToneLabels, ukeVoicing, mandoVoicing })`, ctx);
 const X = vm.runInContext(`({ OPEN_CHORDS, MOVABLE, TRIAD_TONES, TRIAD_SETS, INV_NAMES, UKE_ABS, MANDO_ABS,
    chordRootPc, parseQuality, resolveChord, chordVoicings, movableAt, triadShape,
-   chordToneLabels, ukeVoicing, mandoVoicing, lapVoicings, chordIntervals, INTERVAL_LABELS })`, ctx);
+   chordToneLabels, ukeVoicing, mandoVoicing, lapVoicings, chordIntervals, INTERVAL_LABELS,
+   SCALES, LAP_PIECE_MAX, fretDistance, lapInsertGeometry, lapInsertCuts, lapInsertPages })`, ctx);
 const { OPEN_CHORDS, MOVABLE, TRIAD_TONES, TRIAD_SETS, INV_NAMES, UKE_ABS, MANDO_ABS,
   chordRootPc, parseQuality, resolveChord, chordVoicings, movableAt, triadShape,
-  chordToneLabels, ukeVoicing, mandoVoicing, lapVoicings, chordIntervals, INTERVAL_LABELS } = X;
+  chordToneLabels, ukeVoicing, mandoVoicing, lapVoicings, chordIntervals, INTERVAL_LABELS,
+  SCALES, LAP_PIECE_MAX, fretDistance, lapInsertGeometry, lapInsertCuts, lapInsertPages } = X;
 
 // ---- ground truth ----------------------------------------------------------
 // Expected pitch-class interval sets for every suffix in the banks.
@@ -235,6 +237,46 @@ for (const t of LAP_TUNINGS) {
     }
   }
   notes.push(`[lap ${t.id}] ${partial}/${LAP_NAMES.length} chords fall back to a partial grip`);
+}
+
+// ---- 8. Lap steel neck insert geometry --------------------------------------
+// The insert is only worth printing if its fret lines land on the real ones, so
+// check the ruler it is drawn with, on the default neck and a few others.
+const neckLit = appSrc.match(/const LAP_NECK_DEFAULTS = (\{[^}]*\});/);
+if (!neckLit) bad('insert', 'defaults', 'LAP_NECK_DEFAULTS not found in app.js');
+const NECKS = neckLit ? [vm.runInNewContext(`(${neckLit[1]})`)] : [];
+if (NECKS.length) {
+  NECKS.push({ ...NECKS[0], scale: 25.5, length: 19.9, frets: 24 }, { ...NECKS[0], scale: 24, length: 22, frets: 36, endW: 3 });
+}
+for (const neck of NECKS) {
+  const label = `${neck.scale}in/${neck.length}in`;
+  const g = lapInsertGeometry(neck, 6);
+  const last = g.d.length - 1;
+  if (Math.abs(g.d[12] - neck.scale / 2) > 1e-9) bad('insert', label, 'fret 12 is not at half the scale');
+  if (g.d[last] > neck.length) bad('insert', label, 'a fret runs off the board');
+  if (last < neck.frets && fretDistance(neck.scale, last + 1) <= neck.length - 0.02) bad('insert', label, 'dropped a fret that fits');
+  for (let n = 1; n <= last; n++) {
+    if (g.d[n] - g.d[n - 1] < g.r[n] + g.r[n - 1]) bad('insert', label, `dots collide along the string at fret ${n}`);
+    for (const y of [g.d[n]]) if (g.stringX(1, y) - g.stringX(0, y) < 2 * g.r[n]) bad('insert', label, `dots collide across strings at fret ${n}`);
+    if (Math.abs(g.stringX(0, g.d[n])) + g.r[n] > g.halfW(g.d[n])) bad('insert', label, `outer dot hangs off the board at fret ${n}`);
+  }
+  const cuts = lapInsertCuts(g.d, g.length);
+  if (cuts[0] !== 0 || cuts[cuts.length - 1] !== neck.length) bad('insert', label, 'strips do not cover the board');
+  cuts.slice(1).forEach((c, i) => {
+    if (c - cuts[i] > LAP_PIECE_MAX + 1e-9) bad('insert', label, `strip ${i + 1} is ${(c - cuts[i]).toFixed(2)}in, too long for the sheet`);
+    if (i + 2 < cuts.length && g.d.some((y) => Math.abs(y - c) < 0.05)) bad('insert', label, `cut ${i + 1} lands on a fret line`);
+  });
+  // Every tuning and scale must draw, with no broken numbers in the output.
+  for (const t of LAP_TUNINGS) {
+    for (const scale of SCALES.concat([{ id: 'chromatic', name: 'All notes', iv: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] }])) {
+      const pages = lapInsertPages({
+        neck, tuning: t.strings.map(([n]) => midiOf(n)), tuningName: t.name, shortName: t.id, rootPc: 7, scale,
+        scaleTitle: scale.name, names: SHARP, dimPcs: null, labels: 'both', color: true, bars: (n) => t.bars.map((b) => b + n),
+      });
+      if (!pages.length || pages.some((svg) => /NaN|undefined|Infinity/.test(svg))) bad('insert', `${label} ${t.id} ${scale.id}`, 'broken drawing');
+    }
+  }
+  notes.push(`[insert ${label}] ${last} frets, strips cut at ${cuts.slice(1, -1).map((c) => c.toFixed(2)).join(', ') || 'none'}`);
 }
 
 console.log('\n--- PROBLEMS (' + problems.length + ') ---');

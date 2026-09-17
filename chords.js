@@ -737,6 +737,309 @@ function lapDiagramSVG(displayName, v, tuning, focusName, extra) {
   return `<div class="${dcls}">${head}<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">${p}</svg>${omit}${extra || ''}</div>`;
 }
 
+// ---- Lap steel neck insert -------------------------------------------------
+// A true-size paper copy of a lap steel's fretboard, to lie on the real one
+// beneath the strings and show a scale in a tuning. The neck is whatever the
+// player measured, in inches. The drawing is in hundredths of an inch on a
+// sheet declared in inches, so it prints at size. It comes out as strips short
+// enough for Letter paper, cut mid-space so no fret line lands on a join.
+// Text on the strips reads from the playing position — nut to the left, low
+// string nearest — which on the upright sheet is a quarter turn clockwise.
+
+const LAP_SHEET = { w: 8.5, h: 11, margin: 0.45 };
+const LAP_PIECE_MAX = LAP_SHEET.h - 2 * LAP_SHEET.margin;
+const LAP_FONT = 'Helvetica, Arial, sans-serif';
+const LAP_INK = {
+  color: {
+    root: { fill: '#f2994a', stroke: '#222', text: '#111' },
+    tone: { fill: '#a5e3d5', stroke: '#222', text: '#111' },
+    dim: { fill: '#eee', stroke: '#999', text: '#555' },
+  },
+  mono: {
+    root: { fill: '#111', stroke: '#111', text: '#fff' },
+    tone: { fill: '#fff', stroke: '#111', text: '#111' },
+    dim: { fill: '#e6e6e6', stroke: '#888', text: '#444' },
+  },
+};
+
+// Inches → drawing units, trimmed so the SVG stays readable.
+function lu(v) { return +(v * 100).toFixed(2); }
+
+// Distance from the nut to fret n on a scale length (equal temperament).
+function fretDistance(scale, n) { return scale * (1 - Math.pow(2, -n / 12)); }
+
+// The position marker that belongs to fret n — the run most steel boards carry,
+// repeating each octave. It sits in the space before its fret line.
+function lapMarkerAt(n) {
+  return n >= 3 ? { 3: 'circle', 5: 'triangle', 7: 'square', 9: 'diamond', 0: 'bar' }[n % 12] : undefined;
+}
+
+// Where everything on a neck is: fret distances `d` (d[0] is the nut; frets
+// that would run off the board are dropped), the dot radius `r` at each fret,
+// the board's half-width and each string's offset from the centre line at any
+// distance from the nut. A dot has to clear its neighbours both along the
+// string — the next fret up is the closer one — and across to the next string.
+function lapInsertGeometry(neck, nStrings) {
+  const d = [0];
+  for (let n = 1; n <= neck.frets; n++) {
+    const at = fretDistance(neck.scale, n);
+    if (at > neck.length - 0.02) break;
+    d.push(at);
+  }
+  const along = (from, to) => (y) => from + (to - from) * y / neck.length;
+  const width = along(neck.nutW, neck.endW), span = along(neck.nutSpan, neck.endSpan);
+  const gap = (y) => (nStrings > 1 ? span(y) / (nStrings - 1) : width(y));
+  return {
+    d,
+    length: neck.length,
+    r: d.map((y, n) => Math.min(0.12, 0.38 * (fretDistance(neck.scale, n + 1) - y), 0.42 * gap(y))),
+    halfW: (y) => width(y) / 2,
+    stringX: (i, y) => (nStrings > 1 ? -span(y) / 2 + i * gap(y) : 0),
+  };
+}
+
+// Where to cut the neck into strips that fit the sheet: [0, cut…, length].
+// Cuts fall midway between two fret lines, as near to equal strips as the
+// frets allow.
+function lapInsertCuts(d, length) {
+  const mids = d.slice(0, -1).map((y, n) => (y + d[n + 1]) / 2);
+  for (let k = Math.max(1, Math.ceil(length / LAP_PIECE_MAX)); ; k++) {
+    const cuts = [0];
+    for (let j = 1; j < k; j++) {
+      const from = cuts[cuts.length - 1], target = j * length / k;
+      const ok = mids.filter((m) => m > from && m - from <= LAP_PIECE_MAX);
+      cuts.push(ok.length
+        ? ok.reduce((best, m) => (Math.abs(m - target) < Math.abs(best - target) ? m : best))
+        : Math.min(from + LAP_PIECE_MAX, length));
+    }
+    cuts.push(length);
+    if (cuts.every((c, i) => i === 0 || c - cuts[i - 1] <= LAP_PIECE_MAX + 1e-9)) return cuts;
+  }
+}
+
+// One run of text. `turn` lays it along the neck, to be read from the playing
+// position; `mid` centres it on (x, y) across its own height as well.
+function lapText(x, y, str, size, o = {}) {
+  const at = o.turn ? ` transform="translate(${lu(x)},${lu(y)}) rotate(90)"` : ` x="${lu(x)}"`;
+  const base = (o.mid ? 0.36 * size : 0) + (o.turn ? 0 : y);
+  return `<text${at} y="${lu(base)}" font-size="${lu(size)}" text-anchor="${o.anchor || 'middle'}" ` +
+    `fill="${o.fill || '#111'}"${o.bold ? ' font-weight="700"' : ''}>${escapeHtml(String(str))}</text>`;
+}
+
+// A note on the neck: a dot on a fret line, or a rounded square at the nut for
+// an open string. `label` is [note] or [note, degree].
+function lapNoteMark(x, y, r, ink, label, open) {
+  const shape = open
+    ? `<rect x="${lu(x - r)}" y="${lu(y - r)}" width="${lu(2 * r)}" height="${lu(2 * r)}" rx="${lu(r * 0.3)}" `
+    : `<circle cx="${lu(x)}" cy="${lu(y)}" r="${lu(r)}" `;
+  let out = shape + `fill="${ink.fill}" stroke="${ink.stroke}" stroke-width="0.9"/>`;
+  if (label.length > 1) {
+    // Note above, degree below — as read from the playing position, where
+    // "above" is towards the far (high-string) side.
+    out += lapText(x + 0.22 * r, y, label[0], 0.8 * r, { turn: true, mid: true, bold: true, fill: ink.text });
+    out += lapText(x - 0.5 * r, y, label[1], 0.52 * r, { turn: true, mid: true, fill: ink.text });
+  } else if (label[0]) {
+    const size = (String(label[0]).length > 1 ? 0.95 : 1.15) * r;
+    out += lapText(x, y, label[0], size, { turn: true, mid: true, bold: true, fill: ink.text });
+  }
+  return out;
+}
+
+function lapMarkerShape(kind, y, h, boardW) {
+  const fill = 'fill="#d4d4d4"';
+  if (kind === 'circle') return `<circle cx="0" cy="${lu(y)}" r="${lu(h / 2)}" ${fill}/>`;
+  if (kind === 'square') return `<rect x="${lu(-h * 0.45)}" y="${lu(y - h * 0.45)}" width="${lu(h * 0.9)}" height="${lu(h * 0.9)}" ${fill}/>`;
+  if (kind === 'bar') {
+    const w = boardW * 0.58;
+    return `<rect x="${lu(-w / 2)}" y="${lu(y - h / 2)}" width="${lu(w)}" height="${lu(h)}" rx="${lu(h / 2)}" ${fill}/>`;
+  }
+  const pts = kind === 'triangle' // pointing up the neck, towards the bridge
+    ? [[-h * 0.55, y - h / 2], [h * 0.55, y - h / 2], [0, y + h / 2]]
+    : [[0, y - h * 0.55], [h * 0.55, y], [0, y + h * 0.55], [-h * 0.55, y]];
+  return `<polygon points="${pts.map(([px, py]) => `${lu(px)},${lu(py)}`).join(' ')}" ${fill}/>`;
+}
+
+// The whole neck, drawn once in its own coordinates: x from the centre line,
+// y from the nut. Each strip shows its own stretch of this through a clip.
+//   o.tuning   absolute semitones, low string first (drawn at the left)
+//   o.rootPc, o.scale { name, iv }, o.names[pc], o.dimPcs (Set, drawn fainter)
+//   o.labels   'both' | 'notes' | 'degrees';  o.color  true | false
+//   o.bars     (fret) => the chords a straight bar gives there ([] for none)
+//   o.shortName, o.scaleTitle   what the strips are labelled with
+function lapNeckContent(o, g) {
+  const N = o.tuning.length;
+  const ink = LAP_INK[o.color ? 'color' : 'mono'];
+  const inScale = new Set(o.scale.iv.map((t) => (o.rootPc + t) % 12));
+  const last = g.d.length - 1;
+  let under = '', lines = '', marks = '', text = '';
+
+  for (let i = 0; i < N; i++) {
+    under += `<line x1="${lu(g.stringX(i, 0))}" y1="0" x2="${lu(g.stringX(i, g.length))}" y2="${lu(g.length)}" stroke="#cfcfcf" stroke-width="0.6"/>`;
+  }
+
+  const labelFor = (pc, r) => {
+    const note = o.names[pc], degree = INTERVAL_LABELS[(pc - o.rootPc + 12) % 12];
+    if (o.labels === 'degrees') return [degree];
+    return o.labels === 'both' && r >= 0.1 ? [note, degree] : [note];
+  };
+  const inkFor = (pc) => (pc === o.rootPc ? ink.root : o.dimPcs && o.dimPcs.has(pc) ? ink.dim : ink.tone);
+
+  // Open strings, just below the nut: every string gets one, so the top of the
+  // strip spells the tuning; the ones outside the scale are only ghosted.
+  const r0 = g.r[0], openY = r0 + 0.035;
+  for (let i = 0; i < N; i++) {
+    const pc = o.tuning[i] % 12, x = g.stringX(i, openY);
+    marks += inScale.has(pc)
+      ? lapNoteMark(x, openY, r0, inkFor(pc), labelFor(pc, r0), true)
+      : lapNoteMark(x, openY, r0, { fill: 'none', stroke: '#bbb', text: '#888' }, [o.names[pc]], true);
+  }
+
+  for (let n = 1; n <= last; n++) {
+    const y = g.d[n], r = g.r[n];
+    const heavy = n % 12 === 0;
+    lines += `<line x1="${lu(-g.halfW(y))}" y1="${lu(y)}" x2="${lu(g.halfW(y))}" y2="${lu(y)}" stroke="#111" stroke-width="${heavy ? 4.5 : 3}"/>`;
+    for (let i = 0; i < N; i++) {
+      const pc = (o.tuning[i] + n) % 12;
+      if (inScale.has(pc)) marks += lapNoteMark(g.stringX(i, y), y, r, inkFor(pc), labelFor(pc, r), false);
+    }
+
+    // The clear band between this fret's dots and the last one's.
+    const from = g.d[n - 1] + (n === 1 ? 2 * r0 + 0.035 : g.r[n - 1]), to = y - r;
+    const band = to - from;
+    const kind = lapMarkerAt(n);
+    if (kind && band > 0.05) {
+      const space = y - g.d[n - 1];
+      const h = Math.min((kind === 'bar' ? 0.62 : 0.45) * space, 0.85 * band);
+      under += lapMarkerShape(kind, (from + to) / 2, h, 2 * g.halfW(y));
+    }
+
+    // Fret number, then the straight-bar chords, stacked at the near edge and
+    // ending just short of the line. They shrink with the band, and drop out —
+    // chords first — once they would be too small to read.
+    const room = band - 0.045, left = -g.halfW(y) + 0.035, end = to - 0.02;
+    const numSize = Math.min(0.1, room / (0.62 * String(n).length));
+    if (numSize >= 0.055) {
+      text += lapText(left, end, n, numSize, { turn: true, anchor: 'end', bold: true });
+      const chords = o.bars ? o.bars(n) : [];
+      const longest = Math.max(0, ...chords.map((c) => c.length));
+      const chSize = Math.min(0.085, room / (0.6 * longest));
+      if (longest && chSize >= 0.06) {
+        chords.forEach((c, k) => { text += lapText(left + 0.11 + k * 0.095, end, c, chSize, { turn: true, anchor: 'end', fill: '#444' }); });
+      }
+    }
+  }
+
+  // What this strip is, so a drawer full of them can be told apart: along the
+  // first fret space on the nut strip…
+  const idRoom = g.d[1] - g.r[1] - (2 * r0 + 0.035) - 0.12;
+  if (last >= 1 && idRoom >= 0.4) {
+    const mid = (2 * r0 + 0.035 + g.d[1] - g.r[1]) / 2;
+    const fit = (str, max, wide) => Math.min(max, idRoom / (wide * str.length));
+    text += lapText(0.12, mid, o.shortName, fit(o.shortName, 0.12, 0.6), { turn: true, mid: true, bold: true });
+    text += lapText(-0.06, mid, o.scaleTitle, fit(o.scaleTitle, 0.1, 0.56), { turn: true, mid: true, fill: '#333' });
+  }
+  // …and across the tail past the last fret on the far one, either side of the
+  // marker that lives there.
+  const tailFrom = g.d[last] + g.r[last], tail = g.length - tailFrom;
+  if (tail >= 0.14) {
+    const y = tailFrom + tail / 2, size = Math.min(0.09, tail * 0.55), half = g.halfW(g.length);
+    const kind = lapMarkerAt(last + 1);
+    if (kind && kind !== 'bar') under += lapMarkerShape(kind, y, Math.min(0.2, 0.7 * tail), 2 * half);
+    text += lapText(-half * 0.5, y, o.shortName, size, { mid: true, bold: true });
+    text += lapText(half * 0.5, y, o.scaleTitle, size, { mid: true, fill: '#333' });
+  }
+  return under + lines + marks + text;
+}
+
+// Break a sentence into lines of at most `max` characters.
+function lapWrap(str, max) {
+  const out = [];
+  let line = '';
+  for (const word of str.split(' ')) {
+    if (line && (line + ' ' + word).length > max) { out.push(line); line = word; } else line = line ? line + ' ' + word : word;
+  }
+  if (line) out.push(line);
+  return out;
+}
+
+// The column beside the strips: what the sheet is, how to print and fit it, and
+// two rulers to prove the printer kept the size.
+function lapInsertInfo(o, g, x, y, w) {
+  const ink = LAP_INK[o.color ? 'color' : 'mono'];
+  const per = Math.floor(w / 0.058); // characters per line at the body size
+  let out = '', cy = y + 0.1;
+  const para = (str, size, opt) => {
+    for (const ln of lapWrap(str, Math.floor(per * 0.105 / size))) {
+      out += lapText(x, cy, ln, size, Object.assign({ anchor: 'start' }, opt));
+      cy += size * 1.32;
+    }
+    cy += 0.07;
+  };
+  para('LAP STEEL NECK INSERT', 0.085, { bold: true, fill: '#666' });
+  para(o.tuningName, 0.14, { bold: true });
+  para(o.scaleTitle, 0.125);
+  [[ink.root, 'root', false], [ink.tone, o.dimPcs ? 'natural note' : 'scale tone', false],
+    ...(o.dimPcs ? [[ink.dim, 'sharp / flat', false]] : []), [ink.tone, 'open string', true]].forEach(([k, name, open]) => {
+    out += lapNoteMark(x + 0.07, cy - 0.035, 0.065, k, [], open) + lapText(x + 0.2, cy, name, 0.105, { anchor: 'start' });
+    cy += 0.19;
+  });
+  cy += 0.05;
+  para('Lettering reads from the playing position: nut to your left, low string nearest you (the left edge of each strip).', 0.105, { fill: '#333' });
+  para('Print at 100% (“actual size”), never “fit to page”, then check both rulers before you cut.', 0.105, { bold: true });
+  para('Cut on the outlines. Slide the nut strip beneath the strings and up against the nut, then butt the next strip against it. Card stock keeps the board’s own markers from showing through.', 0.105, { fill: '#333' });
+  const n = o.neck, f12 = g.d[12];
+  para(`Drawn for a ${n.scale} in scale: ${g.d.length - 1} frets on a ${n.length} in board, ${n.nutW}–${n.endW} in wide.` +
+    (f12 ? ` Fret 12 sits ${f12.toFixed(2)} in from the nut.` : ''), 0.105, { fill: '#333' });
+
+  // Rulers: 2 in across, then as many whole inches down as the page has left.
+  const tick = (x1, y1, x2, y2) => `<line x1="${lu(x1)}" y1="${lu(y1)}" x2="${lu(x2)}" y2="${lu(y2)}" stroke="#111" stroke-width="0.8"/>`;
+  cy += 0.1;
+  out += tick(x, cy, x + 2, cy);
+  for (let i = 0; i <= 4; i++) out += tick(x + i / 2, cy, x + i / 2, cy + (i % 2 ? 0.06 : 0.11));
+  out += lapText(x + 1, cy + 0.26, '2 in across', 0.095, {});
+  cy += 0.5;
+  const downIn = Math.max(1, Math.min(6, Math.floor(LAP_SHEET.h - LAP_SHEET.margin - cy)));
+  out += tick(x, cy, x, cy + downIn);
+  for (let i = 0; i <= downIn * 2; i++) {
+    out += tick(x, cy + i / 2, x + (i % 2 ? 0.06 : 0.11), cy + i / 2);
+    if (i % 2 === 0) out += lapText(x + 0.16, cy + i / 2 + 0.035, i / 2, 0.095, { anchor: 'start' });
+  }
+  out += lapText(x + 0.45, cy + downIn / 2, `${downIn} in down`, 0.095, { turn: true, mid: true });
+  return out;
+}
+
+// The finished sheets, one SVG string per page. Strips run left to right, nut
+// strip first, all hanging from the top margin; the info column takes what is
+// left of the last page, or a page of its own.
+function lapInsertPages(o) {
+  const g = lapInsertGeometry(o.neck, o.tuning.length);
+  const cuts = lapInsertCuts(g.d, g.length);
+  const content = lapNeckContent(o, g);
+  const M = LAP_SHEET.margin, GAP = 0.45, INFO_W = 1.85;
+  const pages = [''];
+  let x = M;
+  for (let k = 0; k + 1 < cuts.length; k++) {
+    const a = cuts[k], b = cuts[k + 1];
+    const w = 2 * Math.max(g.halfW(a), g.halfW(b));
+    if (pages[pages.length - 1] && x + w > LAP_SHEET.w - M) { pages.push(''); x = M; }
+    const poly = [[-g.halfW(a), a], [g.halfW(a), a], [g.halfW(b), b], [-g.halfW(b), b]]
+      .map(([px, py]) => `${lu(px)},${lu(py)}`).join(' ');
+    pages[pages.length - 1] +=
+      `<g transform="translate(${lu(x + w / 2)},${lu(M - a)})">` +
+        `<clipPath id="lap-strip-${k}"><polygon points="${poly}"/></clipPath>` +
+        `<g clip-path="url(#lap-strip-${k})">${content}</g>` +
+        `<polygon points="${poly}" fill="none" stroke="#333" stroke-width="0.8"/>` +
+      `</g>`;
+    x += w + GAP;
+  }
+  if (x + INFO_W > LAP_SHEET.w - M) { pages.push(''); x = M; }
+  pages[pages.length - 1] += lapInsertInfo(o, g, x, M, LAP_SHEET.w - M - x);
+  return pages.map((body) =>
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${lu(LAP_SHEET.w)} ${lu(LAP_SHEET.h)}" ` +
+    `width="${LAP_SHEET.w}in" height="${LAP_SHEET.h}in" font-family="${LAP_FONT}">` +
+    `<rect width="100%" height="100%" fill="#fff"/>${body}</svg>`);
+}
+
 // Harmonica keys the common players' spelling.
 const HARP_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 

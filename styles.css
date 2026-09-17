@@ -796,6 +796,7 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   text-transform: none;
   letter-spacing: normal;
 }
+.inst-head .lap-insert-btn { margin-left: 6px; text-transform: none; letter-spacing: normal; font-weight: 400; }
 .lap-tuning-print { display: none; }
 .inst-scale { margin-top: 8px; overflow-x: auto; }
 .inst-scale:empty { display: none; }
@@ -1094,7 +1095,7 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   /* The per-instrument headings kept the screen's teal on paper — the last
      coloured text left in a printout that is otherwise black on white. */
   .inst-label, .inst-head { color: #000; }
-  .inst-head .lap-tuning { display: none; }
+  .inst-head .lap-tuning, .inst-head .lap-insert-btn { display: none; }
   .lap-tuning-print { display: inline; margin-left: 6px; text-transform: none; letter-spacing: normal; font-weight: 400; }
   .chord-diagram svg .lap-bar { fill: #999; opacity: 1; }
   .chord-diagram svg .lap-tone, .cd-omit, .lap-ruler-note { fill: #333; color: #333; }
@@ -1911,6 +1912,35 @@ body.performing { overflow: hidden; }
 }
 .share-actions { display: flex; gap: 8px; margin-top: 14px; }
 .share-actions button { padding: 6px 14px; border-radius: 6px; cursor: pointer; }
+
+/* Lap steel neck insert dialog: the form on the left, the sheet on the right. */
+.insert-card { width: min(96vw, 1000px); max-height: 94vh; display: flex; flex-direction: column; }
+.insert-body { display: grid; grid-template-columns: 290px 1fr; gap: 16px; min-height: 0; overflow: auto; }
+.insert-form { display: flex; flex-direction: column; gap: 7px; font-size: 13px; color: var(--text); }
+.in-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.in-row > span { color: var(--muted); }
+.in-row select, .in-row input {
+  width: 150px;
+  box-sizing: border-box;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+.in-row input { width: 84px; text-align: right; }
+.in-check { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.in-neck { margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 6px; }
+.in-neck-head { font: 700 11px system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.6px; color: var(--section); }
+.in-neck-head .muted { text-transform: none; letter-spacing: normal; font-weight: 400; }
+.in-note { font-size: 11px; color: var(--muted); line-height: 1.4; }
+.insert-preview { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; overflow: auto; }
+.insert-preview svg { display: block; width: 100%; height: auto; border-radius: 3px; }
+.insert-preview svg + svg { margin-top: 10px; }
+@media (max-width: 760px) {
+  .insert-body { grid-template-columns: 1fr; }
+}
 
 /* Keyboard shortcuts cheatsheet. */
 .help-card { width: min(92vw, 480px); }

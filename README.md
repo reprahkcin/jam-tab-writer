@@ -592,6 +592,21 @@ you can see the whole band at once. Two global toggles, **Chords** and
   **on** the frets, where the bar goes, and a row under the fret numbers naming
   the chord a straight bar gives at every fret (C / Am up the neck in C6), with
   this song's chords picked out in bold. The printout names the tuning.
+  **Neck insert…** (beside the tuning picker) prints a **true-size paper
+  fretboard** to cut out and slide beneath the strings: pick a tuning, key and
+  scale (or **All notes**, a note map of the whole neck) and every scale tone
+  becomes a labelled dot sitting on its fret line under its string — root
+  filled, note name and scale degree inside — with the board's position markers,
+  fret numbers and straight-bar chords alongside. It opens on the panel's tuning
+  and the song's key, but its picks are its own, so printing a batch doesn't
+  move the song's scale. **Your neck** takes the measurements, in inches: scale
+  length, board length, fret count, width at each end, and the string spread at
+  each end; they're remembered, and a line underneath says where frets 12 and
+  the last one should land so you can check the scale against the real board.
+  The neck comes out as strips short enough for Letter paper (two for an
+  18 in board), cut mid-space so no fret line lands on a join, with rulers on the
+  sheet to prove the printer kept the size. Lettering reads from the playing
+  position. **Print at 100% — never "fit to page".**
 - **Piano** — a keyboard per chord with the chord tones highlighted (root
   orange, other tones gold) and labelled by interval degree (R/3/5/7 …), plus a
   piano scale roll.
