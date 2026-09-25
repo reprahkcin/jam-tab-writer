@@ -22,11 +22,11 @@ vm.runInContext(src + `
 const X = vm.runInContext(`({ OPEN_CHORDS, MOVABLE, TRIAD_TONES, TRIAD_SETS, INV_NAMES, UKE_ABS, MANDO_ABS,
    chordRootPc, parseQuality, resolveChord, chordVoicings, movableAt, triadShape,
    chordToneLabels, ukeVoicing, mandoVoicing, lapVoicings, chordIntervals, INTERVAL_LABELS,
-   SCALES, LAP_PIECE_MAX, fretDistance, lapInsertGeometry, lapInsertCuts, lapInsertPages })`, ctx);
+   SCALES, LAP_PIECE_MAX, fretDistance, lapInsertGeometry, lapInsertCuts, lapInsertPages, lapPositions })`, ctx);
 const { OPEN_CHORDS, MOVABLE, TRIAD_TONES, TRIAD_SETS, INV_NAMES, UKE_ABS, MANDO_ABS,
   chordRootPc, parseQuality, resolveChord, chordVoicings, movableAt, triadShape,
   chordToneLabels, ukeVoicing, mandoVoicing, lapVoicings, chordIntervals, INTERVAL_LABELS,
-  SCALES, LAP_PIECE_MAX, fretDistance, lapInsertGeometry, lapInsertCuts, lapInsertPages } = X;
+  SCALES, LAP_PIECE_MAX, fretDistance, lapInsertGeometry, lapInsertCuts, lapInsertPages, lapPositions } = X;
 
 // ---- ground truth ----------------------------------------------------------
 // Expected pitch-class interval sets for every suffix in the banks.
@@ -278,6 +278,43 @@ for (const neck of NECKS) {
   }
   notes.push(`[insert ${label}] ${last} frets, strips cut at ${cuts.slice(1, -1).map((c) => c.toFixed(2)).join(', ') || 'none'}`);
 }
+
+// ---- 9. Lap steel positions -------------------------------------------------
+// Every key in every tuning and scale must give three positions an octave —
+// the I, IV and V bars — that between them claim every fret, with the tonic's
+// position drawn as the circle wherever a tonic bar exists.
+const SHAPES_SEEN = new Set();
+for (const t of LAP_TUNINGS) {
+  for (const scale of SCALES) {
+    for (let rootPc = 0; rootPc < 12; rootPc++) {
+      const label = `${t.id} ${SHARP[rootPc]} ${scale.id}`;
+      const p = lapPositions(t.bars, rootPc, scale, 28);
+      if (!p) { bad('positions', label, 'no positions'); continue; }
+      if (p.list.length !== 3) bad('positions', label, `${p.list.length} positions, expected 3`);
+      p.list.forEach((q) => SHAPES_SEEN.add(q.shape));
+      const tonic = p.list.find((q) => q.chords.some((c) => chordIntervals(c).rootPc === rootPc));
+      if (tonic && tonic.shape !== 'circle') bad('positions', label, 'tonic position is not the circle');
+      if (p.list[0].shape !== 'circle') bad('positions', label, 'first position is not the circle');
+      let shared = 0;
+      for (let f = 0; f <= 28; f++) {
+        const at = p.at(f);
+        if (!at.length || at.length > 2) bad('positions', label, `fret ${f} in ${at.length} positions`);
+        if (at.length === 2) shared++;
+        // A bar fret belongs to its own position, alone.
+        const own = p.list.findIndex((q) => q.frets.includes(f));
+        if (own >= 0 && (at.length !== 1 || at[0] !== own)) bad('positions', label, `bar fret ${f} not in its own position alone`);
+      }
+      if (shared > 3) bad('positions', label, `${shared} shared frets, expected at most one an octave`);
+      for (const q of p.list) {
+        if (q.numerals.some((n) => !/^(i|ii|iii|iv|v|vi|vii)$/i.test(n))) bad('positions', label, 'odd numeral ' + q.numerals);
+        if (q.frets.some((f, i) => i && f - q.frets[i - 1] !== 12)) bad('positions', label, 'a position recurs off the octave');
+      }
+    }
+  }
+}
+if ([...SHAPES_SEEN].sort().join() !== 'circle,diamond,square') bad('positions', 'shapes', 'expected circle, square and diamond only, got ' + [...SHAPES_SEEN]);
+const chrom = lapPositions(['C', 'Am'], 0, { id: 'chromatic', iv: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] }, 28);
+if (chrom !== null) bad('positions', 'chromatic', 'the all-notes map should have no positions');
 
 console.log('\n--- PROBLEMS (' + problems.length + ') ---');
 problems.forEach((p) => console.log(p));
