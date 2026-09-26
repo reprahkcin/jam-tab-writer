@@ -39,6 +39,10 @@ Controls live with the thing they act on, so the top row is short:
 | Editor head | **Dictate**, **Page break**, then the chart-wide cleanup — **Reprocess**, **Clear chords** — quiet at the far end |
 | Chart pane head | **Numbers**, then the ways a chart leaves the room: **Share**, **Export**, **Print** with its column setting |
 
+Two dividers are draggable: the strip between the song list and the workspace
+sets the list's width, and the gap between the editor and the chart in Split view
+sets their share of the width. Double-click either to reset. Both are remembered.
+
 Below about 1200px wide the header labels drop away and the row becomes icons
 (hover for the name). On a phone the app is five places shown one at a time from
 a **bottom tab bar** — **Songs · Edit · Chart · Charts · Tools** — with **Perform**

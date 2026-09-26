@@ -480,8 +480,29 @@ main { display: flex; flex: 1; min-height: 0; }
 }
 .count-overlay[hidden] { display: none; }
 
-.panes { flex: 1; display: flex; gap: 12px; min-height: 0; }
+.panes { flex: 1; display: flex; min-height: 0; }
 .pane { flex: 1; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+/* Split view: the editor takes the dragged share (see wirePaneResize), the
+   chart the rest. The resizer is the 12px gap between them; a hairline shows
+   while it is usable. */
+.editor-pane { flex: 0 1 var(--editor-w, 50%); }
+.pane-resizer {
+  flex: 0 0 12px;
+  position: relative;
+  cursor: col-resize;
+  z-index: 5;
+}
+.pane-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 5px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  opacity: 0;
+}
+.pane-resizer:hover::after, .pane-resizer.dragging::after { opacity: 0.4; }
 
 /* Layout switch: side-by-side panes, or a single column showing one at a
    time. Phones always stack both and hide this control. */
@@ -492,7 +513,11 @@ main { display: flex; flex: 1; min-height: 0; }
 
 @media (min-width: 761px) {
   body.view-editor .preview-pane,
-  body.view-preview .editor-pane { display: none; }
+  body.view-preview .editor-pane,
+  body.view-editor .pane-resizer,
+  body.view-preview .pane-resizer { display: none; }
+  /* Alone, the editor takes the whole width whatever the split was. */
+  body.view-editor .editor-pane { flex: 1 1 0; }
   /* With the editor hidden the pane becomes Chart | Reference: banners across
      the top, then two columns that scroll independently. */
   body.view-preview #preview {
@@ -1444,8 +1469,10 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   body.strip-open .song-summary .ss-caret { transform: rotate(180deg); }
 
   /* Editor and chart take their natural height; the page scrolls. */
-  .panes { flex-direction: column; flex: none; }
+  .panes { flex-direction: column; flex: none; gap: 10px; }
   .pane { flex: none; }
+  .pane-resizer { display: none; }
+  .editor-pane { flex: none; }
   #editor { min-height: 50vh; }
   /* Match the chart's text inset to the editor's so the same song lines up
      in both (editor padding 14px vs preview 14/16). */

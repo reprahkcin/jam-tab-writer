@@ -699,6 +699,7 @@ function loadPrefs() {
     perform: { cols: 4, font: 22, autoSecs: 25, scrollSpeed: 30, autoFit: true, panels: { instruments: true, harp: true } },
     layout: 'split',   // 'split' | 'editor' | 'preview' (desktop only)
     sidebarWidth: null, // song-list width in px (desktop); null = the CSS default
+    editorWidth: null,  // editor's share of the split view, in %; null = half
     printCols: 1,
     capture: { deviceId: null, deviceLabel: '', format: 'wav' },
     metro: { bpm: 100, steps: 16, click: true, pattern: null },
@@ -3300,6 +3301,45 @@ document.getElementById('share-copy').addEventListener('click', async () => {
     document.documentElement.style.removeProperty('--sidebar-w');
     prefs.sidebarWidth = null;
     savePrefs();
+  });
+})();
+
+// Desktop split view: the strip between the editor and the chart drags the
+// editor's share of the width, kept as a percentage so the split survives a
+// window resize. Double-click resets to half and half. The chart re-renders
+// when the drag ends because print sizing measures the preview's width.
+(function wirePaneResize() {
+  const rz = document.getElementById('pane-resizer');
+  const panes = document.querySelector('.panes');
+  if (!rz || !panes) return;
+  const MIN = 25, MAX = 75;
+  const apply = (pct) => {
+    pct = Math.round(Math.max(MIN, Math.min(MAX, pct)) * 10) / 10;
+    document.documentElement.style.setProperty('--editor-w', pct + '%');
+    return pct;
+  };
+  if (prefs.editorWidth) apply(prefs.editorWidth);
+  rz.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    rz.classList.add('dragging');
+    rz.setPointerCapture(e.pointerId);
+  });
+  rz.addEventListener('pointermove', (e) => {
+    if (!rz.classList.contains('dragging')) return;
+    const box = panes.getBoundingClientRect();
+    prefs.editorWidth = apply(((e.clientX - box.left) / box.width) * 100);
+  });
+  rz.addEventListener('pointerup', (e) => {
+    rz.classList.remove('dragging');
+    rz.releasePointerCapture(e.pointerId);
+    savePrefs();
+    renderPreview();
+  });
+  rz.addEventListener('dblclick', () => {
+    document.documentElement.style.removeProperty('--editor-w');
+    prefs.editorWidth = null;
+    savePrefs();
+    renderPreview();
   });
 })();
 
