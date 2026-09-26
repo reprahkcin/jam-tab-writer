@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Jam Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=107" />
+  <link rel="stylesheet" href="styles.css?v=108" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -218,6 +218,7 @@
                 &rarr;
                 <input id="replace-to" class="repl-in" type="text" placeholder="chord" spellcheck="false" title="Replacement chord" />
                 <button id="replace-go" class="inline-btn" title="Replace every instance of this chord">Go</button>
+                <button id="replace-close" class="inline-btn quiet repl-close" title="Close (Esc)" aria-label="Close the chord replacer">&#215;</button>
               </span>
             </span>
           </div>
@@ -239,9 +240,19 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
           </div>
         </div>
 
+        <!-- Desktop split view: drag to share the width between editor and chart;
+             double-click resets to half and half. -->
+        <div id="pane-resizer" class="pane-resizer" title="Drag to resize the editor and chart — double-click to reset"></div>
+
         <div class="pane preview-pane">
           <div class="pane-head">
-            <span>Chart</span>
+            <!-- The right column is two tabs: the chart you read, and the band's
+                 reference. The Preview view has room for both side by side. -->
+            <span class="pane-tabs" role="tablist" aria-label="Right column">
+              <button class="rtab" data-rtab="chart" role="tab" aria-selected="true">Chart</button>
+              <button class="rtab" data-rtab="ref" role="tab" aria-selected="false">Reference</button>
+            </span>
+            <span class="pane-both-label">Chart &amp; reference</span>
             <span class="view-toggles">
               <label title="Show chords as Nashville numbers (scale degrees relative to the key)"><input type="checkbox" id="toggle-numbers" /> Numbers</label>
             </span>
@@ -254,15 +265,24 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
               <button id="export-btn" class="side-btn" title="Download this song as a file" aria-label="Export this song">
                 <svg class="ico"><use href="#i-export"/></svg><span class="btn-label">Export</span>
               </button>
-              <label class="print-cols-ctl" title="Number of columns when you print / save as PDF">
-                <select id="print-cols" aria-label="Print columns">
-                  <option value="1">1 col</option>
-                  <option value="2">2 cols</option>
-                </select>
-              </label>
-              <button id="print-btn" class="side-btn" title="Print / save as PDF" aria-label="Print or save as PDF">
-                <svg class="ico"><use href="#i-print"/></svg><span class="btn-label">Print</span>
-              </button>
+              <!-- Paper-only options live behind the Print button, so a column
+                   setting never reads as something the preview should show. -->
+              <span class="print-menu-wrap">
+                <button id="print-menu-btn" class="side-btn" title="Print / save as PDF (Cmd/Ctrl+P), with the paper options" aria-label="Print options" aria-haspopup="true" aria-expanded="false" aria-controls="print-menu">
+                  <svg class="ico"><use href="#i-print"/></svg><span class="btn-label">Print</span><span class="pm-caret" aria-hidden="true"></span>
+                </button>
+                <div id="print-menu" class="print-menu" hidden>
+                  <div class="pm-title">Paper options — the screen doesn't change</div>
+                  <label class="pm-row">Columns
+                    <select id="print-cols" aria-label="Print columns">
+                      <option value="1">1 column</option>
+                      <option value="2">2 columns</option>
+                    </select>
+                  </label>
+                  <div class="pm-hint">A <code>{page}</code> line starts a new sheet — the editor's <b>Page break</b> button inserts one.</div>
+                  <button id="print-btn" class="tool-start" title="Print / save as PDF" aria-label="Print or save as PDF">Print / save as PDF</button>
+                </div>
+              </span>
             </span>
           </div>
           <div id="preview" class="preview">
@@ -274,13 +294,8 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
                  the chart is ordered above it, and the Preview view gives each
                  its own column. -->
             <div class="ref-col">
-              <div id="reference-head" class="ref-head">
-                <span class="ref-title">Reference</span>
-                <label title="Show chord diagrams for each instrument"><input type="checkbox" id="toggle-chords" checked /> Chords</label>
-                <label title="Show a scale map for each instrument"><input type="checkbox" id="toggle-scales" checked /> Scales</label>
-                <label title="Show the key's theory panel: its chords, relative minor and chromatic intervals"><input type="checkbox" id="toggle-theory" checked /> Theory</label>
-              </div>
-              <!-- The jam: on/off chip per instrument, built by renderInstrumentBar(). -->
+              <!-- The jam: on/off chip per instrument, built by renderInstrumentBar().
+                   Every section below it folds from its heading (see wireFolds). -->
               <div id="instrument-bar" class="instrument-bar"></div>
               <!-- Key context for the chart: what key it is in, the chords that
                    come with it, and the chromatic ruler under them. -->
@@ -569,11 +584,11 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=107"></script>
+  <script src="chords.js?v=108"></script>
   <!-- After chords.js: the theory charts are drawn with its renderers. -->
-  <script src="learn.js?v=107"></script>
-  <script src="pdf2cho.js?v=107"></script>
-  <script src="qr.js?v=107"></script>
-  <script src="app.js?v=107"></script>
+  <script src="learn.js?v=108"></script>
+  <script src="pdf2cho.js?v=108"></script>
+  <script src="qr.js?v=108"></script>
+  <script src="app.js?v=108"></script>
 </body>
 </html>

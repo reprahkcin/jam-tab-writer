@@ -480,8 +480,29 @@ main { display: flex; flex: 1; min-height: 0; }
 }
 .count-overlay[hidden] { display: none; }
 
-.panes { flex: 1; display: flex; gap: 12px; min-height: 0; }
+.panes { flex: 1; display: flex; min-height: 0; }
 .pane { flex: 1; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+/* Split view: the editor takes the dragged share (see wirePaneResize), the
+   chart the rest. The resizer is the 12px gap between them; a hairline shows
+   while it is usable. */
+.editor-pane { flex: 0 1 var(--editor-w, 50%); }
+.pane-resizer {
+  flex: 0 0 12px;
+  position: relative;
+  cursor: col-resize;
+  z-index: 5;
+}
+.pane-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 5px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  opacity: 0;
+}
+.pane-resizer:hover::after, .pane-resizer.dragging::after { opacity: 0.4; }
 
 /* Layout switch: side-by-side panes, or a single column showing one at a
    time. Phones always stack both and hide this control. */
@@ -490,9 +511,24 @@ main { display: flex; flex: 1; min-height: 0; }
 .vs-btn { padding: 4px 12px; font-size: 12px; border-radius: 6px; }
 .vs-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--panel-2); }
 
-@media (min-width: 761px) {
+@media screen and (min-width: 761px) {
+  /* Split view: one tab of the right column at a time. Screen-only, so paper
+     keeps both (the print block flattens them back into one page). */
+  body:not(.view-preview).rtab-chart #preview > .ref-col { display: none; }
+  body:not(.view-preview).rtab-ref #preview > .chart-col,
+  body:not(.view-preview).rtab-ref #preview > .tuning-banner,
+  body:not(.view-preview).rtab-ref #preview > #capo-banner,
+  body:not(.view-preview).rtab-ref .preview-pane .view-toggles,
+  body:not(.view-preview).rtab-ref .preview-pane .print-ctl { display: none; }
+  body.view-preview .pane-tabs { display: none; }
+  body.view-preview .pane-both-label { display: inline; }
+
   body.view-editor .preview-pane,
-  body.view-preview .editor-pane { display: none; }
+  body.view-preview .editor-pane,
+  body.view-editor .pane-resizer,
+  body.view-preview .pane-resizer { display: none; }
+  /* Alone, the editor takes the whole width whatever the split was. */
+  body.view-editor .editor-pane { flex: 1 1 0; }
   /* With the editor hidden the pane becomes Chart | Reference: banners across
      the top, then two columns that scroll independently. */
   body.view-preview #preview {
@@ -507,7 +543,6 @@ main { display: flex; flex: 1; min-height: 0; }
   body.view-preview #preview > #capo-banner { grid-column: 1 / -1; }
   body.view-preview #preview > .chart-col { grid-column: 1; grid-row: 3; overflow-y: auto; min-height: 0; padding-bottom: 14px; }
   body.view-preview #preview > .ref-col { grid-column: 2; grid-row: 3; overflow-y: auto; min-height: 0; padding: 0 0 14px 18px; border-left: 1px solid var(--line); }
-  body.view-preview .ref-head { margin-top: 0; padding-top: 0; border-top: none; }
   body.view-preview .instrument-bar { grid-template-columns: repeat(8, minmax(0, 1fr)); }
   body.view-preview .inst-chip { font-size: 11px; padding: 3px 4px; }
 }
@@ -540,6 +575,7 @@ main { display: flex; flex: 1; min-height: 0; }
 .hint-sep { width: 1px; height: 16px; background: var(--line); margin: 0 2px; }
 .inline-btn.quiet { color: var(--muted); }
 .inline-btn.quiet:hover { color: var(--text); }
+.repl-close { padding: 2px 6px; font-size: 13px; line-height: 1; }
 .repl-sel, .repl-in {
   background: var(--panel-2);
   color: var(--text);
@@ -688,18 +724,41 @@ main { display: flex; flex: 1; min-height: 0; }
 #preview { display: flex; flex-direction: column; }
 #preview > .chart-col { order: 1; }
 #preview > .ref-col { order: 2; }
-.ref-head {
-  display: flex;
+/* Every reference section folds from its heading. The heading is a button
+   dressed as the text it replaced (it inherits the head's font), with a caret
+   that turns when the section is shut. Screen-only: the print block reopens
+   everything. */
+.fold {
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
-  margin: 8px 0 10px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--line);
-  font-family: system-ui, sans-serif;
+  gap: 6px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
 }
-.ref-title { font: 700 11px system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
-.ref-head label { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text); cursor: pointer; }
-.ref-head input { accent-color: var(--accent); margin: 0; }
+.fold:hover { background: none; color: var(--text); }
+.fold::before {
+  content: "";
+  width: 0; height: 0;
+  border-left: 5px solid transparent; border-right: 5px solid transparent;
+  border-top: 6px solid currentColor;
+  opacity: 0.7;
+  transition: transform 0.15s ease;
+}
+.collapsed .fold::before { transform: rotate(-90deg); }
+.inst-panel.collapsed .inst-body,
+.theory-panel.collapsed .th-body,
+.harmonica-panel.collapsed .hp-body { display: none; }
+.inst-panel.collapsed { padding-bottom: 4px; }
+.inst-panel.collapsed .inst-head { margin-bottom: 2px; }
+.theory-panel.collapsed .th-head { margin-bottom: 0; }
+.harmonica-panel .hp-body { display: contents; }
 
 .preview .line { line-height: 1.25; margin-bottom: 2px; white-space: pre; }
 
@@ -764,19 +823,75 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   letter-spacing: 0;
 }
 
-.view-toggles { display: flex; align-items: center; gap: 12px; text-transform: none; letter-spacing: 0; }
+/* The chart's own display switch sits beside its name; the print controls take
+   the far end. Without the auto margin a three-item space-between head would
+   float it in the middle. */
+.view-toggles { display: flex; align-items: center; gap: 12px; margin-right: auto; text-transform: none; letter-spacing: 0; }
+/* The right column's tabs, in the pane head where the label was. */
+.pane-tabs { display: inline-flex; gap: 4px; }
+.rtab {
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.rtab[aria-selected="true"] { border-color: var(--accent); color: var(--accent); background: var(--panel-2); }
+/* Stands in for the tabs where both columns are on view (the Preview view). */
+.pane-both-label { display: none; }
 .view-toggles label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .view-toggles input { accent-color: var(--accent); }
-/* Print button + its column setting, at the end of the Preview pane header. */
+/* Share, Export and Print at the end of the Chart pane header. Print opens a
+   small menu holding the paper-only options, so a column setting never reads
+   as something the preview should be showing. */
 .print-ctl { display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; }
-.print-cols-ctl select {
+.print-menu-wrap { position: relative; display: inline-flex; }
+.pm-caret {
+  width: 0; height: 0;
+  margin-left: 2px;
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  opacity: 0.7;
+}
+#print-menu-btn.is-open { border-color: var(--accent); color: var(--accent); }
+.print-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 60;
+  width: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px 12px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+  color: var(--text);
+}
+.print-menu[hidden] { display: none; }
+.pm-title { color: var(--muted); font-size: 11px; }
+.pm-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pm-row select {
   background: var(--panel-2);
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 5px;
-  padding: 2px 4px;
+  padding: 3px 6px;
   font-size: 12px;
 }
+.pm-hint { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.pm-hint code { background: var(--panel-2); padding: 0 4px; border-radius: 3px; color: var(--chord); font-family: var(--mono); }
+.pm-hint b { color: var(--text); font-weight: 600; }
+.print-menu .tool-start { padding: 7px 10px; border-radius: 6px; cursor: pointer; }
 
 /* Capo banner */
 #capo-banner:not(:empty) {
@@ -1165,7 +1280,12 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
      its own heading anyway; so are the reference head's toggles and the scale
      pickers. .palette-empty goes too — it points at controls that aren't on
      the page. */
-  .ref-head, .sp-ctls, .sp-sub, .instrument-bar, .palette-empty { display: none !important; }
+  .pane-resizer, .sp-ctls, .sp-sub, .instrument-bar, .palette-empty { display: none !important; }
+  /* Folds are a screen convenience; paper gets every section whole. */
+  .inst-panel.collapsed .inst-body, .theory-panel.collapsed .th-body { display: block; }
+  .harmonica-panel.collapsed .hp-body { display: contents; }
+  .fold::before { display: none; }
+  .inst-panel.collapsed { padding-bottom: 10px; }
   /* Paper keeps the DOM order — reference first, then the chart — so the two
      screen columns dissolve back into the flat page they were. */
   #preview { display: block; }
@@ -1272,10 +1392,13 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
     padding-left: 0.5in;
     padding-right: 0.5in;
   }
-  /* Two-column chart body, only when the Print control is set to 2 cols. Using a
-     class (not column-count:1) matters: a single-column multicol context would
-     swallow the {page} forced page breaks. */
-  .preview.print-2col #preview-body {
+  /* Two-column chart, only when the print menu is set to 2 columns. The
+     columns are set on each page stretch (.pg, see render()), not on the body:
+     a {page} marker sits between the stretches, so its forced break lands
+     between two multicol boxes and really starts a new sheet. Inside one box
+     Chrome would only start a new column. Using a class (not column-count:1)
+     matters too: a single-column multicol context swallows forced breaks. */
+  .preview.print-2col #preview-body .pg {
     column-count: 2;
     column-gap: 30px;
     column-rule: 1px solid #ccc;
@@ -1357,7 +1480,7 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   body.tab-charts #preview > .tuning-banner,
   body.tab-charts #preview > #capo-banner,
   body.tab-charts .preview-pane .pane-head { display: none; }
-  body.tab-charts .ref-head { margin-top: 0; padding-top: 0; border-top: none; }
+  .pane-tabs, .pane-both-label { display: none; }
 
   /* Songs tab: the whole list, full width. */
   #sidebar { width: 100%; border-right: none; border-bottom: none; }
@@ -1400,8 +1523,10 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   body.strip-open .song-summary .ss-caret { transform: rotate(180deg); }
 
   /* Editor and chart take their natural height; the page scrolls. */
-  .panes { flex-direction: column; flex: none; }
+  .panes { flex-direction: column; flex: none; gap: 10px; }
   .pane { flex: none; }
+  .pane-resizer { display: none; }
+  .editor-pane { flex: none; }
   #editor { min-height: 50vh; }
   /* Match the chart's text inset to the editor's so the same song lines up
      in both (editor padding 14px vs preview 14/16). */
