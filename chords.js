@@ -374,14 +374,24 @@ function chordToneLabels(name) {
 // ring with the interval label (R/3/5/7 …); chord tones that fall outside the
 // scale are drawn as hollow labelled markers so the whole chord is visible.
 // `opts.onWire` puts each note on its fret line instead of behind it — where a
-// lap steel's bar goes. `opts.ruler` adds rows of text under the fret numbers,
-// one cell per fret 0..15: [[{ text, hi }, …], …].
+// lap steel's bar goes. `opts.ruler` adds rows under the fret numbers, one cell
+// per fret 0..15: text cells [{ text, hi }, …] or a row of position glyphs
+// [{ shapes: [kind…] }, …]. `opts.shapeAt(fret)` names the shape(s) a fret's
+// notes take — the lap steel's positions — instead of the plain circle; a
+// second kind is drawn as an outline round the first.
 function scaleDiagramSVG(rootPc, intervals, highlight, tuning = STRING_ABS, opts = {}) {
   const set = new Set(intervals.map((i) => (rootPc + i) % 12));
   const hi = highlight && highlight.size ? highlight : null;
   const N = tuning.length;
   const FR = 15, left = 26, top = 14, rowH = 18, colW = 30, rulerH = 11;
   const ruler = opts.ruler || [];
+  const shapeAt = opts.shapeAt || (() => ['circle']);
+  const mark = (f, cx, cy, cls, r) => {
+    const kinds = shapeAt(f);
+    let m = markShape(kinds[0], cx, cy, r, `class="${cls}"`);
+    if (kinds[1]) m += markShape(kinds[1], cx, cy, 1.12 * r, `class="${cls} sc-second"`);
+    return m;
+  };
   const width = left + FR * colW + 12;
   const numY = top + (N - 1) * rowH + 16;
   const height = numY + 8 + ruler.length * rulerH;
@@ -399,9 +409,14 @@ function scaleDiagramSVG(rootPc, intervals, highlight, tuning = STRING_ABS, opts
   }
   for (const f of markers) p += `<text class="sc-fretnum" x="${at(f)}" y="${numY}" text-anchor="middle">${f}</text>`;
   ruler.forEach((row, r) => row.forEach((cell, f) => {
-    if (!cell || !cell.text || f > FR) return;
-    p += `<text class="${cell.hi ? 'sc-bar sc-bar-hi' : 'sc-bar'}" x="${at(f)}" y="${numY + (r + 1) * rulerH}" ` +
-      `text-anchor="middle">${escapeHtml(cell.text)}</text>`;
+    if (!cell || f > FR) return;
+    const rowY = numY + (r + 1) * rulerH;
+    if (cell.shapes) {
+      // Two glyphs sit side by side where a fret belongs to two positions.
+      cell.shapes.forEach((kind, k) => { p += markShape(kind, at(f) + (k - (cell.shapes.length - 1) / 2) * 9, rowY - 3.5, 3.2, 'class="sc-pos"'); });
+    } else if (cell.text) {
+      p += `<text class="${cell.hi ? 'sc-bar sc-bar-hi' : 'sc-bar'}" x="${at(f)}" y="${rowY}" text-anchor="middle">${escapeHtml(cell.text)}</text>`;
+    }
   }));
 
   for (let i = 0; i < N; i++) {
@@ -412,12 +427,12 @@ function scaleDiagramSVG(rootPc, intervals, highlight, tuning = STRING_ABS, opts
       const inScale = set.has(pc);
       const isChordTone = hi && hi.has(pc);
       if (inScale && isChordTone) {
-        p += `<circle class="${pc === rootPc ? 'sc-root' : 'sc-note'} sc-hi" cx="${cx}" cy="${cy}" r="7"/>`;
+        p += mark(f, cx, cy, `${pc === rootPc ? 'sc-root' : 'sc-note'} sc-hi`, 7);
         p += `<text class="sc-label" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central">${hi.get(pc)}</text>`;
       } else if (inScale) {
-        p += `<circle class="${pc === rootPc ? 'sc-root' : 'sc-note'}" cx="${cx}" cy="${cy}" r="${pc === rootPc ? 6 : 5}"/>`;
+        p += mark(f, cx, cy, pc === rootPc ? 'sc-root' : 'sc-note', pc === rootPc ? 6 : 5);
       } else if (isChordTone) {
-        p += `<circle class="sc-chordonly" cx="${cx}" cy="${cy}" r="7"/>`;
+        p += mark(f, cx, cy, 'sc-chordonly', 7);
         p += `<text class="sc-label-open" x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central">${hi.get(pc)}</text>`;
       }
     }
@@ -910,16 +925,22 @@ function lapText(x, y, str, size, o = {}) {
 // One mark shape, `r` being roughly its reach from the centre: the shapes that
 // stand for positions are sized to read as the same weight as a circle and to
 // hold the same lettering. 'open' is the rounded square of an open string.
-function lapShape(kind, x, y, r, attrs) {
-  const P = (pts) => `<polygon points="${pts.map(([px, py]) => `${lu(x + px * r)},${lu(y + py * r)}`).join(' ')}" ${attrs}/>`;
-  if (kind === 'square') return `<rect x="${lu(x - 0.9 * r)}" y="${lu(y - 0.9 * r)}" width="${lu(1.8 * r)}" height="${lu(1.8 * r)}" ${attrs}/>`;
-  if (kind === 'open') return `<rect x="${lu(x - r)}" y="${lu(y - r)}" width="${lu(2 * r)}" height="${lu(2 * r)}" rx="${lu(r * 0.3)}" ${attrs}/>`;
+// `u` turns a coordinate into the drawing's units — the insert draws in
+// hundredths of an inch, the screen's fret map in pixels.
+const px = (v) => +v.toFixed(2);
+function markShape(kind, x, y, r, attrs, u = px) {
+  const P = (pts) => `<polygon points="${pts.map(([dx, dy]) => `${u(x + dx * r)},${u(y + dy * r)}`).join(' ')}" ${attrs}/>`;
+  if (kind === 'square') return `<rect x="${u(x - 0.9 * r)}" y="${u(y - 0.9 * r)}" width="${u(1.8 * r)}" height="${u(1.8 * r)}" ${attrs}/>`;
+  if (kind === 'open') return `<rect x="${u(x - r)}" y="${u(y - r)}" width="${u(2 * r)}" height="${u(2 * r)}" rx="${u(r * 0.3)}" ${attrs}/>`;
   if (kind === 'diamond') return P([[0, -1.2], [1.2, 0], [0, 1.2], [-1.2, 0]]);
   if (kind === 'hexagon') return P([[0, -1.05], [0.91, -0.525], [0.91, 0.525], [0, 1.05], [-0.91, 0.525], [-0.91, -0.525]]);
   if (kind === 'triangle') return P([[0, -1.3], [1.15, 0.75], [-1.15, 0.75]]);
   if (kind === 'tridown') return P([[0, 1.3], [1.15, -0.75], [-1.15, -0.75]]);
-  return `<circle cx="${lu(x)}" cy="${lu(y)}" r="${lu(r)}" ${attrs}/>`;
+  return `<circle cx="${u(x)}" cy="${u(y)}" r="${u(r)}" ${attrs}/>`;
 }
+function lapShape(kind, x, y, r, attrs) { return markShape(kind, x, y, r, attrs, lu); }
+// The same shapes as text, for a legend that is words rather than a drawing.
+const SHAPE_GLYPH = { circle: '●', square: '■', diamond: '◆', hexagon: '⬢', triangle: '▲', tridown: '▼' };
 
 // A note on the neck. `kinds` is the shape to draw it as — 'open' for the
 // rounded square at the nut — and, when positions are on, a second kind for a

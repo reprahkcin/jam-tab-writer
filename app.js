@@ -1069,9 +1069,21 @@ function renderInstruments(s) {
       let map;
       if (inst.kind === 'piano') map = pianoScaleSVG(pc, scale.iv, highlight);
       else if (inst.kind === 'lap') {
-        map = scaleDiagramSVG(pc, scale.iv, highlight, lap.abs, { onWire: true, ruler: lapRuler(lap) }) +
+        // Positions as on the paper insert: the notes take the shape of the
+        // chord bar they sit nearest, and a row of glyphs under the ruler
+        // shows where each position runs.
+        const pos = lapPositions(lap.t.bars, pc, scale, 15);
+        const kindsAt = (f) => (pos ? pos.at(f).map((i) => pos.list[i].shape) : ['circle']);
+        const ruler = lapRuler(lap);
+        if (pos) ruler.push(Array.from({ length: 16 }, (_, f) => ({ shapes: kindsAt(f) })));
+        const posNote = pos
+          ? ` Shapes are positions — the scale around each chord bar of the key: ` +
+            pos.list.map((q) => `${SHAPE_GLYPH[q.shape]} ${escapeHtml(q.chords.join(' / '))} (bar ${q.frets.join(', ')})`).join(' · ') +
+            `. A note drawn with two shapes belongs to both.`
+          : '';
+        map = scaleDiagramSVG(pc, scale.iv, highlight, lap.abs, { onWire: true, ruler, shapeAt: kindsAt }) +
           `<div class="lap-ruler-note">Notes sit on the fret, where the bar goes. ` +
-          `Under the numbers: the chord a straight bar gives at each fret, this song’s in bold.</div>`;
+          `Under the numbers: the chord a straight bar gives at each fret, this song’s in bold.${posNote}</div>`;
       } else map = scaleDiagramSVG(pc, scale.iv, highlight, inst.tuning);
       body += `<div class="inst-scale">${map}</div>`;
     }

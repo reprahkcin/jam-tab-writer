@@ -22,11 +22,11 @@ vm.runInContext(src + `
 const X = vm.runInContext(`({ OPEN_CHORDS, MOVABLE, TRIAD_TONES, TRIAD_SETS, INV_NAMES, UKE_ABS, MANDO_ABS,
    chordRootPc, parseQuality, resolveChord, chordVoicings, movableAt, triadShape,
    chordToneLabels, ukeVoicing, mandoVoicing, lapVoicings, chordIntervals, INTERVAL_LABELS,
-   SCALES, LAP_PIECE_MAX, fretDistance, lapInsertGeometry, lapInsertCuts, lapInsertPages, lapPositions })`, ctx);
+   SCALES, LAP_PIECE_MAX, fretDistance, lapInsertGeometry, lapInsertCuts, lapInsertPages, lapPositions, scaleDiagramSVG })`, ctx);
 const { OPEN_CHORDS, MOVABLE, TRIAD_TONES, TRIAD_SETS, INV_NAMES, UKE_ABS, MANDO_ABS,
   chordRootPc, parseQuality, resolveChord, chordVoicings, movableAt, triadShape,
   chordToneLabels, ukeVoicing, mandoVoicing, lapVoicings, chordIntervals, INTERVAL_LABELS,
-  SCALES, LAP_PIECE_MAX, fretDistance, lapInsertGeometry, lapInsertCuts, lapInsertPages, lapPositions } = X;
+  SCALES, LAP_PIECE_MAX, fretDistance, lapInsertGeometry, lapInsertCuts, lapInsertPages, lapPositions, scaleDiagramSVG } = X;
 
 // ---- ground truth ----------------------------------------------------------
 // Expected pitch-class interval sets for every suffix in the banks.
@@ -313,6 +313,19 @@ for (const t of LAP_TUNINGS) {
   }
 }
 if ([...SHAPES_SEEN].sort().join() !== 'circle,diamond,square') bad('positions', 'shapes', 'expected circle, square and diamond only, got ' + [...SHAPES_SEEN]);
+// The on-screen fret map draws the same shapes: every tuning and scale must
+// render with them, with no broken numbers and a glyph row under the ruler.
+for (const t of LAP_TUNINGS) {
+  const abs = t.strings.map(([n]) => midiOf(n));
+  for (const scale of SCALES) {
+    const pos = lapPositions(t.bars, 7, scale, 15);
+    const kindsAt = (f) => pos.at(f).map((i) => pos.list[i].shape);
+    const ruler = [Array.from({ length: 16 }, (_, f) => ({ text: 'X', hi: false })), Array.from({ length: 16 }, (_, f) => ({ shapes: kindsAt(f) }))];
+    const svg = scaleDiagramSVG(7, scale.iv, new Map([[7, 'R'], [11, '3']]), abs, { onWire: true, ruler, shapeAt: kindsAt });
+    if (/NaN|undefined/.test(svg)) bad('screen', `${t.id} ${scale.id}`, 'broken fret map');
+    if (!/class="sc-pos"/.test(svg) || !/<polygon[^>]*class="sc-(note|root)/.test(svg)) bad('screen', `${t.id} ${scale.id}`, 'no position shapes drawn');
+  }
+}
 const chrom = lapPositions(['C', 'Am'], 0, { id: 'chromatic', iv: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] }, 28);
 if (chrom !== null) bad('positions', 'chromatic', 'the all-notes map should have no positions');
 
