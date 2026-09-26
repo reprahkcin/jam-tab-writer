@@ -764,7 +764,10 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   letter-spacing: 0;
 }
 
-.view-toggles { display: flex; align-items: center; gap: 12px; text-transform: none; letter-spacing: 0; }
+/* The chart's own display switch sits beside its name; the print controls take
+   the far end. Without the auto margin a three-item space-between head would
+   float it in the middle. */
+.view-toggles { display: flex; align-items: center; gap: 12px; margin-right: auto; text-transform: none; letter-spacing: 0; }
 .view-toggles label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .view-toggles input { accent-color: var(--accent); }
 /* Share, Export and Print at the end of the Chart pane header. Print opens a
