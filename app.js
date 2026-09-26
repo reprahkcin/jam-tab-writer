@@ -263,7 +263,7 @@ const collapsed = new Set();  // collapsed nodes: libId, or libId+'\0'+subpath
 // browser (localStorage) is neutral grey.
 const COLLECTION_DIR = 'GuitarTabWriterCollection';
 const COLLECTION_COLOR = '#5db073';
-const BROWSER_COLOR = '#8b90a3';
+const BROWSER_COLOR = '#909090';
 const EXTERNAL_PALETTE = ['#5b9dd9', '#e0a458', '#a986d6', '#4bb5a8', '#d97aa6', '#c98b4b'];
 function nextExternalColor() {
   const n = libraries.filter((l) => l.kind === 'external').length;
@@ -611,10 +611,12 @@ function renderBreadcrumb(stateText) {
   const s = currentSong();
   if (!s) { bc.hidden = true; bc.innerHTML = ''; return; }
   const sys = systemInfo();
-  const loc = [
+  // In the browser the sidebar's source picker already names the place, so the
+  // breadcrumb carries only the state; folder mode adds the path to the file.
+  const loc = mode === 'folder' ? [
     `<span class="bc-dot" style="background:${sys.color}"></span>`,
     `<span class="bc-sys">${escapeHtml(sys.label)}</span>`,
-  ];
+  ] : [];
   if (mode === 'folder') {
     const segs = (s.path || '').split('/');
     const file = segs.pop() || '';
@@ -798,6 +800,8 @@ function renderPreview() {
   renderTuningBanner(s);
   renderCapoBanner(s);
   renderShapeGoal(s);
+  renderKeyCard(s);
+  renderSongSummary(s);
   renderInstrumentBar();
   renderTheory(s);
   renderInstruments(s);
@@ -814,6 +818,36 @@ function renderPreview() {
   if (typeof learn !== 'undefined' && learn.open) renderLearn();
   updateFrontMatter();
   highlightCaretLine(); // a render wipes the caret echo's classes; re-mark
+}
+
+// The Key card's tail: what the shapes sound in, and — once the stepper is off
+// zero — the way to bake that transpose into the written chords.
+function renderKeyCard(s) {
+  const sounds = document.getElementById('sounds-in');
+  const apply = document.getElementById('apply-transpose-btn');
+  if (!sounds || !apply) return;
+  const pc = soundingKeyPc(s);
+  sounds.innerHTML = pc === null ? '' : `sounds in <b>${HARP_NAMES[pc]}</b>`;
+  apply.hidden = !s.transpose;
+}
+
+// Phone: the song strip folded to one line — key, tempo, tuning — that opens
+// the cards when tapped (see the phone block in styles.css).
+function renderSongSummary(s) {
+  const btn = document.getElementById('song-summary');
+  if (!btn) return;
+  const bits = [];
+  const tonic = s.body ? shapeTonic(s) : null;
+  if (tonic) bits.push(`<b>${(tonic.minor ? MINOR_NAMES : HARP_NAMES)[tonic.pc]}${tonic.minor ? 'm' : ''} shapes</b>`);
+  if (s.capo) bits.push(`capo <b>${s.capo}</b>`);
+  if (s.transpose) bits.push(`transpose <b>${s.transpose > 0 ? '+' : ''}${s.transpose}</b>`);
+  const pc = soundingKeyPc(s);
+  if (pc !== null && (s.capo || s.transpose)) bits.push(`sounds in <b class="accent">${HARP_NAMES[pc]}</b>`);
+  bits.push(s.tempo ? `<b>${s.tempo}</b> bpm` : 'no tempo');
+  // Standard tuning is the assumption; only an alternate one earns a mention.
+  const tuning = s.tuning && s.tuning !== 'standard' ? TUNER_PRESETS[s.tuning] : null;
+  if (tuning) bits.push(escapeHtml(tuning.name));
+  btn.innerHTML = `<span class="ss-text">${bits.join(' <span class="muted">·</span> ')}</span><span class="ss-caret" aria-hidden="true"></span>`;
 }
 
 // ---- Caret echo ------------------------------------------------------------
@@ -1000,7 +1034,7 @@ function renderTheory(s) {
       `<span class="th-print">Key of ${escapeHtml(key.name)} · ${escapeHtml(T.sigText(entry.acc))} · ` +
         `relative ${key.minor ? 'major' : 'minor'} ${escapeHtml(key.minor ? entry.major : entry.minor)}</span>` +
     `</div>` +
-    `<div class="th-row"><span class="th-k">Chords in ${escapeHtml(key.name)}</span><span class="th-chips">${degreeChips}</span></div>` +
+    `<div class="th-row th-table"><span class="th-k">Chords in ${escapeHtml(key.name)}</span><span class="th-chips">${degreeChips}</span></div>` +
     borrowed +
     `<div class="th-row"><span class="th-k">Notes</span><span class="th-scale">${escapeHtml(scale.join(' '))}</span></div>` +
     `<div class="th-row th-chrom"><span class="th-k">Chromatic</span><span class="th-ivs">${chromatic}</span></div>`;
@@ -1032,12 +1066,17 @@ function scaleControlsHtml(s, pc, auto, scale, highlight) {
   // mean nothing unless you know which chord they belong to.
   const focusPrint = s.focusChord
     ? `<span class="sp-focus-print">Chord ${escapeHtml(s.focusChord)}</span>` : '';
-  return `<div class="sp-head"><span class="sp-title">${HARP_NAMES[pc]} ${escapeHtml(scale.name)}</span>` +
-    `<span class="muted sp-ctl">Root</span><select id="scale-root">${rootOpts}</select>` +
-    `<select id="scale-type">${scaleOpts}</select>` +
-    `<span class="muted sp-ctl">Chord</span><select id="scale-focus">${focusOpts}</select>` +
+  // The maps show the key the room hears — the theory panel's key with the
+  // capo added — so the line says which frame it is in.
+  const sub = s.capo
+    ? `<span class="sp-sub" title="The scale maps show what the room hears: the key in Theory with the capo added. Change the key there and this follows; pick a root here to pin it.">sounding · from the key above</span>`
+    : '';
+  return `<div class="sp-head"><span class="sp-title">${HARP_NAMES[pc]} ${escapeHtml(scale.name)}</span>${sub}` +
     focusPrint +
-    `<span class="sp-legend"><span class="sp-dot root"></span>root <span class="sp-dot note"></span>scale tone${legendHi}</span></div>`;
+    `<span class="sp-legend"><span class="sp-dot root"></span>root <span class="sp-dot note"></span>scale tone${legendHi}</span></div>` +
+    `<div class="sp-ctls"><span class="sp-ctl">Root</span><select id="scale-root">${rootOpts}</select>` +
+    `<span class="sp-ctl">Scale</span><select id="scale-type">${scaleOpts}</select>` +
+    `<span class="sp-ctl">Chord</span><select id="scale-focus">${focusOpts}</select></div>`;
 }
 
 // Build a section for every active instrument (chords + scale, per toggles).
@@ -1572,7 +1611,7 @@ function renderRiffEditor(s) {
   if (!s) { cont.innerHTML = ''; return; }
   const riffs = s.riffs || (s.riffs = []);
   if (!riffs.length) {
-    cont.innerHTML = '<div class="riff-empty">No riffs yet — “+ Add riff” starts a tab that prints on its own page.</div>';
+    cont.innerHTML = '<div class="riff-empty">No riffs yet — “+ Riff” starts a tab that prints on its own page.</div>';
     return;
   }
   const hint = '<div class="riff-hint">Type a fret, then add a technique linking it to the next step: ' +
@@ -2130,6 +2169,19 @@ function replaceChordAll() {
   if (!isChord(to)) { flashInvalid(toInput); return; }
   replaceEditorText(replaceChordText(el.editor.value, from, to));
   toInput.value = '';
+  setReplaceOpen(false);
+}
+
+// The chord replacer stays folded behind one button until it's wanted, then
+// opens in place; Esc or a completed replace folds it again.
+function setReplaceOpen(open) {
+  const btn = document.getElementById('replace-toggle');
+  const tools = document.getElementById('replace-tools');
+  if (!btn || !tools) return;
+  tools.hidden = !open;
+  btn.hidden = open;
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) document.getElementById('replace-to').focus();
 }
 
 // Insert text at the cursor. cursorOffset (optional) places the caret that many
@@ -2173,9 +2225,12 @@ function nextVerseLabel() {
 }
 
 function initSectionBar() {
-  el.sectionBar.innerHTML = SECTION_BUTTONS.map((s) =>
-    `<button class="sbtn" data-section="${s}" title="Insert {${s}} section label">${s}</button>`).join('') +
-    '<button class="sbtn sbtn-empty" id="empty-section-btn" title="Insert an empty { } section label to name yourself">{ }</button>';
+  // Both insert rows lead with their empty-bracket button: { } here, [ ] on
+  // the chord row below.
+  el.sectionBar.innerHTML =
+    '<button class="sbtn sbtn-empty" id="empty-section-btn" title="Insert an empty { } section label to name yourself">{ }</button>' +
+    SECTION_BUTTONS.map((s) =>
+      `<button class="sbtn" data-section="${s}" title="Insert {${s}} section label">${s}</button>`).join('');
   el.sectionBar.querySelectorAll('.sbtn[data-section]').forEach((b) => b.addEventListener('click', () => {
     insertSection(b.dataset.section === 'Verse' ? nextVerseLabel() : b.dataset.section);
   }));
@@ -2659,8 +2714,7 @@ function renderStrumEditor(s) {
   if (!s) { cont.innerHTML = ''; return; }
   const strums = s.strums || (s.strums = []);
   if (!strums.length) {
-    cont.innerHTML = '<div class="riff-empty">No patterns yet — “+ Add pattern” starts one that ' +
-      'prints with the chart.</div>';
+    cont.innerHTML = '<div class="riff-empty">No strumming patterns yet — “+ Pattern” starts one that prints with the chart.</div>';
     return;
   }
   const hint = '<div class="riff-hint">Click a slot to cycle it: ' +
@@ -3065,34 +3119,28 @@ document.querySelectorAll('#view-switch .vs-btn').forEach((b) => {
   });
 });
 
-// Phone preview bar: one switch for every chart (chords + scales at once),
-// mirroring the two desktop checkboxes so both views stay in sync.
-(function wireChartsToggle() {
-  const btn = document.getElementById('charts-toggle');
-  if (!btn) return;
-  const paint = () => {
-    const on = prefs.showChords || prefs.showScales;
-    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-    btn.classList.toggle('is-on', on);
-    // Off means off: hide the instrument chips and panels too, not just the
-    // diagrams inside them, so the phone falls back to a clean lyric sheet.
-    document.body.classList.toggle('charts-off', !on);
-  };
-  btn.addEventListener('click', () => {
-    const on = !(prefs.showChords || prefs.showScales);
-    prefs.showChords = on;
-    prefs.showScales = on;
-    el.toggleChords.checked = on;
-    el.toggleScales.checked = on;
-    savePrefs();
-    renderPreview();
-    paint();
+// Phone: the app is five places — Songs, Edit, Chart, Charts, Tools — shown
+// one at a time from the bottom tab bar. Desktop CSS ignores the classes.
+const PHONE_TABS = ['songs', 'edit', 'chart', 'charts', 'tools'];
+function setPhoneTab(tab) {
+  if (!PHONE_TABS.includes(tab)) tab = 'edit';
+  prefs.phoneTab = tab;
+  savePrefs();
+  PHONE_TABS.forEach((t) => document.body.classList.toggle('tab-' + t, t === tab));
+  document.body.classList.remove('strip-open');
+  document.querySelectorAll('#phone-tabs .ptab').forEach((b) => {
+    b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false');
   });
-  paint();
-  // Keep the switch honest when the desktop checkboxes change.
-  el.toggleChords.addEventListener('change', paint);
-  el.toggleScales.addEventListener('change', paint);
-})();
+  // A freshly shown pane lays out at its own width (print sizing, wrapping).
+  if (window.matchMedia('(max-width: 760px)').matches && currentSong()) renderPreview();
+}
+document.querySelectorAll('#phone-tabs .ptab').forEach((b) => b.addEventListener('click', () => setPhoneTab(b.dataset.tab)));
+setPhoneTab(prefs.phoneTab || 'edit');
+// The folded song strip on the chart tabs opens the key/tempo/tuning cards.
+document.getElementById('song-summary').addEventListener('click', (e) => {
+  const open = document.body.classList.toggle('strip-open');
+  e.currentTarget.setAttribute('aria-expanded', open ? 'true' : 'false');
+});
 document.getElementById('mbar-perform').addEventListener('click', () => openPerform());
 
 el.toggleNumbers.addEventListener('change', () => {
@@ -3201,28 +3249,13 @@ document.getElementById('share-copy').addEventListener('click', async () => {
   document.addEventListener('click', (e) => { if (!header.contains(e.target)) setOpen(false); });
 })();
 
-// Collapsible song drawer (phones): tap the "Songs" header to show/hide the
-// list. Below the breakpoint it starts collapsed so the editor is front and
-// centre; picking a song closes it again. On desktop the CSS ignores the
-// class, so the list is always shown.
-(function wireSongDrawer() {
-  const head = document.getElementById('sidebar-head');
-  const sidebar = document.getElementById('sidebar');
+// Phone: picking a song from the Songs tab goes straight to its chart.
+(function wireSongPick() {
   const list = document.getElementById('song-list');
-  if (!head || !sidebar || !list) return;
-  const isPhone = () => window.matchMedia('(max-width: 760px)').matches;
-  const setOpen = (open) => {
-    sidebar.classList.toggle('drawer-open', open);
-    head.setAttribute('aria-expanded', open ? 'true' : 'false');
-  };
-  // The head doubles as the drawer handle, so a button sitting in it (Setlists)
-  // must not also toggle the drawer.
-  head.addEventListener('click', (e) => {
-    if (e.target.closest('button')) return;
-    if (isPhone()) setOpen(!sidebar.classList.contains('drawer-open'));
+  if (!list) return;
+  list.addEventListener('click', (e) => {
+    if (window.matchMedia('(max-width: 760px)').matches && e.target.closest('li.song-item')) setPhoneTab('chart');
   });
-  head.addEventListener('keydown', (e) => { if (isPhone() && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setOpen(!sidebar.classList.contains('drawer-open')); } });
-  list.addEventListener('click', (e) => { if (isPhone() && e.target.closest('li')) setOpen(false); });
 })();
 
 // Desktop: the strip on the song list's right edge drags its width, which is
@@ -3373,9 +3406,47 @@ function computePrintFont() {
 
 // Folder mode controls.
 const reopenBtn = document.getElementById('reopen-btn');
-document.getElementById('folder-btn').addEventListener('click', openFolder);
-document.getElementById('collection-btn').addEventListener('click', setupCollection);
 document.getElementById('save-btn').addEventListener('click', saveCurrentNow);
+
+// The sidebar's source picker: where the song list comes from, as one control.
+// Its first option is the current state; the rest are the ways to change it.
+// Picking one runs the action and the picker snaps back to the real state,
+// since a folder dialog can be cancelled.
+function renderSourcePicker() {
+  const sel = document.getElementById('source-select');
+  const dot = document.getElementById('source-dot');
+  if (!sel || !dot) return;
+  const opts = [];
+  if (mode === 'folder') {
+    const col = libraries.filter((l) => l.kind === 'collection');
+    const ext = libraries.filter((l) => l.kind !== 'collection');
+    const parts = [];
+    if (col.length) parts.push('Collection');
+    if (ext.length === 1) parts.push(ext[0].name);
+    else if (ext.length) parts.push(`${ext.length} folders`);
+    opts.push(['state', 'Saved in ' + (parts.join(' + ') || 'folders')]);
+    if (!col.length) opts.push(['collection', 'Set up a Collection…']);
+    opts.push(['folder', 'Add a folder…']);
+    sel.title = 'Songs are .cho files in the folders listed below';
+  } else {
+    opts.push(['state', 'Saved in this browser']);
+    opts.push(['collection', 'Set up a Collection folder…']);
+    opts.push(['folder', 'Open a folder of .cho files…']);
+    sel.title = 'Songs are saved in this browser — pick a Collection or a folder to keep them as files on disk';
+  }
+  sel.innerHTML = opts.map(([v, label]) => `<option value="${v}">${escapeHtml(label)}</option>`).join('');
+  sel.value = 'state';
+  dot.style.background = systemInfo().color;
+}
+document.getElementById('source-select').addEventListener('change', (e) => {
+  const pick = e.target.value;
+  renderSourcePicker();
+  if (pick === 'collection') setupCollection();
+  else if (pick === 'folder') openFolder();
+});
+// Filled at boot as well as on every mode change: in plain browser mode
+// nothing else would ever call updateModeUI.
+renderSourcePicker();
 
 async function saveCurrentNow() {
   const s = currentSong();
@@ -3420,12 +3491,7 @@ async function materializeDraft(s) {
 function updateModeUI() {
   const folder = mode === 'folder';
   document.getElementById('save-btn').hidden = !folder;
-  document.getElementById('import-btn').hidden = false; // import works in both modes
-  const folderBtn = document.getElementById('folder-btn');
-  setBtnLabel(folderBtn, folder ? 'Add folder' : 'Open folder');
-  folderBtn.title = folder
-    ? 'Open another folder of .cho charts'
-    : 'Set up a file-backed collection: copy your songs into a folder and edit on disk';
+  renderSourcePicker();
   const bar = document.getElementById('folder-bar');
   if (folder) {
     bar.hidden = false;
@@ -3620,11 +3686,24 @@ document.getElementById('clear-chords-btn').addEventListener('click', () => {
   el.editor.dispatchEvent(new Event('input'));
 });
 
-document.getElementById('tr-text-down').addEventListener('click', () => transposeEditorText(-1));
-document.getElementById('tr-text-up').addEventListener('click', () => transposeEditorText(1));
+// One transpose, not two: the Key card's stepper shifts the display, and this
+// bakes that shift into the written chords and puts the stepper back to 0.
+document.getElementById('apply-transpose-btn').addEventListener('click', () => {
+  const s = currentSong();
+  if (!s || !s.transpose) return;
+  const semi = s.transpose;
+  transposeEditorText(semi); // fires input: the text, palette and preview refresh
+  s.transpose = 0;
+  el.trAmount.textContent = '0';
+  s.updated = Date.now();
+  schedulePersist();
+  renderPreview();
+});
+document.getElementById('replace-toggle').addEventListener('click', () => setReplaceOpen(true));
 document.getElementById('replace-go').addEventListener('click', replaceChordAll);
 document.getElementById('replace-to').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); replaceChordAll(); }
+  if (e.key === 'Escape') { e.preventDefault(); setReplaceOpen(false); }
 });
 
 const importInput = document.getElementById('import-input');

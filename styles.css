@@ -1,13 +1,13 @@
 :root {
-  --bg: #1c1e26;
-  --panel: #232634;
-  --panel-2: #2b2f40;
-  --line: #363b4f;
-  --text: #e6e8ef;
-  --muted: #8b90a3;
+  --bg: #1e1e1e;
+  --panel: #262626;
+  --panel-2: #2f2f2f;
+  --line: #3b3b3b;
+  --text: #e8e8e8;
+  --muted: #909090;
   --accent: #f0a35e;
   --chord: #f0a35e;
-  --section: #7fd1b9;
+  --section: #8ec5f0;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 }
 
@@ -86,10 +86,6 @@ header h1 { font-size: 18px; margin: 0; letter-spacing: 0.3px; }
 .hdr-primary:hover { background: #f6c073; border-color: #f6c073; }
 .hdr-primary .ico { stroke: none; }
 
-/* Collection's green is the managed-home colour, and it also tells the two
-   folder buttons apart at a glance. */
-#collection-btn .ico { color: #5db073; }
-
 /* Small buttons that sit inside a pane or sidebar header rather than the top row. */
 .side-btn {
   display: inline-flex;
@@ -105,7 +101,7 @@ header h1 { font-size: 18px; margin: 0; letter-spacing: 0.3px; }
 /* Phone-only chrome — revealed in the max-width block below. Declared here,
    ahead of that block, so the media query wins on source order. */
 .menu-toggle { display: none; }
-.preview-mbar { display: none; }
+.phone-tabs, .phone-perform, .song-summary { display: none; }
 /* Scoped, so it outranks the later `.pf-group { display: flex }` it sits on. */
 .perform-bar .pf-phone-only { display: none; }
 
@@ -118,7 +114,7 @@ button {
   font-size: 13px;
   cursor: pointer;
 }
-button:hover { background: #343a4e; border-color: #4a516b; }
+button:hover { background: #393939; border-color: #515151; }
 button:active { transform: translateY(1px); }
 
 main { display: flex; flex: 1; min-height: 0; }
@@ -158,10 +154,24 @@ main { display: flex; flex: 1; min-height: 0; }
   color: var(--muted);
   border-bottom: 1px solid var(--line);
 }
-.sidebar-head-end { display: flex; align-items: center; gap: 8px; }
+.sidebar-head-end { display: flex; align-items: center; gap: 6px; }
 
-/* The drawer caret only appears on phones (see the max-width block). */
-.drawer-caret { display: none; }
+/* Where the songs live: a dot in the system's colour and one picker. */
+.source-row { display: flex; align-items: center; gap: 7px; padding: 8px 10px 0; }
+.source-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.source-select {
+  flex: 1;
+  min-width: 0;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-family: system-ui, sans-serif;
+}
+.search-row { display: flex; align-items: center; gap: 6px; padding: 8px 10px; }
+.search-row .song-search { flex: 1; min-width: 0; margin: 0; }
 
 .song-search {
   margin: 8px 10px;
@@ -186,6 +196,7 @@ main { display: flex; flex: 1; min-height: 0; }
   background: var(--panel-2);
   font-size: 12px;
 }
+.folder-bar[hidden] { display: none; }
 .folder-bar .fb-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--accent); font-weight: 600; }
 
 #song-list { list-style: none; margin: 0; padding: 6px; overflow-y: auto; flex: 1; }
@@ -200,7 +211,7 @@ main { display: flex; flex: 1; min-height: 0; }
   gap: 6px;
 }
 .song-item:hover { background: var(--panel-2); }
-.song-item.active { background: #33384c; }
+.song-item.active { background: #383838; }
 .song-item .st { overflow: hidden; }
 .song-item .st b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .song-item .st small { color: var(--muted); font-size: 12px; }
@@ -332,8 +343,8 @@ main { display: flex; flex: 1; min-height: 0; }
   vertical-align: middle;
 }
 
-/* Collection's managed-home green now rides on its icon (see #collection-btn
-   .ico), so the separate dot would say the same thing twice. */
+/* Collection's managed-home green rides on its dot in the list header and the
+   sidebar's source picker, so a separate marker here would say it twice. */
 
 /* Save-location breadcrumb under the song title. */
 .save-breadcrumb {
@@ -370,6 +381,32 @@ main { display: flex; flex: 1; min-height: 0; }
 #workspace { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 14px; gap: 12px; }
 
 .meta-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.meta-row .save-breadcrumb { flex: 0 1 auto; min-width: 0; padding: 0; }
+.save-status { font-size: 11px; }
+.save-status:empty { display: none; }
+.meta-row .view-switch { margin-left: auto; }
+
+/* Row 2: labelled cards — key, tempo, tuning — each a group of controls. */
+.card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.card-lbl {
+  font: 700 11px system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted);
+}
+.card .stepper { background: none; border: none; padding: 0; gap: 4px; }
+.card .tuning-ctl { gap: 0; }
+.sounds-in { font-size: 12px; color: var(--text); white-space: nowrap; }
+.sounds-in:empty { display: none; }
+.sounds-in b { color: var(--accent); }
 
 .title-input, .artist-input {
   background: var(--panel);
@@ -391,7 +428,6 @@ main { display: flex; flex: 1; min-height: 0; }
   border-radius: 6px;
   padding: 4px 8px;
 }
-.stepper:first-of-type { margin-left: auto; }
 .stepper label { font-size: 12px; color: var(--muted); }
 .stepper button { padding: 2px 9px; font-size: 15px; }
 .stepper span { min-width: 22px; text-align: center; font-variant-numeric: tabular-nums; }
@@ -437,7 +473,7 @@ main { display: flex; flex: 1; min-height: 0; }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(28, 30, 38, 0.6);
+  background: rgba(30, 30, 30, 0.6);
   font: 700 22vh system-ui, sans-serif;
   color: var(--accent);
   pointer-events: none;
@@ -457,6 +493,23 @@ main { display: flex; flex: 1; min-height: 0; }
 @media (min-width: 761px) {
   body.view-editor .preview-pane,
   body.view-preview .editor-pane { display: none; }
+  /* With the editor hidden the pane becomes Chart | Reference: banners across
+     the top, then two columns that scroll independently. */
+  body.view-preview #preview {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    column-gap: 18px;
+    overflow: hidden;
+    padding-bottom: 0;
+  }
+  body.view-preview #preview > .tuning-banner,
+  body.view-preview #preview > #capo-banner { grid-column: 1 / -1; }
+  body.view-preview #preview > .chart-col { grid-column: 1; grid-row: 3; overflow-y: auto; min-height: 0; padding-bottom: 14px; }
+  body.view-preview #preview > .ref-col { grid-column: 2; grid-row: 3; overflow-y: auto; min-height: 0; padding: 0 0 14px 18px; border-left: 1px solid var(--line); }
+  body.view-preview .ref-head { margin-top: 0; padding-top: 0; border-top: none; }
+  body.view-preview .instrument-bar { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+  body.view-preview .inst-chip { font-size: 11px; padding: 3px 4px; }
 }
 
 .pane-head {
@@ -482,6 +535,11 @@ main { display: flex; flex: 1; min-height: 0; }
   gap: 8px;
 }
 .etool { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); }
+.etool[hidden] { display: none; }
+.etool-quiet { font-size: 11px; }
+.hint-sep { width: 1px; height: 16px; background: var(--line); margin: 0 2px; }
+.inline-btn.quiet { color: var(--muted); }
+.inline-btn.quiet:hover { color: var(--text); }
 .repl-sel, .repl-in {
   background: var(--panel-2);
   color: var(--text);
@@ -514,17 +572,26 @@ main { display: flex; flex: 1; min-height: 0; }
   font-weight: 600;
   cursor: pointer;
 }
-.section-bar .sbtn:hover { background: #343a4e; border-color: #4a516b; }
+.section-bar .sbtn:hover { background: #393939; border-color: #515151; }
 /* Empty/custom insert buttons — dashed to signal "you fill it in". */
 .sbtn-empty, .chip-empty { border-style: dashed !important; }
 
+/* Chord tools row: the palette, then the folded replacer at the end. */
+.chord-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.palette-tools { flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
 .chord-palette {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 5px;
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--line);
 }
 .chord-palette .chip {
   background: var(--panel-2);
@@ -537,7 +604,7 @@ main { display: flex; flex: 1; min-height: 0; }
   font-weight: 700;
   cursor: pointer;
 }
-.chord-palette .chip:hover { background: #343a4e; border-color: #4a516b; }
+.chord-palette .chip:hover { background: #393939; border-color: #515151; }
 .chord-palette .palette-empty { color: var(--muted); font-size: 12px; }
 
 /* The Alt+N digit badge on the first nine palette chips. */
@@ -616,6 +683,23 @@ main { display: flex; flex: 1; min-height: 0; }
 }
 
 .preview { flex: 1; overflow-y: auto; padding: 14px 16px; font-family: var(--mono); font-size: 14px; }
+/* Screen order: banners, then the chart, then the reference — the DOM keeps
+   the reference first for paper (see the print block). */
+#preview { display: flex; flex-direction: column; }
+#preview > .chart-col { order: 1; }
+#preview > .ref-col { order: 2; }
+.ref-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  font-family: system-ui, sans-serif;
+}
+.ref-title { font: 700 11px system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
+.ref-head label { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text); cursor: pointer; }
+.ref-head input { accent-color: var(--accent); margin: 0; }
 
 .preview .line { line-height: 1.25; margin-bottom: 2px; white-space: pre; }
 
@@ -670,7 +754,7 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   font-size: 12px;
   cursor: pointer;
 }
-.inline-btn:hover { background: #343a4e; }
+.inline-btn:hover { background: #393939; }
 
 /* Transient result note for editor actions (see editorNote). */
 .ed-note {
@@ -721,7 +805,7 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   font-size: 12px;
   cursor: pointer;
 }
-.cb-toggle .seg.on { background: var(--accent); border-color: var(--accent); color: #1c1e26; font-weight: 600; }
+.cb-toggle .seg.on { background: var(--accent); border-color: var(--accent); color: #1e1e1e; font-weight: 600; }
 
 /* Rhythm / Lead sections */
 .chord-section { margin-bottom: 8px; }
@@ -759,11 +843,16 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
 @media print { .roadmap { display: none !important; } }
 
 /* The jam roster: an on/off chip per instrument. */
-.instrument-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+/* A grid of equal chips, two tidy rows of four — never a ragged wrap. */
+.instrument-bar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-bottom: 12px; }
 .instrument-bar:empty { display: none; }
 .inst-chip {
   font: 600 12px system-ui, sans-serif;
-  padding: 3px 11px;
+  padding: 3px 8px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--panel-2);
@@ -824,7 +913,7 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
 }
 .cd-name { font-family: system-ui, sans-serif; font-size: 12px; font-weight: 700; color: var(--chord); margin-bottom: 2px; cursor: pointer; border-radius: 4px; padding: 0 4px; }
 .cd-name:hover { background: var(--panel-2); }
-.cd-name.focused { background: var(--accent); color: #1c1e26; }
+.cd-name.focused { background: var(--accent); color: #1e1e1e; }
 .cd-na { font-family: system-ui, sans-serif; font-size: 10px; color: var(--muted); padding: 14px 0; }
 .cd-sound { font-family: system-ui, sans-serif; font-size: 10px; color: var(--section); margin-top: 2px; }
 /* Cell width shared by all instruments so chord columns line up; wide enough
@@ -843,7 +932,7 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   font-family: system-ui, sans-serif;
   cursor: pointer;
 }
-.cd-voicing:hover { color: var(--text); border-color: #4a516b; }
+.cd-voicing:hover { color: var(--text); border-color: #515151; }
 .chord-diagram svg line { stroke: var(--muted); stroke-width: 1; }
 .chord-diagram svg .cd-nut { fill: var(--text); }
 .chord-diagram svg .cd-dot { fill: var(--text); }
@@ -875,13 +964,13 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   font-family: system-ui, sans-serif;
   cursor: pointer;
 }
-.pk-inv:hover { color: var(--text); border-color: #4a516b; }
-.pk-white { fill: #e9ecf2; stroke: #10121a; stroke-width: 0.5; }
-.pk-black { fill: #20222e; stroke: #10121a; stroke-width: 0.5; }
+.pk-inv:hover { color: var(--text); border-color: #515151; }
+.pk-white { fill: #ececec; stroke: #121212; stroke-width: 0.5; }
+.pk-black { fill: #222222; stroke: #121212; stroke-width: 0.5; }
 .pk-white.pk-hi, .pk-black.pk-hi { fill: #ffd479; }             /* chord tone */
 .pk-white.pk-root, .pk-black.pk-root { fill: var(--accent); }   /* root */
 .pk-white.pk-scale, .pk-black.pk-scale { fill: var(--section); } /* scale tone */
-.pk-label { fill: #10121a; font: 700 6px system-ui, sans-serif; pointer-events: none; }
+.pk-label { fill: #121212; font: 700 6px system-ui, sans-serif; pointer-events: none; }
 .pk-label-b { font-size: 5px; }
 
 /* One scale diagram per instrument, stacked under the scale controls. */
@@ -896,9 +985,12 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   padding: 10px 12px;
   margin-bottom: 14px;
 }
-.sp-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; font-family: system-ui, sans-serif; font-size: 13px; }
+.sp-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; font-family: system-ui, sans-serif; font-size: 13px; }
 .sp-title { font-weight: 700; color: var(--section); }
-.scale-panel select, .sp-head select {
+.sp-sub { color: var(--muted); font-size: 11px; }
+.sp-ctls { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin-bottom: 10px; font-family: system-ui, sans-serif; font-size: 12px; }
+.sp-ctl { color: var(--muted); font-size: 11px; }
+.scale-panel select, .sp-head select, .sp-ctls select {
   background: var(--panel);
   color: var(--text);
   border: 1px solid var(--line);
@@ -924,7 +1016,7 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
 .scale-svg .sc-chordonly { fill: none; stroke: #ffe08a; stroke-width: 1.6; }
 .scale-svg.has-hi .sc-note:not(.sc-hi) { opacity: 0.22; }
 .scale-svg.has-hi .sc-root:not(.sc-hi) { opacity: 0.45; }
-.scale-svg .sc-label { fill: #1c1e26; font-size: 7px; font-weight: 700; font-family: system-ui, sans-serif; pointer-events: none; }
+.scale-svg .sc-label { fill: #1e1e1e; font-size: 7px; font-weight: 700; font-family: system-ui, sans-serif; pointer-events: none; }
 .scale-svg .sc-label-open { fill: #ffe08a; font-size: 7px; font-weight: 700; font-family: system-ui, sans-serif; pointer-events: none; }
 /* Lap steel fret map: the straight-bar chord at each fret, the song's picked out. */
 .scale-svg .sc-bar { fill: var(--muted); font-size: 8px; font-family: system-ui, sans-serif; }
@@ -998,6 +1090,7 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   overflow-y: auto;
   flex-shrink: 0;
 }
+.parts-actions { display: flex; gap: 6px; }
 .riffs-head {
   display: flex;
   align-items: center;
@@ -1045,7 +1138,7 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   font-family: var(--mono);
   font-size: 12px;
 }
-.rg-cell:focus { outline: none; border-color: var(--accent); background: #33384c; }
+.rg-cell:focus { outline: none; border-color: var(--accent); background: #383838; }
 .riff-hint { color: var(--muted); font-size: 11px; margin-bottom: 8px; }
 .riff-hint code { background: var(--panel-2); padding: 0 3px; border-radius: 3px; color: var(--text); }
 .riff-hint b { color: var(--accent); font-family: var(--mono); }
@@ -1067,11 +1160,16 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   .riff-tab .line { font-size: var(--print-font, 10pt); }
 
   header, #sidebar, .meta-row, .editor-pane, .pane-head,
-  .save-breadcrumb, .view-switch, .preview-mbar,
+  .save-breadcrumb, .view-switch, .song-summary, .phone-tabs, .phone-perform,
   /* Which instruments are on is a screen control, and each panel below carries
-     its own heading anyway. .palette-empty goes too — it points at controls that
-     aren't on the page. */
-  .instrument-bar, .palette-empty { display: none !important; }
+     its own heading anyway; so are the reference head's toggles and the scale
+     pickers. .palette-empty goes too — it points at controls that aren't on
+     the page. */
+  .ref-head, .sp-ctls, .sp-sub, .instrument-bar, .palette-empty { display: none !important; }
+  /* Paper keeps the DOM order — reference first, then the chart — so the two
+     screen columns dissolve back into the flat page they were. */
+  #preview { display: block; }
+  #preview > .chart-col, #preview > .ref-col { display: contents; }
   html, body { background: #fff; color: #000; height: auto; display: block; }
   main, #workspace, .panes, .preview-pane, .pane {
     display: block; border: none; background: #fff; padding: 0; margin: 0; min-height: 0;
@@ -1215,8 +1313,9 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
    an unscoped query would hand the printer the phone's drawers, scroll areas
    and touch bars — and, sitting after the print block, would outrank it. */
 @media screen and (max-width: 760px) {
-  /* A single left/right gutter that every block lines up to. */
-  :root { --gutter: 12px; }
+  /* A single left/right gutter that every block lines up to, and the height of
+     the tab bar the page keeps clear of. */
+  :root { --gutter: 12px; --tabbar-h: 58px; }
 
   /* Scroll the whole page vertically instead of locking everything to one
      viewport-height screen with tiny internal scroll areas. Clipping sideways
@@ -1225,137 +1324,139 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
      display, which pushes the perform controls and lyrics off the edge. */
   html, body { height: auto; overflow-x: hidden; }
   html { max-width: 100%; }
+  body { padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px)); }
 
-  /* Header collapses to a title + ☰ menu; the action list drops down. */
-  header { position: relative; padding: 10px var(--gutter); }
+  /* Header is the brand alone; its actions become the Tools tab's screen. */
+  header { flex-wrap: wrap; padding: 10px var(--gutter); }
   header h1 { font-size: 16px; white-space: nowrap; }
-  .menu-toggle { display: inline-flex; align-items: center; }
-  .header-actions {
-    display: none;
-    position: absolute;
-    top: 100%;
-    right: var(--gutter);
-    left: var(--gutter);
-    z-index: 700;
+  .menu-toggle { display: none; }
+  .header-actions { display: none; }
+  body.tab-tools .header-actions {
+    display: flex;
+    flex-basis: 100%;
     flex-direction: column;
     align-items: stretch;
-    gap: 4px;
-    padding: 8px;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
-    max-height: 76vh;
-    overflow-y: auto;
+    gap: 8px;
+    padding: 12px 0 4px;
   }
-  header.menu-open .header-actions { display: flex; }
-  .header-actions button { text-align: left; padding: 9px 12px; font-size: 14px; }
-  /* The dropdown is a list, so everything gets its words back and the cluster
-     separators become dividers between them. */
-  .hdr-btn { justify-content: flex-start; gap: 9px; }
-  /* Matches .hdr-btn.icon-only's specificity: an unlabelled row in a dropdown
-     list is just a mystery glyph. */
+  body.tab-tools .header-actions button { justify-content: flex-start; gap: 12px; padding: 14px; font-size: 16px; }
   .hdr-btn .btn-label, .hdr-btn.icon-only .btn-label { display: inline; }
-  .hdr-btn.icon-only { padding: 9px 12px; }
-  .hdr-sep { width: auto; height: 1px; margin: 3px 2px; }
+  .hdr-btn.icon-only { padding: 14px; }
+  .hdr-sep { width: auto; height: 1px; margin: 4px 0; }
 
-  /* Stack the song list above the workspace so each spans the full width. */
+  /* One place at a time. */
   main { flex-direction: column; }
-  #sidebar {
-    width: 100%;
-    border-right: none;
-    border-bottom: 1px solid var(--line);
-  }
-  .sidebar-resizer { display: none; } /* the drawer has no width to drag */
+  body:not(.tab-songs) #sidebar,
+  body.tab-songs #workspace,
+  body.tab-tools #workspace { display: none; }
+  body:not(.tab-edit):not(.strip-open) .meta-row { display: none; }
+  body:not(.tab-edit) .editor-pane { display: none; }
+  body.tab-edit .preview-pane { display: none; }
+  body.tab-chart #preview > .ref-col { display: none; }
+  body.tab-charts #preview > .chart-col,
+  body.tab-charts #preview > .tuning-banner,
+  body.tab-charts #preview > #capo-banner,
+  body.tab-charts .preview-pane .pane-head { display: none; }
+  body.tab-charts .ref-head { margin-top: 0; padding-top: 0; border-top: none; }
 
-  /* Song list is a drawer: the "Songs" header toggles it, and it starts
-     collapsed so the editor is front and centre. */
-  .sidebar-head { cursor: pointer; user-select: none; align-items: center; }
-  .drawer-caret {
-    display: inline-block;
-    width: 0;
-    height: 0;
-    margin-left: 7px;
-    vertical-align: middle;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-top: 6px solid currentColor;
-    opacity: 0.7;
-    transition: transform 0.15s ease;
-  }
-  #sidebar.drawer-open .drawer-caret { transform: rotate(180deg); }
-  #sidebar:not(.drawer-open) .song-search,
-  #sidebar:not(.drawer-open) #song-list,
-  #sidebar:not(.drawer-open) .folder-bar { display: none; }
-  #sidebar.drawer-open #song-list { max-height: 46vh; }
-
-  /* Align every block to the same gutter: sidebar internals and the
-     workspace column all start at --gutter. */
+  /* Songs tab: the whole list, full width. */
+  #sidebar { width: 100%; border-right: none; border-bottom: none; }
+  .sidebar-resizer { display: none; }
   .sidebar-head { padding: 12px var(--gutter); }
-  .song-search { margin: 8px var(--gutter); }
-  #song-list { padding: 4px var(--gutter); }
+  .source-row, .search-row { padding-left: var(--gutter); padding-right: var(--gutter); }
+  #song-list { padding: 4px var(--gutter); overflow: visible; }
   #song-list li { padding-left: 8px; padding-right: 8px; }
+  .song-item { padding: 12px 10px; }
+
   #workspace { padding: var(--gutter); gap: 10px; }
 
-  /* Editor and preview stack and take their natural height; the page scrolls. */
+  /* The strip: full cards on the Edit tab; one folded line on the chart tabs
+     that opens them. */
   .view-switch { display: none; }
-  .panes { flex-direction: column; flex: none; }
-  .pane { flex: none; }
-  #editor { min-height: 220px; }
-  /* Match the preview's text inset to the editor's so the same song lines up
-     in both (editor padding 14px vs preview 14/16). */
-  .preview { flex: none; max-height: 70vh; padding: 14px; }
-
-  /* Song meta stacks in tidy full-width rows instead of ragged wrapping.
-     (Desktop right-aligns the steppers with margin-left:auto; that shoves
-     them into a weird indent once they wrap.) */
-  .meta-row { gap: 8px; }
-  .meta-row .title-input,
-  .meta-row .artist-input,
-  .meta-row .tuning-ctl { flex: 1 1 100%; min-width: 0; }
-  .meta-row .stepper,
-  .meta-row .stepper:first-of-type {
-    margin-left: 0;
-    flex: 1 1 auto;
-    justify-content: space-between;
-  }
+  .meta-row .title-input, .meta-row .artist-input { flex: 1 1 100%; min-width: 0; }
+  .meta-row .card { flex: 1 1 100%; flex-wrap: wrap; row-gap: 6px; }
+  .meta-row .save-breadcrumb { flex: 1 1 100%; }
+  .tuning-ctl { flex: 1; }
   .tuning-ctl select { flex: 1; min-width: 0; }
-  #instrument-panels, #harmonica-panel, #riff-panels, #roadmap { overflow-x: auto; }
-
-  /* One big Charts switch + Perform replace the fiddly desktop checkboxes. */
-  .view-toggles { display: none; }
-  .preview-mbar {
-    display: flex;
-    gap: 8px;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--line);
-  }
-  .mbar-btn {
-    flex: 1;
+  body.tab-chart .song-summary, body.tab-charts .song-summary {
     display: flex;
     align-items: center;
-    justify-content: center;
     gap: 8px;
-    padding: 11px 12px;
-    font-size: 15px;
-    font-weight: 600;
-    border-radius: 8px;
+    width: 100%;
+    padding: 9px 12px;
+    text-align: left;
+    font: 13px system-ui, sans-serif;
+    color: var(--text);
   }
-  .mbar-dot {
-    width: 11px;
-    height: 11px;
-    border-radius: 50%;
-    background: var(--muted);
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  .song-summary .ss-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .song-summary b { font-weight: 700; }
+  .song-summary b.accent { color: var(--accent); }
+  .song-summary .ss-caret {
+    width: 0; height: 0;
+    border-left: 5px solid transparent; border-right: 5px solid transparent;
+    border-top: 6px solid var(--muted);
+    transition: transform 0.15s ease;
   }
-  .mbar-btn.is-on { border-color: var(--accent); color: var(--accent); }
-  .mbar-btn.is-on .mbar-dot { background: var(--accent); }
-  .mbar-perform { background: var(--accent); border-color: var(--accent); color: #23180c; }
-  body.charts-off #instrument-bar,
-  body.charts-off #instrument-panels,
-  body.charts-off #theory-panel,
-  body.charts-off #harmonica-panel { display: none; }
+  body.strip-open .song-summary .ss-caret { transform: rotate(180deg); }
 
+  /* Editor and chart take their natural height; the page scrolls. */
+  .panes { flex-direction: column; flex: none; }
+  .pane { flex: none; }
+  #editor { min-height: 50vh; }
+  /* Match the chart's text inset to the editor's so the same song lines up
+     in both (editor padding 14px vs preview 14/16). */
+  .preview { flex: none; padding: 14px; }
+  #preview { display: block; }
+  #instrument-panels, #harmonica-panel, #riff-panels, #roadmap { overflow-x: auto; }
+  .instrument-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+  /* The tab bar, and Perform floating above it on the chart tabs. */
+  .phone-tabs {
+    display: flex;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 900;
+    height: calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+  }
+  .ptab {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px 0;
+    background: none;
+    border: none;
+    border-radius: 0;
+    color: var(--muted);
+    font: 600 11px system-ui, sans-serif;
+  }
+  .ptab:hover { background: none; }
+  .ptab .ico { width: 20px; height: 20px; }
+  .ptab[aria-current="page"] { color: var(--accent); }
+  body.tab-chart .phone-perform, body.tab-charts .phone-perform {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    position: fixed;
+    right: 16px;
+    bottom: calc(var(--tabbar-h) + 14px + env(safe-area-inset-bottom, 0px));
+    z-index: 890;
+    padding: 12px 18px;
+    border-radius: 999px;
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #23180c;
+    font: 700 15px system-ui, sans-serif;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  }
+  .phone-perform .ico { stroke: none; fill: currentColor; }
+  body.performing .phone-tabs, body.performing .phone-perform,
+  body.learning .phone-tabs, body.learning .phone-perform { display: none; }
 }
 
 /* ---- Performance mode ----------------------------------------------------- */
@@ -1417,8 +1518,8 @@ body.performing { overflow: hidden; }
   cursor: pointer;
   font-family: system-ui, sans-serif;
 }
-.perform-bar button:hover { background: #343a4e; }
-.pf-toggle.on { background: var(--accent); border-color: var(--accent); color: #1c1e26; font-weight: 700; }
+.perform-bar button:hover { background: #393939; }
+.pf-toggle.on { background: var(--accent); border-color: var(--accent); color: #1e1e1e; font-weight: 700; }
 .pf-page { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 74px; text-align: right; }
 /* Exit floats bottom-right, away from the top edge: in fullscreen on macOS the
    browser toolbar slides down over the top strip the moment the mouse goes up
@@ -1439,7 +1540,7 @@ body.performing { overflow: hidden; }
   font-family: system-ui, sans-serif;
   transition: opacity 0.35s ease;
 }
-.pf-exit:hover { background: #343a4e; }
+.pf-exit:hover { background: #393939; }
 .perform-overlay.immersive .pf-exit { opacity: 0; }
 .perform-overlay.immersive .pf-exit:hover { opacity: 1; }
 
@@ -1522,7 +1623,7 @@ body.performing { overflow: hidden; }
 .tool-close:hover { color: #ff8080; }
 .tool-body { padding: 12px; display: flex; flex-direction: column; gap: 10px; align-items: stretch; }
 .tool-start {
-  background: var(--accent); color: #1c1e26; border: none; border-radius: 6px;
+  background: var(--accent); color: #1e1e1e; border: none; border-radius: 6px;
   padding: 8px; font-weight: 700; font-size: 14px; cursor: pointer;
 }
 .tool-start.on { background: #d97a6b; color: #fff; }
@@ -1558,7 +1659,7 @@ body.performing { overflow: hidden; }
   width: 17px; height: 20px; border-radius: 3px; padding: 0; flex-shrink: 0; cursor: pointer;
   background: var(--panel-2); border: 1px solid var(--line);
 }
-.dm-cell.beat { border-color: #565d78; }         /* first of each group of 4 (a beat) */
+.dm-cell.beat { border-color: #5e5e5e; }         /* first of each group of 4 (a beat) */
 .dm-cell.on { background: var(--accent); border-color: var(--accent); }
 .dm-cell.playing { border-color: var(--section); }
 .dm-cell.on.playing { background: #ffd479; box-shadow: 0 0 8px var(--accent); }
@@ -1568,7 +1669,7 @@ body.performing { overflow: hidden; }
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
   border-radius: 6px; padding: 8px 14px; cursor: pointer; font-size: 13px;
 }
-#dm-clear:hover { background: #343a4e; }
+#dm-clear:hover { background: #393939; }
 
 /* Dictation */
 .dict-btn.on { background: #d97a6b; border-color: #d97a6b; color: #fff; }
@@ -1700,16 +1801,16 @@ body.performing { overflow: hidden; }
 .tstr-name { font: 700 13px var(--mono); line-height: 1; }
 .tstr-hz { font-size: 9px; opacity: 0.75; font-variant-numeric: tabular-nums; }
 /* The string being read right now. */
-.tstr.active { background: var(--accent); border-color: var(--accent); color: #1c1e26; }
+.tstr.active { background: var(--accent); border-color: var(--accent); color: #1e1e1e; }
 .tstr.active.is-in-tune { background: var(--section); border-color: var(--section); }
 /* Locked on by a click — outlined so it reads as a deliberate choice. */
 .tstr.pinned { border-color: var(--accent); color: var(--text); }
-.tstr.pinned.active { color: #1c1e26; }
+.tstr.pinned.active { color: #1e1e1e; }
 /* Brought in tune at some point since Start. */
 .tstr.done::after {
   content: "✓"; position: absolute; top: -5px; right: -3px;
   font-size: 9px; font-weight: 700; line-height: 1;
-  color: #1c1e26; background: var(--section); border-radius: 50%; padding: 1px 2px;
+  color: #1e1e1e; background: var(--section); border-radius: 50%; padding: 1px 2px;
 }
 
 .tuner-readout { text-align: center; transition: opacity 0.3s ease; }
@@ -1863,7 +1964,7 @@ body.performing { overflow: hidden; }
   .tool-panel, .tool-panel-wide, #tuner-panel {
     left: 8px;
     right: 8px;
-    bottom: 8px;
+    bottom: calc(var(--tabbar-h, 0px) + 8px + env(safe-area-inset-bottom, 0px));
     width: auto;
   }
   .dm-grid { overflow-x: auto; }
@@ -1877,7 +1978,7 @@ body.performing { overflow: hidden; }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(28, 30, 38, 0.7);
+  background: rgba(30, 30, 30, 0.7);
 }
 .share-modal[hidden] { display: none; }
 .share-card {
@@ -1987,7 +2088,7 @@ body.performing { overflow: hidden; }
   padding: 6px 9px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--text);
 }
 .sl-item:hover { background: var(--panel-2); }
-.sl-item.active { background: #33384c; }
+.sl-item.active { background: #383838; }
 .sl-count { color: var(--muted); font-size: 11px; }
 .sl-empty, .sl-hint { color: var(--muted); font-size: 12px; padding: 6px 4px; list-style: none; }
 .setlist-detail { flex: 1; min-width: 0; border-left: 1px solid var(--line); padding-left: 14px; }
@@ -2061,11 +2162,11 @@ body.performing { overflow: hidden; }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(28, 30, 38, 0.82);
+  background: rgba(30, 30, 30, 0.82);
   backdrop-filter: blur(2px);
 }
 .pdf-overlay[hidden] { display: none; }
-.pdf-overlay.dragging { background: rgba(28, 30, 38, 0.9); }
+.pdf-overlay.dragging { background: rgba(30, 30, 30, 0.9); }
 .pdf-card {
   min-width: 320px;
   max-width: 80vw;
@@ -2387,7 +2488,7 @@ body.learning { overflow: hidden; }
   border-radius: 6px;
 }
 /* The downbeats carry the pulse, so they get the emphasis. */
-.sp-cell.sp-beat { border-color: #4a516b; }
+.sp-cell.sp-beat { border-color: #515151; }
 .sp-mark { display: block; font-size: 16px; line-height: 1.15; color: var(--accent); min-height: 19px; }
 .sp-count { display: block; font-family: var(--mono); font-size: 9px; color: var(--muted); }
 .sp-cell.sp-skip .sp-mark { color: var(--muted); }
@@ -2405,7 +2506,7 @@ body.learning { overflow: hidden; }
   cursor: pointer;
 }
 .sg-cell:hover { border-color: var(--accent); }
-.sg-cell.sg-beat { background: #333a52; }
+.sg-cell.sg-beat { background: #3a3a3a; }
 .sg-mark { display: block; font-size: 18px; line-height: 1.1; color: var(--accent); min-height: 21px; }
 .sg-count { display: block; font-family: var(--mono); font-size: 10px; color: var(--muted); }
 .sg-cell.sg-skip .sg-mark { color: var(--line); }
@@ -2525,6 +2626,13 @@ body.learning { overflow: hidden; }
 .th-row { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; flex-wrap: wrap; }
 .th-row .th-k { padding-top: 4px; }
 .th-chips, .th-borrowed, .th-ivs { display: flex; flex-wrap: wrap; gap: 4px; }
+/* The key's seven chords as a table the full width of the panel: names above,
+   degrees below, the song's own chords lit. */
+.th-row.th-table { flex-direction: column; align-items: stretch; gap: 4px; }
+.th-table .th-k { padding-top: 0; }
+.th-table .th-chips { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.th-table .th-chip { flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 4px 4px; border-radius: 6px; min-width: 0; }
+.th-table .th-chip b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .th-chip {
   display: inline-flex;
   align-items: baseline;

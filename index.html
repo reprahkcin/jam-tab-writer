@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Jam Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=106" />
+  <link rel="stylesheet" href="styles.css?v=107" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -29,58 +29,29 @@
     <symbol id="i-setlist" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h7"/><path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></symbol>
     <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M9.8 9.4a2.3 2.3 0 1 1 3.4 2.2c-.8.5-1.2 1-1.2 1.9"/><path d="M12 16.6h.01"/></symbol>
     <!-- Learn: an open book. -->
+    <!-- Phone tab bar. -->
+    <symbol id="i-songs" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20l4.5-1 10-10-3.5-3.5-10 10L4 20z"/><path d="M13 7.5l3.5 3.5"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><rect x="4" y="3.5" width="16" height="17" rx="2"/><path d="M8 9h8M8 13h6M8 17h4"/></symbol>
+    <symbol id="i-charts" viewBox="0 0 24 24"><path d="M5 4v16M9.5 4v16M14.5 4v16M19 4v16"/><path d="M5 9.5h14M5 15h14"/></symbol>
+    <symbol id="i-tools" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.5"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.2 2.2M16.2 16.2l2.2 2.2M5.6 18.4l2.2-2.2M16.2 7.8l2.2-2.2"/></symbol>
     <symbol id="i-learn" viewBox="0 0 24 24"><path d="M12 7.5S10.2 5.8 6.8 5.8c-1.4 0-2.3.3-2.8.5v12c.5-.2 1.4-.5 2.8-.5 3.4 0 5.2 1.7 5.2 1.7"/><path d="M12 7.5s1.8-1.7 5.2-1.7c1.4 0 2.3.3 2.8.5v12c-.5-.2-1.4-.5-2.8-.5-3.4 0-5.2 1.7-5.2 1.7"/><path d="M12 7.5V19"/></symbol>
   </svg>
 
   <header>
     <h1>Jam Tab Writer</h1>
     <button id="menu-toggle" class="menu-toggle" aria-label="Menu" aria-expanded="false" aria-controls="header-actions">☰ Menu</button>
-    <!-- Grouped by job so the row can be scanned rather than read: this chart |
-         where charts live | in & out | session tools | play. Print lives with the
-         Preview pane it prints, Setlists with the song list it draws from. -->
+    <!-- Only what you reach for mid-session: the tools, then the modes. The
+         library controls live with the song list they fill, and the ways a
+         chart leaves the room (Share, Export, Print) with the chart itself. -->
     <div class="header-actions" id="header-actions">
-      <button id="new-btn" class="hdr-btn" title="Start a new blank song" aria-label="New song">
-        <svg class="ico"><use href="#i-new"/></svg><span class="btn-label">New</span>
-      </button>
-
-      <span class="hdr-sep" aria-hidden="true"></span>
-
-      <button id="collection-btn" class="hdr-btn" title="Set up or open your Collection — a GuitarTabWriterCollection folder created inside a location you pick" aria-label="Collection">
-        <svg class="ico"><use href="#i-collection"/></svg><span class="btn-label">Collection</span>
-      </button>
-      <button id="folder-btn" class="hdr-btn" title="Open a folder of .cho charts and edit them in place" aria-label="Open folder">
-        <svg class="ico"><use href="#i-folder"/></svg><span class="btn-label">Open folder</span>
-      </button>
-      <button id="reopen-btn" class="hdr-btn" title="Reopen the last folder" aria-label="Reopen folder" hidden>
-        <svg class="ico"><use href="#i-folder"/></svg><span class="btn-label">Reopen folder</span>
-      </button>
-      <button id="save-btn" class="hdr-btn" title="Save this chart to its file (Cmd/Ctrl+S)" aria-label="Save to file" hidden>
-        <svg class="ico"><use href="#i-save"/></svg><span class="btn-label">Save</span>
-      </button>
-
-      <span class="hdr-sep" aria-hidden="true"></span>
-
-      <button id="import-btn" class="hdr-btn" title="Open a .txt / .cho file" aria-label="Import a file">
-        <svg class="ico"><use href="#i-import"/></svg><span class="btn-label">Import</span>
-      </button>
-      <button id="export-btn" class="hdr-btn" title="Download this song as a file" aria-label="Export this song">
-        <svg class="ico"><use href="#i-export"/></svg><span class="btn-label">Export</span>
-      </button>
-      <button id="share-btn" class="hdr-btn" title="Share this song as a link" aria-label="Share as a link">
-        <svg class="ico"><use href="#i-share"/></svg><span class="btn-label">Share</span>
-      </button>
-
-      <span class="hdr-sep" aria-hidden="true"></span>
-
-      <!-- Momentary tools: icon-only on a wide screen, labelled in the phone
-           menu where there's room for words. -->
-      <button id="metro-btn" class="hdr-btn icon-only" title="Metronome" aria-label="Metronome">
+      <button id="metro-btn" class="hdr-btn" title="Metronome" aria-label="Metronome">
         <svg class="ico"><use href="#i-metro"/></svg><span class="btn-label">Metronome</span>
       </button>
-      <button id="tuner-btn" class="hdr-btn icon-only" title="Instrument tuner (uses your microphone)" aria-label="Tuner">
+      <button id="tuner-btn" class="hdr-btn" title="Instrument tuner (uses your microphone)" aria-label="Tuner">
         <svg class="ico"><use href="#i-tuner"/></svg><span class="btn-label">Tuner</span>
       </button>
-      <button id="capture-btn" class="hdr-btn icon-only" title="Record takes from your audio interface (R)" aria-label="Record a take">
+      <button id="capture-btn" class="hdr-btn" title="Record takes from your audio interface (R)" aria-label="Record a take">
         <svg class="ico"><use href="#i-record"/></svg><span class="btn-label">Record</span>
       </button>
 
@@ -95,75 +66,116 @@
       <button id="help-btn" class="hdr-btn icon-only" title="Keyboard shortcuts (press ?)" aria-label="Keyboard shortcuts">
         <svg class="ico"><use href="#i-help"/></svg><span class="btn-label">Shortcuts</span>
       </button>
-      <input type="file" id="import-input" accept=".txt,.cho,.chordpro,.crd,.pdf,text/plain,application/pdf" hidden />
     </div>
   </header>
 
   <main>
     <aside id="sidebar">
-      <!-- Setlists draw from this list, so the button lives with it. -->
-      <div class="sidebar-head" id="sidebar-head" role="button" tabindex="0" aria-expanded="false" aria-controls="song-list">
-        <span>Songs<span class="drawer-caret" aria-hidden="true"></span></span>
+      <!-- The song list owns everything that fills it: New and Import here,
+           and the source picker below for where the songs live. -->
+      <div class="sidebar-head" id="sidebar-head">
+        <span>Songs</span>
         <span class="sidebar-head-end">
           <span id="song-count" class="muted"></span>
-          <button id="setlist-btn" class="side-btn" title="Build and perform setlists" aria-label="Setlists">
-            <svg class="ico"><use href="#i-setlist"/></svg><span class="btn-label">Setlists</span>
+          <button id="new-btn" class="side-btn" title="Start a new blank song" aria-label="New song">
+            <svg class="ico"><use href="#i-new"/></svg><span class="btn-label">New</span>
+          </button>
+          <button id="import-btn" class="side-btn" title="Open a .txt / .cho file, or a PDF chart to convert" aria-label="Import a file">
+            <svg class="ico"><use href="#i-import"/></svg><span class="btn-label">Import</span>
           </button>
         </span>
       </div>
-      <input id="song-search" class="song-search" type="search" placeholder="Search songs…" spellcheck="false" />
+      <!-- Where the songs live is one fact with a few values — this browser, the
+           Collection, a folder — so it is one picker (built by renderSourcePicker).
+           Reopen shows only when saved folders are waiting on a permission click. -->
+      <div class="source-row">
+        <span id="source-dot" class="source-dot" aria-hidden="true"></span>
+        <select id="source-select" class="source-select" aria-label="Where songs are kept"></select>
+        <button id="reopen-btn" class="side-btn" title="Reopen the last folders" aria-label="Reopen folders" hidden>
+          <svg class="ico"><use href="#i-folder"/></svg><span class="btn-label">Reopen</span>
+        </button>
+      </div>
+      <div class="search-row">
+        <input id="song-search" class="song-search" type="search" placeholder="Search songs…" spellcheck="false" />
+        <!-- Setlists draw from this list, so the button lives with it. -->
+        <button id="setlist-btn" class="side-btn" title="Build and perform setlists" aria-label="Setlists">
+          <svg class="ico"><use href="#i-setlist"/></svg><span class="btn-label">Setlists</span>
+        </button>
+      </div>
       <div id="folder-bar" class="folder-bar" hidden></div>
       <ul id="song-list"></ul>
+      <input type="file" id="import-input" accept=".txt,.cho,.chordpro,.crd,.pdf,text/plain,application/pdf" hidden />
     </aside>
     <!-- Desktop only: drag to resize the song list; double-click resets. -->
     <div id="sidebar-resizer" class="sidebar-resizer" title="Drag to resize the song list — double-click to reset"></div>
 
     <section id="workspace">
+      <!-- Song strip, row 1: what it is, where it is saved, how you're looking
+           at it. The breadcrumb carries the folder path + save state; in the
+           browser the sidebar's source picker already says where songs live. -->
       <div class="meta-row">
         <input id="title-input" class="title-input" type="text" placeholder="Song title" />
         <input id="artist-input" class="artist-input" type="text" placeholder="Artist (optional)" />
-        <div class="stepper">
-          <label>Transpose</label>
-          <button id="tr-down" title="Down a semitone">&minus;</button>
-          <span id="tr-amount">0</span>
-          <button id="tr-up" title="Up a semitone">+</button>
+        <div id="save-breadcrumb" class="save-breadcrumb" hidden></div>
+        <span id="save-status" class="muted save-status"></span>
+        <button id="save-btn" class="side-btn" title="Save this chart to its file (Cmd/Ctrl+S)" aria-label="Save to file" hidden>
+          <svg class="ico"><use href="#i-save"/></svg><span class="btn-label">Save</span>
+        </button>
+        <!-- Desktop layout switch: side-by-side, or a single column showing one
+             pane at a time. -->
+        <div id="view-switch" class="view-switch" role="group" aria-label="Layout">
+          <span class="vs-label">View</span>
+          <button class="vs-btn" data-view="split" aria-pressed="true" title="Editor and preview side by side">Split</button>
+          <button class="vs-btn" data-view="editor" aria-pressed="false" title="Editor only, full width">Editor</button>
+          <button class="vs-btn" data-view="preview" aria-pressed="false" title="Chart and reference side by side, full width">Preview</button>
         </div>
-        <div class="stepper">
-          <label>Capo</label>
-          <button id="capo-down" title="Move capo down a fret">&minus;</button>
-          <span id="capo-amount">0</span>
-          <button id="capo-up" title="Move capo up a fret">+</button>
+      </div>
+
+      <!-- Row 2: three labelled cards — key, tempo, tuning. -->
+      <div class="meta-row meta-cards">
+        <div class="card key-card" role="group" aria-label="Key">
+          <span class="card-lbl">Key</span>
+          <!-- Drives the two steppers beside it as a pair: pick the open-chord
+               family you want under your fingers and transpose + capo move in
+               opposite directions, so the song keeps sounding in the same key. -->
+          <div class="stepper shape-goal" id="shape-goal-wrap" hidden>
+            <select id="shape-goal" title="Play this song with the open chords of a key you're comfortable in — transpose and capo adjust together so it still sounds in the same key" aria-label="Shapes"></select>
+          </div>
+          <div class="stepper">
+            <label>Transpose</label>
+            <button id="tr-down" title="Down a semitone">&minus;</button>
+            <span id="tr-amount">0</span>
+            <button id="tr-up" title="Up a semitone">+</button>
+          </div>
+          <div class="stepper">
+            <label>Capo</label>
+            <button id="capo-down" title="Move capo down a fret">&minus;</button>
+            <span id="capo-amount">0</span>
+            <button id="capo-up" title="Move capo up a fret">+</button>
+          </div>
+          <span id="sounds-in" class="sounds-in"></span>
+          <!-- One transpose, not two: this bakes the stepper's shift into the
+               written chords and puts the stepper back to 0. -->
+          <button id="apply-transpose-btn" class="inline-btn" title="Rewrite the chords in the text at this transpose, then set Transpose back to 0" hidden>Apply to text</button>
         </div>
-        <!-- Drives the two steppers to its left as a pair: pick the open-chord
-             family you want under your fingers and transpose + capo move in
-             opposite directions, so the song keeps sounding in the same key. -->
-        <div class="stepper shape-goal" id="shape-goal-wrap" hidden>
-          <label for="shape-goal">Shapes</label>
-          <select id="shape-goal" title="Play this song with the open chords of a key you're comfortable in — transpose and capo adjust together so it still sounds in the same key"></select>
-        </div>
-        <div class="stepper">
-          <label>Tempo</label>
-          <button id="tempo-down" title="Slower">&minus;</button>
-          <input id="tempo-input" class="tempo-input" type="text" inputmode="numeric" placeholder="—" title="Beats per minute for this song" />
-          <button id="tempo-up" title="Faster">+</button>
+        <div class="card tempo-card" role="group" aria-label="Tempo">
+          <span class="card-lbl">Tempo</span>
+          <div class="stepper">
+            <button id="tempo-down" title="Slower">&minus;</button>
+            <input id="tempo-input" class="tempo-input" type="text" inputmode="numeric" placeholder="—" title="Beats per minute for this song" aria-label="Tempo in beats per minute" />
+            <button id="tempo-up" title="Faster">+</button>
+          </div>
           <button id="count-in-btn" class="inline-btn" title="Count in four beats at this tempo">Count in</button>
         </div>
-        <label class="tuning-ctl" title="Alternate tuning for this song (shows a reminder; diagrams stay standard-tuned)">Tuning
-          <select id="song-tuning"></select>
-        </label>
+        <div class="card tuning-card" role="group" aria-label="Tuning">
+          <span class="card-lbl">Tuning</span>
+          <label class="tuning-ctl" title="Alternate tuning for this song (shows a reminder; diagrams stay standard-tuned)">
+            <select id="song-tuning" aria-label="Tuning"></select>
+          </label>
+        </div>
       </div>
-
-      <!-- Where the current chart is saved: system colour + folder path + state. -->
-      <div id="save-breadcrumb" class="save-breadcrumb" hidden></div>
-
-      <!-- Desktop layout switch: side-by-side, or a single column showing one
-           pane at a time. -->
-      <div id="view-switch" class="view-switch" role="group" aria-label="Layout">
-        <span class="vs-label">View</span>
-        <button class="vs-btn" data-view="split" aria-pressed="true" title="Editor and preview side by side">Split</button>
-        <button class="vs-btn" data-view="editor" aria-pressed="false" title="Editor only, full width">Editor</button>
-        <button class="vs-btn" data-view="preview" aria-pressed="false" title="Preview only, full width">Preview</button>
-      </div>
+      <!-- Phone: the strip folded to one tappable line (filled by renderSongSummary). -->
+      <button id="song-summary" class="song-summary" aria-expanded="false" title="Key, tempo and tuning — tap to open them"></button>
 
       <div class="panes">
         <div class="pane editor-pane">
@@ -171,19 +183,13 @@
             <span>Editor</span>
             <span class="hint">
               <button id="dictate-btn" class="inline-btn dict-btn" title="Speak lyrics into the editor (D to start, Esc to stop)" hidden>&#127908; Dictate</button>
-              <button id="pagebreak-btn" class="inline-btn" title="Insert a page break at the cursor">Insert page break</button>
-              <button id="reprocess-btn" class="inline-btn" title="Run this chart through the import processing again: fold plain chord lines into the lyrics, drop OCR junk, tidy whitespace, and lift {title:}/{capo:}… and tab blocks out of the text. Whole chart, or just the selection. Safe to run repeatedly.">Reprocess</button>
-              <button id="clear-chords-btn" class="inline-btn" title="Remove every [chord] from this chart (keeps lyrics and sections)">Clear chords</button>
+              <button id="pagebreak-btn" class="inline-btn" title="Insert a page break at the cursor">Page break</button>
               <span id="editor-note" class="ed-note" hidden></span>
-              <span class="etool">Transpose text
-                <button id="tr-text-down" class="inline-btn" title="Transpose the written chords down a semitone">&minus;</button>
-                <button id="tr-text-up" class="inline-btn" title="Transpose the written chords up a semitone">+</button>
-              </span>
-              <span class="etool">Replace
-                <select id="replace-from" class="repl-sel" title="Chord to replace"></select>
-                &rarr;
-                <input id="replace-to" class="repl-in" type="text" placeholder="chord" spellcheck="false" title="Replacement chord" />
-                <button id="replace-go" class="inline-btn" title="Replace every instance of this chord">Replace</button>
+              <!-- Chart-wide cleanup: rarely used, so it sits last and quiet. -->
+              <span class="hint-sep" aria-hidden="true"></span>
+              <span class="etool etool-quiet">Chart
+                <button id="reprocess-btn" class="inline-btn quiet" title="Run this chart through the import processing again: fold plain chord lines into the lyrics, drop OCR junk, tidy whitespace, and lift {title:}/{capo:}… and tab blocks out of the text. Whole chart, or just the selection. Safe to run repeatedly.">Reprocess</button>
+                <button id="clear-chords-btn" class="inline-btn quiet" title="Remove every [chord] from this chart (keeps lyrics and sections)">Clear chords</button>
               </span>
             </span>
           </div>
@@ -202,43 +208,54 @@
             <button id="dict-install" class="inline-btn" hidden></button>
           </div>
           <div id="section-bar" class="section-bar"></div>
-          <div id="chord-palette" class="chord-palette"></div>
+          <!-- Chord tools: the palette, and a replacer folded away until wanted. -->
+          <div class="chord-row">
+            <div id="chord-palette" class="chord-palette"></div>
+            <span class="palette-tools">
+              <button id="replace-toggle" class="inline-btn quiet" aria-expanded="false" aria-controls="replace-tools" title="Replace every instance of one chord with another">Replace…</button>
+              <span id="replace-tools" class="etool" hidden>
+                <select id="replace-from" class="repl-sel" title="Chord to replace"></select>
+                &rarr;
+                <input id="replace-to" class="repl-in" type="text" placeholder="chord" spellcheck="false" title="Replacement chord" />
+                <button id="replace-go" class="inline-btn" title="Replace every instance of this chord">Go</button>
+              </span>
+            </span>
+          </div>
           <textarea id="editor" spellcheck="false" placeholder="[G]Type your lyrics here and drop [C]chords in [D]brackets...
 
 Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
-          <!-- Author riffs/solos as tab grids; each prints on its own page. -->
-          <!-- Author strumming patterns: click a slot to cycle it. -->
-          <div id="strums-authoring" class="riffs-authoring">
+          <!-- Parts: strumming patterns (print with the chart) and riffs / solos
+               (each prints on its own page), one footer between them. -->
+          <div id="riffs-authoring" class="riffs-authoring parts-authoring">
             <div class="riffs-head">
-              <span>Strumming</span>
-              <button id="add-strum-btn" class="inline-btn" title="Add a strumming pattern">+ Add pattern</button>
+              <span>Parts</span>
+              <span class="parts-actions">
+                <button id="add-strum-btn" class="inline-btn" title="Add a strumming pattern">+ Pattern</button>
+                <button id="add-riff-btn" class="inline-btn" title="Add a new riff or solo">+ Riff</button>
+              </span>
             </div>
             <div id="strum-editors"></div>
-          </div>
-          <div id="riffs-authoring" class="riffs-authoring">
-            <div class="riffs-head">
-              <span>Riffs &amp; Solos</span>
-              <button id="add-riff-btn" class="inline-btn" title="Add a new riff or solo">+ Add riff</button>
-            </div>
             <div id="riff-editors"></div>
           </div>
         </div>
 
         <div class="pane preview-pane">
           <div class="pane-head">
-            <span>Preview</span>
+            <span>Chart</span>
             <span class="view-toggles">
-              <label title="Show chord diagrams for each instrument"><input type="checkbox" id="toggle-chords" checked /> Chords</label>
-              <label title="Show a scale map for each instrument"><input type="checkbox" id="toggle-scales" checked /> Scales</label>
               <label title="Show chords as Nashville numbers (scale degrees relative to the key)"><input type="checkbox" id="toggle-numbers" /> Numbers</label>
-              <label title="Show the key's theory panel: its chords, relative minor and chromatic intervals"><input type="checkbox" id="toggle-theory" checked /> Theory</label>
-              <span id="save-status" class="muted"></span>
             </span>
-            <!-- Print sits with the column setting it obeys, next to the chart
-                 it puts on paper. -->
+            <!-- How the chart leaves the room — link, file, paper — with the
+                 column setting Print obeys. -->
             <span class="print-ctl">
-              <label class="print-cols-ctl" title="Number of columns when you print / save as PDF">Print
-                <select id="print-cols">
+              <button id="share-btn" class="side-btn" title="Share this song as a link" aria-label="Share as a link">
+                <svg class="ico"><use href="#i-share"/></svg><span class="btn-label">Share</span>
+              </button>
+              <button id="export-btn" class="side-btn" title="Download this song as a file" aria-label="Export this song">
+                <svg class="ico"><use href="#i-export"/></svg><span class="btn-label">Export</span>
+              </button>
+              <label class="print-cols-ctl" title="Number of columns when you print / save as PDF">
+                <select id="print-cols" aria-label="Print columns">
                   <option value="1">1 col</option>
                   <option value="2">2 cols</option>
                 </select>
@@ -248,38 +265,59 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
               </button>
             </span>
           </div>
-          <!-- Phone-only preview controls: one big charts switch + Perform. -->
-          <div id="preview-mbar" class="preview-mbar">
-            <button id="charts-toggle" class="mbar-btn" aria-pressed="true" title="Show or hide all chord and scale charts">
-              <span class="mbar-dot"></span>Charts
-            </button>
-            <button id="mbar-perform" class="mbar-btn mbar-perform" title="Full-screen scrolling lyrics">&#9654; Perform</button>
-          </div>
           <div id="preview" class="preview">
             <div id="print-header"></div>
             <div id="tuning-banner" class="tuning-banner"></div>
             <div id="capo-banner"></div>
-            <!-- The jam: on/off chip per instrument, built by renderInstrumentBar(). -->
-            <div id="instrument-bar" class="instrument-bar"></div>
-            <!-- Key context for the chart: what key it is in, the chords that
-                 come with it, and the chromatic ruler under them. -->
-            <div id="theory-panel" class="theory-panel"></div>
-            <div id="harmonica-panel" class="harmonica-panel"></div>
-            <!-- One section per active instrument (chords + scale), built by renderInstruments(). -->
-            <div id="instrument-panels"></div>
-            <!-- Arrangement roadmap: click a section to scroll to it. -->
-            <div id="roadmap" class="roadmap"></div>
-            <!-- Strumming patterns sit with the chart rather than on their own
-                 page: you read them while playing it, not separately. -->
-            <div id="strum-panels" class="strum-panels"></div>
-            <div id="preview-body"></div>
-            <!-- Rendered riffs/solos; each block prints on its own page. -->
-            <div id="riff-panels"></div>
+            <!-- The reference — the band's charts — comes first in the DOM
+                 because paper gives it page 1 (see has-front-matter). On screen
+                 the chart is ordered above it, and the Preview view gives each
+                 its own column. -->
+            <div class="ref-col">
+              <div id="reference-head" class="ref-head">
+                <span class="ref-title">Reference</span>
+                <label title="Show chord diagrams for each instrument"><input type="checkbox" id="toggle-chords" checked /> Chords</label>
+                <label title="Show a scale map for each instrument"><input type="checkbox" id="toggle-scales" checked /> Scales</label>
+                <label title="Show the key's theory panel: its chords, relative minor and chromatic intervals"><input type="checkbox" id="toggle-theory" checked /> Theory</label>
+              </div>
+              <!-- The jam: on/off chip per instrument, built by renderInstrumentBar(). -->
+              <div id="instrument-bar" class="instrument-bar"></div>
+              <!-- Key context for the chart: what key it is in, the chords that
+                   come with it, and the chromatic ruler under them. -->
+              <div id="theory-panel" class="theory-panel"></div>
+              <div id="harmonica-panel" class="harmonica-panel"></div>
+              <!-- One section per active instrument (chords + scale), built by renderInstruments(). -->
+              <div id="instrument-panels"></div>
+            </div>
+            <div class="chart-col">
+              <!-- Arrangement roadmap: click a section to scroll to it. -->
+              <div id="roadmap" class="roadmap"></div>
+              <!-- Strumming patterns sit with the chart rather than on their own
+                   page: you read them while playing it, not separately. -->
+              <div id="strum-panels" class="strum-panels"></div>
+              <div id="preview-body"></div>
+              <!-- Rendered riffs/solos; each block prints on its own page. -->
+              <div id="riff-panels"></div>
+            </div>
           </div>
         </div>
       </div>
     </section>
   </main>
+
+  <!-- Phone: the app is five places — Songs, Edit, Chart, Charts, Tools — shown
+       one at a time from this bar (wired by setPhoneTab). Perform floats above
+       it on the chart tabs: the one button you hit mid-song. Desktop hides both. -->
+  <nav id="phone-tabs" class="phone-tabs" aria-label="Sections">
+    <button class="ptab" data-tab="songs"><svg class="ico"><use href="#i-songs"/></svg>Songs</button>
+    <button class="ptab" data-tab="edit"><svg class="ico"><use href="#i-edit"/></svg>Edit</button>
+    <button class="ptab" data-tab="chart"><svg class="ico"><use href="#i-chart"/></svg>Chart</button>
+    <button class="ptab" data-tab="charts"><svg class="ico"><use href="#i-charts"/></svg>Charts</button>
+    <button class="ptab" data-tab="tools"><svg class="ico"><use href="#i-tools"/></svg>Tools</button>
+  </nav>
+  <button id="mbar-perform" class="phone-perform" title="Full-screen scrolling lyrics">
+    <svg class="ico"><use href="#i-perform"/></svg>Perform
+  </button>
 
   <!-- Metronome + drum machine (floating panel) -->
   <div id="metro-panel" class="tool-panel tool-panel-wide" hidden>
@@ -531,11 +569,11 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=106"></script>
+  <script src="chords.js?v=107"></script>
   <!-- After chords.js: the theory charts are drawn with its renderers. -->
-  <script src="learn.js?v=106"></script>
-  <script src="pdf2cho.js?v=106"></script>
-  <script src="qr.js?v=106"></script>
-  <script src="app.js?v=106"></script>
+  <script src="learn.js?v=107"></script>
+  <script src="pdf2cho.js?v=107"></script>
+  <script src="qr.js?v=107"></script>
+  <script src="app.js?v=107"></script>
 </body>
 </html>
