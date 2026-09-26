@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Jam Tab Writer</title>
-  <link rel="stylesheet" href="styles.css?v=107" />
+  <link rel="stylesheet" href="styles.css?v=108" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -254,15 +254,24 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
               <button id="export-btn" class="side-btn" title="Download this song as a file" aria-label="Export this song">
                 <svg class="ico"><use href="#i-export"/></svg><span class="btn-label">Export</span>
               </button>
-              <label class="print-cols-ctl" title="Number of columns when you print / save as PDF">
-                <select id="print-cols" aria-label="Print columns">
-                  <option value="1">1 col</option>
-                  <option value="2">2 cols</option>
-                </select>
-              </label>
-              <button id="print-btn" class="side-btn" title="Print / save as PDF" aria-label="Print or save as PDF">
-                <svg class="ico"><use href="#i-print"/></svg><span class="btn-label">Print</span>
-              </button>
+              <!-- Paper-only options live behind the Print button, so a column
+                   setting never reads as something the preview should show. -->
+              <span class="print-menu-wrap">
+                <button id="print-menu-btn" class="side-btn" title="Print / save as PDF (Cmd/Ctrl+P), with the paper options" aria-label="Print options" aria-haspopup="true" aria-expanded="false" aria-controls="print-menu">
+                  <svg class="ico"><use href="#i-print"/></svg><span class="btn-label">Print</span><span class="pm-caret" aria-hidden="true"></span>
+                </button>
+                <div id="print-menu" class="print-menu" hidden>
+                  <div class="pm-title">Paper options — the screen doesn't change</div>
+                  <label class="pm-row">Columns
+                    <select id="print-cols" aria-label="Print columns">
+                      <option value="1">1 column</option>
+                      <option value="2">2 columns</option>
+                    </select>
+                  </label>
+                  <div class="pm-hint">A <code>{page}</code> line starts a new sheet — the editor's <b>Page break</b> button inserts one.</div>
+                  <button id="print-btn" class="tool-start" title="Print / save as PDF" aria-label="Print or save as PDF">Print / save as PDF</button>
+                </div>
+              </span>
             </span>
           </div>
           <div id="preview" class="preview">
@@ -569,11 +578,11 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=107"></script>
+  <script src="chords.js?v=108"></script>
   <!-- After chords.js: the theory charts are drawn with its renderers. -->
-  <script src="learn.js?v=107"></script>
-  <script src="pdf2cho.js?v=107"></script>
-  <script src="qr.js?v=107"></script>
-  <script src="app.js?v=107"></script>
+  <script src="learn.js?v=108"></script>
+  <script src="pdf2cho.js?v=108"></script>
+  <script src="qr.js?v=108"></script>
+  <script src="app.js?v=108"></script>
 </body>
 </html>

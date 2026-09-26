@@ -485,13 +485,16 @@ page**, after the chart. Riffs are saved with the song as standard ChordPro
 
 ## Printing
 
-Click **Print** in the Chart pane header — it sits next to the column setting
-it obeys — to open your browser's print dialog; from there you can print on paper
-or "Save as PDF". Cmd/Ctrl+P does the same thing from anywhere, including
+Click **Print** in the Chart pane header to open the print menu — the paper-only
+options (**1 or 2 columns**) and the **Print / save as PDF** action, kept behind
+one button so a column setting never looks like something the preview should be
+showing. Printing opens your browser's print dialog; from there you can print on
+paper or "Save as PDF". Cmd/Ctrl+P does the same thing from anywhere, including
 Editor-only view where the preview (and so the button) is hidden. The printout is
 a clean black-on-white chord sheet with the song title and artist at the top; the
 editor, sidebar, and toolbar are hidden. Chord lines stay glued to the lyric line
-below them, and `{page}` markers force a new page.
+below them, and `{page}` markers force a new page — in two-column prints as
+well, where each stretch between markers gets its own pair of columns.
 
 Use the **1 col / 2 cols** control beside that button to lay the chart out in
 **1 or 2 columns** (2 is handy for fitting a long song on one page). Chord + lyric

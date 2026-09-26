@@ -767,16 +767,54 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
 .view-toggles { display: flex; align-items: center; gap: 12px; text-transform: none; letter-spacing: 0; }
 .view-toggles label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
 .view-toggles input { accent-color: var(--accent); }
-/* Print button + its column setting, at the end of the Preview pane header. */
+/* Share, Export and Print at the end of the Chart pane header. Print opens a
+   small menu holding the paper-only options, so a column setting never reads
+   as something the preview should be showing. */
 .print-ctl { display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; }
-.print-cols-ctl select {
+.print-menu-wrap { position: relative; display: inline-flex; }
+.pm-caret {
+  width: 0; height: 0;
+  margin-left: 2px;
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  opacity: 0.7;
+}
+#print-menu-btn.is-open { border-color: var(--accent); color: var(--accent); }
+.print-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 60;
+  width: 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 10px 12px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+  color: var(--text);
+}
+.print-menu[hidden] { display: none; }
+.pm-title { color: var(--muted); font-size: 11px; }
+.pm-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pm-row select {
   background: var(--panel-2);
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 5px;
-  padding: 2px 4px;
+  padding: 3px 6px;
   font-size: 12px;
 }
+.pm-hint { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.pm-hint code { background: var(--panel-2); padding: 0 4px; border-radius: 3px; color: var(--chord); font-family: var(--mono); }
+.pm-hint b { color: var(--text); font-weight: 600; }
+.print-menu .tool-start { padding: 7px 10px; border-radius: 6px; cursor: pointer; }
 
 /* Capo banner */
 #capo-banner:not(:empty) {
@@ -1272,10 +1310,13 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
     padding-left: 0.5in;
     padding-right: 0.5in;
   }
-  /* Two-column chart body, only when the Print control is set to 2 cols. Using a
-     class (not column-count:1) matters: a single-column multicol context would
-     swallow the {page} forced page breaks. */
-  .preview.print-2col #preview-body {
+  /* Two-column chart, only when the print menu is set to 2 columns. The
+     columns are set on each page stretch (.pg, see render()), not on the body:
+     a {page} marker sits between the stretches, so its forced break lands
+     between two multicol boxes and really starts a new sheet. Inside one box
+     Chrome would only start a new column. Using a class (not column-count:1)
+     matters too: a single-column multicol context swallows forced breaks. */
+  .preview.print-2col #preview-body .pg {
     column-count: 2;
     column-gap: 30px;
     column-rule: 1px solid #ccc;

@@ -144,7 +144,14 @@ function render(body, semitones, numKey) {
     return '<div class="empty-hint">Nothing yet — start typing in the editor. ' +
       'Chords go in brackets, e.g. <code>[Am]</code>.</div>';
   }
-  return body.split('\n').map((l, i) => renderLine(l, semitones, numKey, i)).join('');
+  const html = body.split('\n').map((l, i) => renderLine(l, semitones, numKey, i)).join('');
+  // Each stretch between {page} markers becomes its own block. On paper a
+  // two-column chart is then one multicol box per stretch, so the forced break
+  // between them really starts a new sheet — inside a single box Chrome only
+  // starts a new column, which is how a {page} used to vanish in 2-col prints.
+  // On screen the blocks are invisible wrappers; the marker stays between them.
+  const parts = html.split(/(<div class="page-break"[^>]*><\/div>)/);
+  return parts.map((part, i) => (i % 2 ? part : `<div class="pg">${part}</div>`)).join('');
 }
 
 // ---- Wrapping chord/lyric rendering (phone performance view) ---------------
@@ -3319,7 +3326,27 @@ document.getElementById('add-riff-btn').addEventListener('click', () => {
   renderRiffEditor(cur);
   renderRiffs(cur);
 });
+// The print menu: the paper-only options (columns) and the print action, folded
+// behind one button so they never read as settings for the preview.
+function setPrintMenu(open) {
+  const menu = document.getElementById('print-menu');
+  const btn = document.getElementById('print-menu-btn');
+  if (!menu || !btn) return;
+  menu.hidden = !open;
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  btn.classList.toggle('is-open', open);
+}
+document.getElementById('print-menu-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  setPrintMenu(document.getElementById('print-menu').hidden);
+});
+document.getElementById('print-menu').addEventListener('click', (e) => e.stopPropagation());
+document.addEventListener('click', () => setPrintMenu(false));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !document.getElementById('print-menu').hidden) setPrintMenu(false);
+});
 document.getElementById('print-btn').addEventListener('click', () => {
+  setPrintMenu(false);
   // Swap to the aligned chart first: computePrintFont measures line widths,
   // and the phone's wrapped lines would give it the wrong answer.
   if (window.matchMedia('(max-width: 760px)').matches) { forceAlignedChart = true; renderPreview(); }
