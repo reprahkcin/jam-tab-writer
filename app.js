@@ -693,7 +693,7 @@ function loadPrefs() {
     scaleType: 'majPent',
     voicings: { guitar1: {}, guitar2: {} }, pianoInv: { piano: {} },
     ensemble: Object.assign({}, ENSEMBLE_DEFAULTS),
-    perform: { cols: 4, font: 22, autoSecs: 25, scrollSpeed: 30, autoFit: true, panels: { instruments: true, harp: true } },
+    perform: { cols: 4, font: 22, autoSecs: 25, scrollSpeed: 30, autoFit: true, panels: { instruments: true } },
     layout: 'split',   // 'split' | 'editor' | 'preview' (desktop only)
     sidebarWidth: null, // song-list width in px (desktop); null = the CSS default
     editorWidth: null,  // editor's share of the split view, in %; null = half
@@ -719,7 +719,13 @@ function loadPrefs() {
   p.showChords = true; p.showScales = true; p.showTheory = true;
   p.folded = Object.assign({}, p.folded);
   p.perform = Object.assign({ cols: 4, font: 22, autoSecs: 25, autoFit: true, panels: {} }, p.perform);
-  p.perform.panels = Object.assign({ instruments: true, harp: true }, p.perform.panels);
+  p.perform.panels = Object.assign({ instruments: true }, p.perform.panels);
+  // The harmonica used to have its own Perform switch; it is one of the
+  // instruments now, so an old harp-only setting keeps the group showing.
+  if ('harp' in p.perform.panels) {
+    p.perform.panels.instruments = !!(p.perform.panels.instruments || p.perform.panels.harp);
+    delete p.perform.panels.harp;
+  }
   p.metro = Object.assign({ bpm: 100, steps: 16, click: true, pattern: null }, p.metro);
   p.learn = Object.assign({ topic: 'chords', lens: true }, p.learn);
   p.capture = Object.assign({ deviceId: null, deviceLabel: '', format: 'wav' }, p.capture);
@@ -4029,8 +4035,11 @@ el.editor.addEventListener('blur', () => { if (chordPopup) setTimeout(closeChord
 // for longer songs, toggleable diagram/scale/harmonica panels, and page-turner
 // (arrow / PageUp-Down / Space) navigation that flows into the next song.
 
-const PERF_PANELS = { instruments: 'instrument-panels', harp: 'harmonica-panel' };
-const PERF_LABELS = { instruments: 'Instruments', harp: 'Harmonica' };
+// One Perform panel: the reference, in the order the Reference tab shows it.
+// The harmonica is an instrument like the rest — the roster chip decides
+// whether it is there — so it shares the group rather than having a switch.
+const PERF_PANELS = { instruments: ['harmonica-panel', 'instrument-panels'] };
+const PERF_LABELS = { instruments: 'Instruments' };
 const PERF_PADX = 28; // must match .perform-cols left/right padding in CSS
 const PERF_GAP = 36;  // gap between columns, in px
 
@@ -4427,15 +4436,17 @@ function openPerform() {
   renderPreview();
   perfRenderPanels(s);
   // Relocate the live panel nodes into the overlay (keeps them interactive).
-  for (const [key, id] of Object.entries(PERF_PANELS)) {
-    const node = document.getElementById(id);
-    if (!node) continue;
-    if (!perf.orig[id]) perf.orig[id] = { parent: node.parentNode, next: node.nextSibling };
+  for (const [key, ids] of Object.entries(PERF_PANELS)) {
     const wrap = document.createElement('div');
     wrap.className = 'pf-panel';
     wrap.dataset.panel = key;
     wrap.innerHTML = `<div class="pf-panel-h">${PERF_LABELS[key]}</div>`;
-    wrap.appendChild(node);
+    for (const id of ids) {
+      const node = document.getElementById(id);
+      if (!node) continue;
+      if (!perf.orig[id]) perf.orig[id] = { parent: node.parentNode, next: node.nextSibling };
+      wrap.appendChild(node);
+    }
     pf.panels.appendChild(wrap);
   }
   // Anything still listening would type into a chart you can no longer see.
@@ -4474,7 +4485,8 @@ function closePerform() {
   pf.overlay.removeEventListener('mousemove', perfActivity);
   clearTimeout(perf.idleTimer);
   // Return the panel nodes to their original places in the preview.
-  for (const id of Object.values(PERF_PANELS)) {
+  // Back in reverse so each node's remembered next-sibling is already home.
+  for (const id of Object.values(PERF_PANELS).flat().reverse()) {
     const node = document.getElementById(id);
     const o = perf.orig[id];
     if (o && node) o.parent.insertBefore(node, o.next);
