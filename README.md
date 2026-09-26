@@ -591,7 +591,11 @@ you can see the whole band at once. Two global toggles, **Chords** and
   Its **fret map** is the scale map drawn in that tuning with the notes sitting
   **on** the frets, where the bar goes, and a row under the fret numbers naming
   the chord a straight bar gives at every fret (C / Am up the neck in C6), with
-  this song's chords picked out in bold. The printout names the tuning.
+  this song's chords picked out in bold. Its notes take the shape of the
+  **position** they sit in — circle, square, diamond for the I, IV and V bars,
+  the same shapes as the printed insert below — with a row of glyphs under
+  the ruler showing where each position runs and a line beneath naming them.
+  The printout names the tuning.
   **Neck insert…** (beside the tuning picker) prints a **true-size paper
   fretboard** to cut out and slide beneath the strings: pick a tuning, key and
   scale (or **All notes**, a note map of the whole neck) and every scale tone

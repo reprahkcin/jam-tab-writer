@@ -929,6 +929,13 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
 /* Lap steel fret map: the straight-bar chord at each fret, the song's picked out. */
 .scale-svg .sc-bar { fill: var(--muted); font-size: 8px; font-family: system-ui, sans-serif; }
 .scale-svg .sc-bar-hi { fill: var(--chord); font-weight: 700; }
+/* Positions: the second shape round a note on a shared fret, and the row of
+   position glyphs under the ruler. After .sc-root/.sc-note so the outline's
+   empty fill wins; the highlight ring keeps its colour on both shapes. */
+.scale-svg .sc-second { fill: none; stroke: var(--section); stroke-width: 1.2; }
+.scale-svg .sc-root.sc-second { stroke: var(--accent); }
+.scale-svg .sc-hi.sc-second, .scale-svg .sc-chordonly.sc-second { stroke: #ffe08a; }
+.scale-svg .sc-pos { fill: var(--muted); }
 .lap-ruler-note { font: 10px system-ui, sans-serif; color: var(--muted); margin-top: 2px; }
 
 /* Harmonica panel */
@@ -1146,6 +1153,8 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   .scale-svg.has-hi .sc-note:not(.sc-hi) { opacity: 0.35; }
   .scale-svg .sc-label { fill: #fff; }
   .scale-svg .sc-label-open { fill: #000; }
+  .scale-svg .sc-second { stroke: #333; }
+  .scale-svg .sc-pos { fill: #333; }
   .cd-name.focused { background: none; color: #000; text-decoration: underline; }
   .harmonica-panel:not(:empty) { background: #fff; border: 1px solid #999; }
   .harmonica-panel .hp-title { color: #000; }
