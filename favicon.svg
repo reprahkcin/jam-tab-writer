@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- A chord diagram: nut, three strings, two frets, two fingered notes.
+       Dark ground so it reads on light and dark tab bars alike; the strings
+       in the app's section blue, the notes in its accent orange. -->
+  <rect width="32" height="32" rx="7" fill="#262626"/>
+  <path d="M7.5 9h17" stroke="#8ec5f0" stroke-width="3" stroke-linecap="round"/>
+  <path d="M8 9v17M16 9v17M24 9v17M8 15.5h16M8 22h16" stroke="#8ec5f0" stroke-width="1.6" stroke-linecap="round"/>
+  <circle cx="24" cy="12.4" r="2.9" fill="#f0a35e"/>
+  <circle cx="16" cy="18.8" r="2.9" fill="#f0a35e"/>
+</svg>
