@@ -3767,6 +3767,11 @@ document.getElementById('apply-transpose-btn').addEventListener('click', () => {
   renderPreview();
 });
 document.getElementById('replace-toggle').addEventListener('click', () => setReplaceOpen(true));
+document.getElementById('replace-close').addEventListener('click', () => setReplaceOpen(false));
+// Esc folds the replacer from anywhere, not only from inside its text box.
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !document.getElementById('replace-tools').hidden) setReplaceOpen(false);
+});
 document.getElementById('replace-go').addEventListener('click', replaceChordAll);
 document.getElementById('replace-to').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); replaceChordAll(); }
