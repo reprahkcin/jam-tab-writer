@@ -674,9 +674,6 @@ const el = {
   theoryPanel: document.getElementById('theory-panel'),
   strumEditors: document.getElementById('strum-editors'),
   harmonica: document.getElementById('harmonica-panel'),
-  toggleChords: document.getElementById('toggle-chords'),
-  toggleTheory: document.getElementById('toggle-theory'),
-  toggleScales: document.getElementById('toggle-scales'),
   toggleNumbers: document.getElementById('toggle-numbers'),
 };
 
@@ -705,6 +702,8 @@ function loadPrefs() {
     metro: { bpm: 100, steps: 16, click: true, pattern: null },
     tunerPreset: 'standard',
     lapTuning: 'lapC6', // a TUNER_PRESETS id; checked when it's read (see lapTuning)
+    folded: {},         // reference sections folded shut on screen, by id
+    rightTab: 'chart',  // the right column's tab in split view: 'chart' | 'ref'
   };
   let p = defaults;
   try { p = Object.assign(defaults, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch { /* keep defaults */ }
@@ -715,9 +714,10 @@ function loadPrefs() {
   if (!p.pianoInv || Array.isArray(p.pianoInv)) p.pianoInv = {};
   p.pianoInv.piano = p.pianoInv.piano || p.pianoInv.rhythm || {};
   p.ensemble = Object.assign({}, ENSEMBLE_DEFAULTS, p.ensemble);
-  if (typeof p.showChords !== 'boolean') p.showChords = p.diagrams !== false;  // old 'diagrams' toggle
-  if (typeof p.showScales !== 'boolean') p.showScales = p.lead !== false;      // old 'lead' carried the scale
-  if (typeof p.showTheory !== 'boolean') p.showTheory = true;
+  // The Chords / Scales / Theory switches are gone — folding a section on the
+  // Reference tab took their place — so whatever an old switch left off comes back.
+  p.showChords = true; p.showScales = true; p.showTheory = true;
+  p.folded = Object.assign({}, p.folded);
   p.perform = Object.assign({ cols: 4, font: 22, autoSecs: 25, autoFit: true, panels: {} }, p.perform);
   p.perform.panels = Object.assign({ instruments: true, harp: true }, p.perform.panels);
   p.metro = Object.assign({ bpm: 100, steps: 16, click: true, pattern: null }, p.metro);
@@ -1029,9 +1029,10 @@ function renderTheory(s) {
       }).join('') + `</span></div>`
     : '';
 
+  box.classList.toggle('collapsed', !!prefs.folded.theory);
   box.innerHTML =
     `<div class="th-head">` +
-      `<span class="th-title">Theory</span>` +
+      `<button class="fold th-title" data-fold="theory" aria-expanded="${prefs.folded.theory ? 'false' : 'true'}">Theory</button>` +
       `<span class="muted th-ctl">Key</span><select id="theory-key" title="The key the chart is written in">${keyOpts}</select>` +
       `<span class="th-fact"><span class="th-k">Signature</span>${escapeHtml(T.sigText(entry.acc))}</span>` +
       // A minor key shares its signature with its relative major, so that is the
@@ -1042,10 +1043,12 @@ function renderTheory(s) {
       `<span class="th-print">Key of ${escapeHtml(key.name)} · ${escapeHtml(T.sigText(entry.acc))} · ` +
         `relative ${key.minor ? 'major' : 'minor'} ${escapeHtml(key.minor ? entry.major : entry.minor)}</span>` +
     `</div>` +
+    `<div class="th-body">` +
     `<div class="th-row th-table"><span class="th-k">Chords in ${escapeHtml(key.name)}</span><span class="th-chips">${degreeChips}</span></div>` +
     borrowed +
     `<div class="th-row"><span class="th-k">Notes</span><span class="th-scale">${escapeHtml(scale.join(' '))}</span></div>` +
-    `<div class="th-row th-chrom"><span class="th-k">Chromatic</span><span class="th-ivs">${chromatic}</span></div>`;
+    `<div class="th-row th-chrom"><span class="th-k">Chromatic</span><span class="th-ivs">${chromatic}</span></div>` +
+    `</div>`;
 
   const sel = document.getElementById('theory-key');
   if (sel) sel.addEventListener('change', (e) => {
@@ -1135,11 +1138,14 @@ function renderInstruments(s) {
       body += `<div class="inst-scale">${map}</div>`;
     }
     if (!body) continue;
-    const head = escapeHtml(inst.label) + (inst.kind === 'lap' ? lapTuningPickerHtml(lap) : '');
-    html += `<section class="inst-panel" data-inst="${inst.id}"><div class="inst-head">${head}</div>${body}</section>`;
+    const folded = !!prefs.folded[inst.id];
+    const head = `<button class="fold" data-fold="${inst.id}" aria-expanded="${folded ? 'false' : 'true'}">${escapeHtml(inst.label)}</button>` +
+      (inst.kind === 'lap' ? lapTuningPickerHtml(lap) : '');
+    html += `<section class="inst-panel${folded ? ' collapsed' : ''}" data-inst="${inst.id}">` +
+      `<div class="inst-head">${head}</div><div class="inst-body">${body}</div></section>`;
   }
   el.instPanels.innerHTML = html ||
-    '<span class="palette-empty">No instrument charts to show — add instruments above, or enable Chords / Scales.</span>';
+    '<span class="palette-empty">No instrument charts to show — switch instruments on above.</span>';
   wireInstruments(s);
 }
 
@@ -1557,14 +1563,16 @@ function renderHarmonica(s) {
     opts += `<option value="${i}"${!auto && s.key === i ? ' selected' : ''}>${HARP_NAMES[i]}</option>`;
   }
   // Compact single line: it sits up in the header now, not the reference stack.
+  el.harmonica.classList.toggle('collapsed', !!prefs.folded.harmonica);
   el.harmonica.innerHTML =
-    `<span class="hp-title">Harmonica</span>` +
+    `<button class="fold hp-title" data-fold="harmonica" aria-expanded="${prefs.folded.harmonica ? 'false' : 'true'}">Harmonica</button>` +
+    `<span class="hp-body">` +
     `<select id="key-select">${opts}</select>` +
     `<span class="hp-recs">` +
       `<span class="hp-rec"><b>${r.cross}</b> cross</span>` +
       `<span class="hp-rec"><b>${r.straight}</b> straight</span>` +
       `<span class="hp-rec"><b>${r.slant}</b> slant</span>` +
-    `</span>`;
+    `</span></span>`;
   document.getElementById('key-select').addEventListener('change', (e) => {
     const cur = currentSong();
     cur.key = e.target.value === 'auto' ? null : parseInt(e.target.value, 10);
@@ -3091,20 +3099,35 @@ el.tempoInput.addEventListener('change', () => {
 });
 
 function savePrefs() { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); }
-el.toggleChords.addEventListener('change', () => {
-  prefs.showChords = el.toggleChords.checked;
+
+// The right column's two tabs in split view: the chart you read, and the
+// reference. The Preview view shows both side by side and hides the tabs;
+// the phone's own Chart / Charts tabs do the same job there.
+function setRightTab(tab) {
+  tab = tab === 'ref' ? 'ref' : 'chart';
+  prefs.rightTab = tab;
   savePrefs();
-  renderPreview();
-});
-el.toggleScales.addEventListener('change', () => {
-  prefs.showScales = el.toggleScales.checked;
+  document.body.classList.toggle('rtab-chart', tab === 'chart');
+  document.body.classList.toggle('rtab-ref', tab === 'ref');
+  document.querySelectorAll('.pane-tabs .rtab').forEach((b) => b.setAttribute('aria-selected', b.dataset.rtab === tab ? 'true' : 'false'));
+  if (currentSong()) renderPreview(); // a freshly shown column lays out at its width
+}
+document.querySelectorAll('.pane-tabs .rtab').forEach((b) => b.addEventListener('click', () => setRightTab(b.dataset.rtab)));
+setRightTab(prefs.rightTab);
+
+// Every reference section — Theory, Harmonica, each instrument — folds from its
+// heading. The fold is screen-only and remembered; paper always gets the whole
+// section. One delegated listener, since the panels are rebuilt on every render.
+el.preview.addEventListener('click', (e) => {
+  const btn = e.target.closest('.fold');
+  if (!btn) return;
+  const id = btn.dataset.fold;
+  const panel = btn.closest('.inst-panel, .theory-panel, .harmonica-panel');
+  const folded = !prefs.folded[id];
+  if (folded) prefs.folded[id] = true; else delete prefs.folded[id];
+  if (panel) panel.classList.toggle('collapsed', folded);
+  btn.setAttribute('aria-expanded', folded ? 'false' : 'true');
   savePrefs();
-  renderPreview();
-});
-el.toggleTheory.addEventListener('change', () => {
-  prefs.showTheory = el.toggleTheory.checked;
-  savePrefs();
-  renderPreview();
 });
 // Desktop layout: side-by-side panes, or a single column showing one pane at
 // a time. Phones ignore this and always stack (the switch is hidden there).
@@ -6266,9 +6289,6 @@ function paintTunerStrings(active, inTune) {
 function boot() {
   initSectionBar();
   initTuningSelect();
-  el.toggleChords.checked = prefs.showChords;
-  el.toggleScales.checked = prefs.showScales;
-  el.toggleTheory.checked = prefs.showTheory;
   el.toggleNumbers.checked = prefs.nashville;
   applyLayout();
   applyPrintCols();

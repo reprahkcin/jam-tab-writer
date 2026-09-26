@@ -37,7 +37,7 @@ Controls live with the thing they act on, so the top row is short:
 | Songs sidebar | **New** and **Import** in its head — the two ways to add a song — and under them one **source picker** saying where the songs live: *Saved in this browser*, or your **Collection** and open folders. Pick an option to set up a Collection or open a folder; in folder mode **Reopen** appears when saved folders are waiting on a permission click. **Setlists** sits beside the search box, above the list it draws from |
 | Song strip | Row 1: title, artist, the save breadcrumb (folder mode) and the **View** switch. Row 2: three cards — **Key** (shapes · transpose · capo, what it sounds in, and **Apply to text**), **Tempo** (with **Count in**), **Tuning** |
 | Editor head | **Dictate**, **Page break**, then the chart-wide cleanup — **Reprocess**, **Clear chords** — quiet at the far end |
-| Chart pane head | **Numbers**, then the ways a chart leaves the room: **Share**, **Export**, **Print** with its column setting |
+| Chart pane head | Two tabs — **Chart** and **Reference** — then **Numbers**, then the ways a chart leaves the room: **Share**, **Export**, **Print ▾** |
 
 Two dividers are draggable: the strip between the song list and the workspace
 sets the list's width, and the gap between the editor and the chart in Split view
@@ -566,11 +566,14 @@ share a uniform grid and even spacing (on screen and in print).
 
 ## Instruments — the jam
 
-Charts are organized **by instrument**. A row of chips at the top of the preview
-is your jam roster — switch each instrument on or off. Every instrument you turn
-on gets its own section with **its chord diagrams and its scale map**, stacked so
-you can see the whole band at once. Two global toggles, **Chords** and
-**Scales**, hide those rows across every instrument.
+Charts are organized **by instrument**, on the right column's **Reference** tab
+(the Preview view shows the chart and the reference side by side instead). A row
+of chips at the top is your jam roster — switch each instrument on or off. Every
+instrument you turn on gets its own section with **its chord diagrams and its
+scale map**, all open by default so you can see the whole band at once; click any
+section's heading — Theory, Harmonica, or an instrument — to fold it shut, and
+again to open it. Folds are remembered and are screen-only: paper always gets
+every section whole.
 
 - **Guitar 1 / Guitar 2** — two guitar parts (your first and second guitar).
   Both show fretboard diagrams with the voicing dropdown; **Guitar 1** defaults

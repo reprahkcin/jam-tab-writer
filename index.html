@@ -246,7 +246,13 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
         <div class="pane preview-pane">
           <div class="pane-head">
-            <span>Chart</span>
+            <!-- The right column is two tabs: the chart you read, and the band's
+                 reference. The Preview view has room for both side by side. -->
+            <span class="pane-tabs" role="tablist" aria-label="Right column">
+              <button class="rtab" data-rtab="chart" role="tab" aria-selected="true">Chart</button>
+              <button class="rtab" data-rtab="ref" role="tab" aria-selected="false">Reference</button>
+            </span>
+            <span class="pane-both-label">Chart &amp; reference</span>
             <span class="view-toggles">
               <label title="Show chords as Nashville numbers (scale degrees relative to the key)"><input type="checkbox" id="toggle-numbers" /> Numbers</label>
             </span>
@@ -288,13 +294,8 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
                  the chart is ordered above it, and the Preview view gives each
                  its own column. -->
             <div class="ref-col">
-              <div id="reference-head" class="ref-head">
-                <span class="ref-title">Reference</span>
-                <label title="Show chord diagrams for each instrument"><input type="checkbox" id="toggle-chords" checked /> Chords</label>
-                <label title="Show a scale map for each instrument"><input type="checkbox" id="toggle-scales" checked /> Scales</label>
-                <label title="Show the key's theory panel: its chords, relative minor and chromatic intervals"><input type="checkbox" id="toggle-theory" checked /> Theory</label>
-              </div>
-              <!-- The jam: on/off chip per instrument, built by renderInstrumentBar(). -->
+              <!-- The jam: on/off chip per instrument, built by renderInstrumentBar().
+                   Every section below it folds from its heading (see wireFolds). -->
               <div id="instrument-bar" class="instrument-bar"></div>
               <!-- Key context for the chart: what key it is in, the chords that
                    come with it, and the chromatic ruler under them. -->
