@@ -27,26 +27,23 @@ instead, since the browser only allows file access from `http://`/`https://`:
 
 then open that URL in Chrome or Edge.
 
-## The toolbar
+## The layout
 
-The top row is grouped by job, with a hairline between clusters, so it can be
-scanned instead of read end to end:
+Controls live with the thing they act on, so the top row is short:
 
-| Cluster | Buttons |
+| Where | Controls |
 | --- | --- |
-| This chart | **New** |
-| Where charts live | **Collection** (green), **Open folder**, and — in folder mode — **Reconnect folder** and **Save** |
-| In & out | **Import**, **Export**, **Share** |
-| Session tools | **Metronome**, **Tuner**, **Record** — icons only; the button lights up while its panel is open, and Record turns red while a take is rolling |
-| Play | **Perform** (filled, the one you hit mid-song) and the **?** shortcuts sheet |
+| Header | **Metronome**, **Tuner**, **Record** (the button lights while its panel is open; Record turns red while a take is rolling), then **Learn**, **Perform** (filled — the one you hit mid-song) and the **?** shortcuts sheet |
+| Songs sidebar | **New** and **Import** in its head — the two ways to add a song — and under them one **source picker** saying where the songs live: *Saved in this browser*, or your **Collection** and open folders. Pick an option to set up a Collection or open a folder; in folder mode **Reopen** appears when saved folders are waiting on a permission click. **Setlists** sits beside the search box, above the list it draws from |
+| Song strip | Row 1: title, artist, the save breadcrumb (folder mode) and the **View** switch. Row 2: three cards — **Key** (shapes · transpose · capo, what it sounds in, and **Apply to text**), **Tempo** (with **Count in**), **Tuning** |
+| Editor head | **Dictate**, **Page break**, then the chart-wide cleanup — **Reprocess**, **Clear chords** — quiet at the far end |
+| Chart pane head | **Numbers**, then the ways a chart leaves the room: **Share**, **Export**, **Print** with its column setting |
 
-Two controls live with the thing they act on rather than in the toolbar:
-**Print** is in the Preview pane header next to its column setting, and
-**Setlists** sits in the Songs sidebar header, above the list it draws from.
-
-Below about 1200px wide the labels drop away and the row becomes icons (hover for
-the name) rather than wrapping onto two lines. On a phone the whole row collapses
-into the **☰ Menu** dropdown, where everything is labelled again.
+Below about 1200px wide the header labels drop away and the row becomes icons
+(hover for the name). On a phone the app is five places shown one at a time from
+a **bottom tab bar** — **Songs · Edit · Chart · Charts · Tools** — with **Perform**
+floating above it on the chart tabs and the song strip folded to one tappable
+line.
 
 ## Folder mode — edit folders of charts on disk
 
@@ -56,18 +53,19 @@ something down instantly. When you're ready to keep charts as real files, you
 for repos of songs you track in git. You can keep **several folders open at
 once**; each open folder is a *library*.
 
-- Click **Open folder** and pick a directory (Chrome/Edge only). The first time,
+- Pick **Open a folder of .cho files…** from the sidebar's source picker and
+  choose a directory (Chrome/Edge only). The first time,
   your existing browser songs are **copied into that folder** as `.cho` files
   and the app switches to file-backed mode (your browser copy is kept as a
   backup). The folder is scanned recursively for `.cho` files.
-- Click **+ Folder** to open **additional** folders. The sidebar groups songs
+- Pick **Add a folder…** from the source picker to open **additional** folders. The sidebar groups songs
   under a collapsible header per folder, each with **↻ reload from disk** and
   **× close** controls.
 - Edits **save straight back to the file** (auto-saved, debounced; or press
   **Cmd/Ctrl+S**, or the **Save** button). Then commit in that repo as usual.
 - Folders are remembered. Next session the app reconnects the ones it still has
   permission for; any that need a fresh grant appear behind a single
-  **Reconnect folders** button (browsers can't silently re-grant folder access
+  **Reopen** button in the sidebar (browsers can't silently re-grant folder access
   on a cold start). Closing the **last** folder returns you to browser songs.
 - **+ New** and **Import** land in the **active** folder, shown as
   `+ New → <folder>` at the top of the sidebar and marked with a dot on its
@@ -487,7 +485,7 @@ page**, after the chart. Riffs are saved with the song as standard ChordPro
 
 ## Printing
 
-Click **Print** in the Preview pane header — it sits next to the column setting
+Click **Print** in the Chart pane header — it sits next to the column setting
 it obeys — to open your browser's print dialog; from there you can print on paper
 or "Save as PDF". Cmd/Ctrl+P does the same thing from anywhere, including
 Editor-only view where the preview (and so the button) is hidden. The printout is
