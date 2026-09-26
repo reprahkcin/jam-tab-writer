@@ -607,6 +607,21 @@ you can see the whole band at once. Two global toggles, **Chords** and
   18 in board), cut mid-space so no fret line lands on a join, with rulers on the
   sheet to prove the printer kept the size. Lettering reads from the playing
   position. **Print at 100% — never "fit to page".**
+  **Positions** (on by default) are the lap steel's answer to CAGED. A
+  guitarist learns a scale in five positions, each built round a chord shape;
+  a lap steel has one chord shape — the bar — so its positions are the frets
+  where a straight bar gives a chord of the key: **I, IV and V**, with the
+  relative minors alongside them in a 6th tuning (in C6 for a song in G: G/Em
+  at bar 7, C/Am at 12, D/Bm at 2). Every fret belongs to the nearest chord bar,
+  and each position gets its own **mark shape** — circle for the tonic's
+  position, square for IV, diamond for V — so the positions read on a
+  black-and-white print without any colour: root still solid black, scale
+  tones white. A fret midway between two bars belongs to both, and its notes
+  are drawn with both shapes, one round the other. The fret-number ruler leads
+  each number with its position's glyph, and the legend lists the positions
+  with their chords, degrees and bar frets. In a tuning with only a major bar
+  (the open tunings) a minor key's positions are its relative major's I, IV
+  and V. The **All notes** map has no key, so no positions.
 - **Piano** — a keyboard per chord with the chord tones highlighted (root
   orange, other tones gold) and labelled by interval degree (R/3/5/7 …), plus a
   piano scale roll.

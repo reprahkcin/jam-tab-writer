@@ -691,6 +691,87 @@ function lapVoicings(name, tuning) {
   return out.sort((a, b) => a.score - b.score || a.fret - b.fret);
 }
 
+// Minor chords read better with these spellings (G#m, Bbm) than the key names.
+const MINOR_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'G#', 'A', 'Bb', 'B'];
+function isMinorChord(ci) { return ci.iv.includes(3) && !ci.iv.includes(4); }
+
+// The chord a tuning's straight-bar chord `bar` becomes with the bar at fret f.
+function lapBarNameAt(bar, f) {
+  const ci = chordIntervals(bar);
+  return (isMinorChord(ci) ? MINOR_NAMES : HARP_NAMES)[(ci.rootPc + f) % 12] + bar.match(CHORD_RE)[3];
+}
+
+// ---- Positions ------------------------------------------------------------
+// A guitarist learns a scale in the five CAGED positions, each built round a
+// chord shape. A lap steel has one chord shape — the bar — so its positions
+// are the frets where a straight bar gives a chord of the key: I, IV and V,
+// with the relative minors alongside them in a 6th tuning. Every fret belongs
+// to the nearest of those bars; one midway between two belongs to both.
+const LAP_SHAPES = ['circle', 'square', 'diamond', 'hexagon', 'triangle', 'tridown'];
+const NUMERALS = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+
+// The seven-note scale a pentatonic or blues scale is carved from, which is
+// what decides whether a chord is in the key.
+function lapParentIv(scale) {
+  if (scale.iv.length >= 7) return scale.iv;
+  return scale.iv.includes(3) ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
+}
+
+// { list: [{ shape, chords, numerals, frets }], at: (fret) => [index…] } for
+// a tuning's straight-bar chords `bars` in a key, or null when the scale has
+// no key to speak of. `at` gives the position(s) a fret belongs to, nearest
+// first by rank.
+function lapPositions(bars, rootPc, scale, lastFret) {
+  if (!bars || !bars.length || scale.iv.length > 7) return null;
+  const parent = lapParentIv(scale);
+  const inKey = new Set(parent.map((i) => (rootPc + i) % 12));
+  // A bar chord is in the key where its root, 3rd and 5th all are — the 7th
+  // of an E7 bar is left out of it, as a player leaves that string out.
+  const byFret = new Map();
+  for (const bar of bars) {
+    const ci = chordIntervals(bar);
+    const triad = ci.iv.filter((t) => t === 0 || t === 3 || t === 4 || t === 7);
+    for (let f = 0; f <= lastFret; f++) {
+      if (!triad.every((t) => inKey.has((ci.rootPc + t + f) % 12))) continue;
+      if (!byFret.has(f)) byFret.set(f, []);
+      byFret.get(f).push(bar);
+    }
+  }
+  if (!byFret.size) return null;
+  // One position per chord, an octave apart. Ranked I, then IV, then V, then
+  // — for a minor key in a tuning with only a major bar — the relative
+  // major's I, IV and V; the rank hands out the shapes.
+  const rankOf = { 0: 0, 5: 1, 7: 2, 3: 3, 8: 4, 10: 5 };
+  const rank = (iv) => (iv in rankOf ? rankOf[iv] : 6 + iv);
+  const classes = new Map();
+  for (const [f, list] of [...byFret].sort((a, b) => a[0] - b[0])) {
+    const k = f % 12;
+    if (!classes.has(k)) {
+      const facts = list.map((bar) => {
+        const ci = chordIntervals(bar);
+        const iv = (ci.rootPc + f - rootPc + 12) % 12;
+        const n = NUMERALS[parent.indexOf(iv)];
+        return { name: lapBarNameAt(bar, f), numeral: isMinorChord(ci) ? n.toLowerCase() : n, rank: rank(iv) };
+      }).sort((a, b) => a.rank - b.rank);
+      classes.set(k, { frets: [], chords: facts.map((x) => x.name), numerals: facts.map((x) => x.numeral), rank: facts[0].rank });
+    }
+    classes.get(k).frets.push(f);
+  }
+  const list = [...classes.values()].sort((a, b) => a.rank - b.rank || a.frets[0] - b.frets[0]);
+  list.forEach((pos, i) => { pos.shape = LAP_SHAPES[i % LAP_SHAPES.length]; });
+  const anchors = [];
+  list.forEach((pos, i) => pos.frets.forEach((f) => anchors.push({ f, i })));
+  const at = (f) => {
+    let best = Infinity, out = [];
+    for (const a of anchors) {
+      const dist = Math.abs(a.f - f);
+      if (dist < best) { best = dist; out = [a.i]; } else if (dist === best && !out.includes(a.i)) out.push(a.i);
+    }
+    return out.sort((a, b) => a - b);
+  };
+  return { list, at };
+}
+
 // "bar 5", "open", "bar 3 · no b7" — what a grip is, in a player's words.
 function lapVoicingLabel(v) {
   return (v.fret === 0 ? 'open' : `bar ${v.fret}`) + (v.omit.length ? ` · no ${v.omit.join(', ')}` : '');
@@ -826,13 +907,27 @@ function lapText(x, y, str, size, o = {}) {
     `fill="${o.fill || '#111'}"${o.bold ? ' font-weight="700"' : ''}>${escapeHtml(String(str))}</text>`;
 }
 
-// A note on the neck: a dot on a fret line, or a rounded square at the nut for
-// an open string. `label` is [note] or [note, degree].
-function lapNoteMark(x, y, r, ink, label, open) {
-  const shape = open
-    ? `<rect x="${lu(x - r)}" y="${lu(y - r)}" width="${lu(2 * r)}" height="${lu(2 * r)}" rx="${lu(r * 0.3)}" `
-    : `<circle cx="${lu(x)}" cy="${lu(y)}" r="${lu(r)}" `;
-  let out = shape + `fill="${ink.fill}" stroke="${ink.stroke}" stroke-width="0.9"/>`;
+// One mark shape, `r` being roughly its reach from the centre: the shapes that
+// stand for positions are sized to read as the same weight as a circle and to
+// hold the same lettering. 'open' is the rounded square of an open string.
+function lapShape(kind, x, y, r, attrs) {
+  const P = (pts) => `<polygon points="${pts.map(([px, py]) => `${lu(x + px * r)},${lu(y + py * r)}`).join(' ')}" ${attrs}/>`;
+  if (kind === 'square') return `<rect x="${lu(x - 0.9 * r)}" y="${lu(y - 0.9 * r)}" width="${lu(1.8 * r)}" height="${lu(1.8 * r)}" ${attrs}/>`;
+  if (kind === 'open') return `<rect x="${lu(x - r)}" y="${lu(y - r)}" width="${lu(2 * r)}" height="${lu(2 * r)}" rx="${lu(r * 0.3)}" ${attrs}/>`;
+  if (kind === 'diamond') return P([[0, -1.2], [1.2, 0], [0, 1.2], [-1.2, 0]]);
+  if (kind === 'hexagon') return P([[0, -1.05], [0.91, -0.525], [0.91, 0.525], [0, 1.05], [-0.91, 0.525], [-0.91, -0.525]]);
+  if (kind === 'triangle') return P([[0, -1.3], [1.15, 0.75], [-1.15, 0.75]]);
+  if (kind === 'tridown') return P([[0, 1.3], [1.15, -0.75], [-1.15, -0.75]]);
+  return `<circle cx="${lu(x)}" cy="${lu(y)}" r="${lu(r)}" ${attrs}/>`;
+}
+
+// A note on the neck. `kinds` is the shape to draw it as — 'open' for the
+// rounded square at the nut — and, when positions are on, a second kind for a
+// note that belongs to two positions, drawn as an outline round the first.
+// `label` is [note] or [note, degree].
+function lapNoteMark(x, y, r, ink, label, kinds) {
+  let out = lapShape(kinds[0], x, y, r, `fill="${ink.fill}" stroke="${ink.stroke}" stroke-width="0.9"`);
+  if (kinds[1]) out += lapShape(kinds[1], x, y, 1.12 * r, `fill="none" stroke="${ink.stroke}" stroke-width="0.9"`);
   if (label.length > 1) {
     // Note above, degree below — as read from the playing position, where
     // "above" is towards the far (high-string) side.
@@ -871,6 +966,11 @@ function lapNeckContent(o, g) {
   const ink = LAP_INK[o.color ? 'color' : 'mono'];
   const inScale = new Set(o.scale.iv.map((t) => (o.rootPc + t) % 12));
   const last = g.d.length - 1;
+  const pos = o.positions || null;
+  // Positions shrink the marks a touch: a two-shape mark needs the room, and
+  // the diamond reaches past a circle's edge. Still big enough for the degree.
+  const rr = (n) => g.r[n] * (pos ? 0.88 : 1);
+  const kindsAt = (n, open) => (pos ? pos.at(n).map((i) => pos.list[i].shape) : [open ? 'open' : 'circle']);
   let under = '', lines = '', marks = '', text = '';
 
   for (let i = 0; i < N; i++) {
@@ -886,25 +986,25 @@ function lapNeckContent(o, g) {
 
   // Open strings, just below the nut: every string gets one, so the top of the
   // strip spells the tuning; the ones outside the scale are only ghosted.
-  const r0 = g.r[0], openY = r0 + 0.035;
+  const r0 = rr(0), openY = g.r[0] + 0.035;
   for (let i = 0; i < N; i++) {
     const pc = o.tuning[i] % 12, x = g.stringX(i, openY);
     marks += inScale.has(pc)
-      ? lapNoteMark(x, openY, r0, inkFor(pc), labelFor(pc, r0), true)
-      : lapNoteMark(x, openY, r0, { fill: 'none', stroke: '#bbb', text: '#888' }, [o.names[pc]], true);
+      ? lapNoteMark(x, openY, r0, inkFor(pc), labelFor(pc, r0), kindsAt(0, true))
+      : lapNoteMark(x, openY, r0, { fill: 'none', stroke: '#bbb', text: '#888' }, [o.names[pc]], ['open']);
   }
 
   for (let n = 1; n <= last; n++) {
-    const y = g.d[n], r = g.r[n];
+    const y = g.d[n], r = rr(n);
     const heavy = n % 12 === 0;
     lines += `<line x1="${lu(-g.halfW(y))}" y1="${lu(y)}" x2="${lu(g.halfW(y))}" y2="${lu(y)}" stroke="#111" stroke-width="${heavy ? 4.5 : 3}"/>`;
     for (let i = 0; i < N; i++) {
       const pc = (o.tuning[i] + n) % 12;
-      if (inScale.has(pc)) marks += lapNoteMark(g.stringX(i, y), y, r, inkFor(pc), labelFor(pc, r), false);
+      if (inScale.has(pc)) marks += lapNoteMark(g.stringX(i, y), y, r, inkFor(pc), labelFor(pc, r), kindsAt(n, false));
     }
 
     // The clear band between this fret's dots and the last one's.
-    const from = g.d[n - 1] + (n === 1 ? 2 * r0 + 0.035 : g.r[n - 1]), to = y - r;
+    const from = g.d[n - 1] + (n === 1 ? 2 * r0 + 0.035 : rr(n - 1)), to = y - r;
     const band = to - from;
     const kind = lapMarkerAt(n);
     if (kind && band > 0.05) {
@@ -913,13 +1013,19 @@ function lapNeckContent(o, g) {
       under += lapMarkerShape(kind, (from + to) / 2, h, 2 * g.halfW(y));
     }
 
-    // Fret number, then the straight-bar chords, stacked at the near edge and
-    // ending just short of the line. They shrink with the band, and drop out —
-    // chords first — once they would be too small to read.
+    // Fret number — led by the glyph of its position, when those are on —
+    // then the straight-bar chords, stacked at the near edge and ending just
+    // short of the line. They shrink with the band, and drop out — chords
+    // first — once they would be too small to read.
     const room = band - 0.045, left = -g.halfW(y) + 0.035, end = to - 0.02;
-    const numSize = Math.min(0.1, room / (0.62 * String(n).length));
+    const glyphs = pos ? pos.at(n) : [];
+    const numSize = Math.min(0.1, room / (0.62 * String(n).length + 0.9 * glyphs.length));
     if (numSize >= 0.055) {
       text += lapText(left, end, n, numSize, { turn: true, anchor: 'end', bold: true });
+      glyphs.forEach((i, k) => {
+        const gy = end - 0.62 * numSize * String(n).length - (0.5 + 0.9 * k) * numSize;
+        under += lapShape(pos.list[i].shape, left + 0.36 * numSize, gy, 0.3 * numSize, 'fill="#111"');
+      });
       const chords = o.bars ? o.bars(n) : [];
       const longest = Math.max(0, ...chords.map((c) => c.length));
       const chSize = Math.min(0.085, room / (0.6 * longest));
@@ -978,11 +1084,25 @@ function lapInsertInfo(o, g, x, y, w) {
   para('LAP STEEL NECK INSERT', 0.085, { bold: true, fill: '#666' });
   para(o.tuningName, 0.14, { bold: true });
   para(o.scaleTitle, 0.125);
-  [[ink.root, 'root', false], [ink.tone, o.dimPcs ? 'natural note' : 'scale tone', false],
-    ...(o.dimPcs ? [[ink.dim, 'sharp / flat', false]] : []), [ink.tone, 'open string', true]].forEach(([k, name, open]) => {
-    out += lapNoteMark(x + 0.07, cy - 0.035, 0.065, k, [], open) + lapText(x + 0.2, cy, name, 0.105, { anchor: 'start' });
+  const pos = o.positions || null;
+  [[ink.root, 'root', 'circle'], [ink.tone, o.dimPcs ? 'natural note' : 'scale tone', 'circle'],
+    ...(o.dimPcs ? [[ink.dim, 'sharp / flat', 'circle']] : []),
+    [ink.tone, pos ? 'open string (the row before the nut)' : 'open string', 'open']].forEach(([k, name, kind]) => {
+    out += lapNoteMark(x + 0.07, cy - 0.035, 0.065, k, [], [kind]) + lapText(x + 0.2, cy, name, 0.105, { anchor: 'start' });
     cy += 0.19;
   });
+  if (pos) {
+    cy += 0.06;
+    para('POSITIONS', 0.085, { bold: true, fill: '#666' });
+    for (const p of pos.list) {
+      out += lapShape(p.shape, x + 0.07, cy - 0.035, 0.065, 'fill="#111"');
+      out += lapText(x + 0.2, cy, `${p.chords.join(' / ')} · ${p.numerals.join(' / ')}`, 0.105, { anchor: 'start', bold: true });
+      cy += 0.145;
+      out += lapText(x + 0.2, cy, 'bar ' + p.frets.join(', '), 0.095, { anchor: 'start', fill: '#333' });
+      cy += 0.19;
+    }
+    para('Each fret belongs to the nearest chord bar. A mark drawn with two shapes sits midway between two positions and belongs to both.', 0.1, { fill: '#333' });
+  }
   cy += 0.05;
   para('Lettering reads from the playing position: nut to your left, low string nearest you (the left edge of each strip).', 0.105, { fill: '#333' });
   para('Print at 100% (“actual size”), never “fit to page”, then check both rulers before you cut.', 0.105, { bold: true });

@@ -714,7 +714,7 @@ function loadPrefs() {
   p.learn = Object.assign({ topic: 'chords', lens: true }, p.learn);
   p.capture = Object.assign({ deviceId: null, deviceLabel: '', format: 'wav' }, p.capture);
   p.lapNeck = Object.assign({}, LAP_NECK_DEFAULTS, p.lapNeck);
-  p.lapInsert = Object.assign({ labels: 'both', color: true, bars: true }, p.lapInsert);
+  p.lapInsert = Object.assign({ labels: 'both', color: true, bars: true, positions: true }, p.lapInsert);
   return p;
 }
 let prefs = loadPrefs();
@@ -1181,20 +1181,10 @@ function lapTuningPickerHtml(lap) {
     `<span class="lap-tuning-print">${escapeHtml(lap.t.name)}</span>`;
 }
 
-// Minor chords read better with these spellings (G#m, Bbm) than the key names.
-const MINOR_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'G#', 'A', 'Bb', 'B'];
-function isMinorChord(ci) { return ci.iv.includes(3) && !ci.iv.includes(4); }
-
 // Rows for under the lap steel's fret map: for each chord the tuning gives with
 // a straight bar (its `bars`), that chord's name at every fret 0–15. Where one
 // of this song's chords is played — same root, same major/minor, at the fret
 // its chosen grip uses — the cell shows the song's own name, highlighted.
-// The chord a tuning's straight-bar chord `bar` becomes with the bar at fret f.
-function lapBarNameAt(bar, f) {
-  const ci = chordIntervals(bar);
-  return (isMinorChord(ci) ? MINOR_NAMES : HARP_NAMES)[(ci.rootPc + f) % 12] + bar.match(CHORD_RE)[3];
-}
-
 function lapRuler(lap) {
   return (lap.t.bars || []).map((bar) => {
     const ci = chordIntervals(bar);
@@ -1261,6 +1251,7 @@ function lapInsertOptions() {
   const scale = INSERT_SCALES.find((sc) => sc.id === insert.scale) || INSERT_SCALES[0];
   const names = lapInsertNoteNames(insert.root, scale);
   const all = scale.id === 'chromatic';
+  const lastFret = lapInsertGeometry(prefs.lapNeck, t.strings.length).d.length - 1;
   return {
     neck: prefs.lapNeck,
     tuning: t.strings.map(([note]) => noteToMidi(note)),
@@ -1276,6 +1267,7 @@ function lapInsertOptions() {
     labels: prefs.lapInsert.labels,
     color: prefs.lapInsert.color,
     bars: prefs.lapInsert.bars ? (n) => (t.bars || []).map((bar) => lapBarNameAt(bar, n)) : null,
+    positions: prefs.lapInsert.positions && !all ? lapPositions(t.bars, insert.root, scale, lastFret) : null,
   };
 }
 
@@ -1327,6 +1319,8 @@ function renderInsertForm() {
         .map(([v, l]) => opt(v, l, v === pi.labels)).join('') + `</select></label>` +
     `<label class="in-check"><input type="checkbox" id="insert-color"${pi.color ? ' checked' : ''}/> Colour (off for a black-and-white printer)</label>` +
     `<label class="in-check"><input type="checkbox" id="insert-bars"${pi.bars ? ' checked' : ''}/> Straight-bar chords beside the fret numbers</label>` +
+    `<label class="in-check" title="The scale around each chord bar of the key — I, IV and V — each position with its own mark shape, so they read on a black-and-white print">` +
+      `<input type="checkbox" id="insert-positions"${pi.positions ? ' checked' : ''}${insert.scale === 'chromatic' ? ' disabled' : ''}/> Positions: a mark shape per chord bar (I · IV · V)</label>` +
     `<div class="in-neck"><div class="in-neck-head">Your neck <span class="muted">inches</span></div>` +
       LAP_NECK_FIELDS.map(([key, label, tip]) =>
         `<label class="in-row" title="${escapeHtml(tip)}"><span>${escapeHtml(label)}</span>` +
@@ -1338,10 +1332,11 @@ function renderInsertForm() {
   const pick = (id, apply) => form.querySelector(id).addEventListener('change', (e) => { apply(e.target); savePrefs(); renderInsertPreview(); });
   pick('#insert-tuning', (t) => { insert.tuning = t.value; });
   pick('#insert-root', (t) => { insert.root = parseInt(t.value, 10); });
-  pick('#insert-scale', (t) => { insert.scale = t.value; });
+  pick('#insert-scale', (t) => { insert.scale = t.value; form.querySelector('#insert-positions').disabled = t.value === 'chromatic'; });
   pick('#insert-labels', (t) => { prefs.lapInsert.labels = t.value; });
   pick('#insert-color', (t) => { prefs.lapInsert.color = t.checked; });
   pick('#insert-bars', (t) => { prefs.lapInsert.bars = t.checked; });
+  pick('#insert-positions', (t) => { prefs.lapInsert.positions = t.checked; });
   form.querySelectorAll('[data-neck]').forEach((input) => input.addEventListener('change', () => {
     const [key, , , min, max] = LAP_NECK_FIELDS.find((f) => f[0] === input.dataset.neck);
     const v = key === 'frets' ? parseInt(input.value, 10) : parseFloat(input.value);
