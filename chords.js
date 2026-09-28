@@ -1313,7 +1313,7 @@ function lapNeckContent(o, g) {
       });
       for (const [f, labs] of tags) {
         const yy = noteY(f), r = rr(f) * 1.5, ty = f === 0 ? yy + r + 0.03 : yy - r - 0.03;
-        text += lapText(g.halfW(yy) - 0.035 - 0.033, ty, labs.join(' '), 0.066, { turn: true, anchor: f === 0 ? 'start' : 'end', mid: true, bold: true });
+        text += lapText(g.halfW(yy) - 0.035 - 0.033, ty, labs.join(' · '), 0.066, { turn: true, anchor: f === 0 ? 'start' : 'end', mid: true, bold: true });
       }
     }
     for (const [key, list] of rings) {
