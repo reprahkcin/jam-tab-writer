@@ -2209,9 +2209,23 @@ body.performing { overflow: hidden; }
   .insert-body { grid-template-columns: 1fr; }
 }
 
-/* Keyboard shortcuts cheatsheet. */
+/* Help: the tour and the example song, then the keyboard shortcuts. */
 .help-card { width: min(92vw, 480px); }
-.help-body { margin-top: 10px; max-height: 70vh; overflow-y: auto; }
+.help-start { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.help-action {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  text-align: left; padding: 10px 12px; border-radius: 8px; cursor: pointer;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+}
+.help-action:hover, .help-action:focus-visible { border-color: var(--accent); }
+.help-action .ha-title { font: 600 13px system-ui, sans-serif; color: var(--accent); }
+.help-action .ha-sub { font-size: 11px; line-height: 1.4; color: var(--muted); }
+.help-sub-head {
+  margin-top: 16px;
+  font: 700 11px system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted);
+}
+@media (max-width: 480px) { .help-start { grid-template-columns: 1fr; } }
+.help-body { margin-top: 10px; max-height: 60vh; overflow-y: auto; }
 .help-group { margin-bottom: 14px; }
 .help-group-title {
   font: 700 11px system-ui, sans-serif;
@@ -2838,3 +2852,57 @@ body.learning { overflow: hidden; }
   .th-iv { color: #666; }
   .th-iv.th-in { background: #fff; border-color: #999; color: #000; }
 }
+
+/* ---- The guided tour (driver.js popovers, in the app's colours) ---------- */
+.driver-popover.jtw-tour {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+  font-family: system-ui, sans-serif;
+  max-width: 340px;
+  padding: 16px 16px 14px;
+}
+.jtw-tour .driver-popover-title { font-size: 15px; font-weight: 700; color: var(--accent); line-height: 1.35; padding-right: 20px; }
+.jtw-tour .driver-popover-description { font-size: 13px; line-height: 1.55; color: var(--text); }
+.jtw-tour .driver-popover-description b { font-weight: 600; color: var(--text); }
+.jtw-tour .driver-popover-description code {
+  font: 12px var(--mono); color: var(--chord); background: var(--panel-2); padding: 0 4px; border-radius: 3px;
+}
+.jtw-tour .driver-popover-description kbd {
+  font: 600 11px var(--mono); color: var(--text); background: var(--panel-2);
+  border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px;
+}
+.jtw-tour .driver-popover-progress-text { color: var(--muted); font-size: 12px; }
+.jtw-tour .driver-popover-close-btn { color: var(--muted); }
+.jtw-tour .driver-popover-close-btn:hover, .jtw-tour .driver-popover-close-btn:focus { color: var(--text); }
+.jtw-tour .driver-popover-footer-btn {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 12px; font-size: 12px; text-shadow: none;
+}
+.jtw-tour .driver-popover-footer-btn:hover, .jtw-tour .driver-popover-footer-btn:focus { background: var(--line); }
+.jtw-tour .driver-popover-next-btn { background: var(--accent); border-color: var(--accent); color: #1e1e1e; font-weight: 600; }
+.jtw-tour .driver-popover-next-btn:hover, .jtw-tour .driver-popover-next-btn:focus { background: var(--accent); filter: brightness(1.08); }
+.jtw-tour .driver-popover-arrow-side-left { border-left-color: var(--panel); }
+.jtw-tour .driver-popover-arrow-side-right { border-right-color: var(--panel); }
+.jtw-tour .driver-popover-arrow-side-top { border-top-color: var(--panel); }
+.jtw-tour .driver-popover-arrow-side-bottom { border-bottom-color: var(--panel); }
+@media print { .driver-popover, .driver-overlay, .tour-invite { display: none !important; } }
+
+/* First visit: a quiet offer of the tour, bottom right (above the phone tabs). */
+.tour-invite {
+  position: fixed; right: 16px; bottom: 16px; z-index: 900;
+  width: min(340px, calc(100vw - 32px));
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+  padding: 14px 16px; font: 13px/1.5 system-ui, sans-serif;
+}
+.tour-invite .ti-title { font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+.tour-invite .ti-body { color: var(--text); }
+.tour-invite .ti-actions { display: flex; gap: 8px; margin-top: 10px; }
+.tour-invite button { padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); }
+.tour-invite .ti-go { background: var(--accent); border-color: var(--accent); color: #1e1e1e; font-weight: 600; }
+.tour-invite .ti-foot { margin-top: 8px; font-size: 11px; color: var(--muted); }
+@media (max-width: 760px) { .tour-invite { bottom: 76px; } }

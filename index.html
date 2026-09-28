@@ -10,7 +10,8 @@
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=1" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1" />
   <meta name="theme-color" content="#1e1e1e" />
-  <link rel="stylesheet" href="styles.css?v=110" />
+  <link rel="stylesheet" href="vendor/driver/driver.css?v=1" />
+  <link rel="stylesheet" href="styles.css?v=111" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -69,8 +70,8 @@
       <button id="perform-btn" class="hdr-btn hdr-primary" title="Full-screen performance view" aria-label="Perform">
         <svg class="ico"><use href="#i-perform"/></svg><span class="btn-label">Perform</span>
       </button>
-      <button id="help-btn" class="hdr-btn icon-only" title="Keyboard shortcuts (press ?)" aria-label="Keyboard shortcuts">
-        <svg class="ico"><use href="#i-help"/></svg><span class="btn-label">Shortcuts</span>
+      <button id="help-btn" class="hdr-btn icon-only" title="Help: the tour, the example song, keyboard shortcuts (press ?)" aria-label="Help">
+        <svg class="ico"><use href="#i-help"/></svg><span class="btn-label">Help</span>
       </button>
     </div>
   </header>
@@ -532,10 +533,21 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
     <div id="learn-body" class="learn-body" tabindex="-1"></div>
   </div>
 
-  <!-- Keyboard shortcuts cheatsheet. -->
+  <!-- Help: the tour and the example song, then the keyboard shortcuts. -->
   <div id="help-modal" class="share-modal" hidden>
     <div class="share-card help-card">
-      <div class="share-head">Keyboard shortcuts</div>
+      <div class="share-head">Help</div>
+      <div class="help-start">
+        <button id="help-tour" class="help-action">
+          <span class="ha-title">Take the tour</span>
+          <span class="ha-sub">Two minutes through everything the app does, on the example song</span>
+        </button>
+        <button id="help-example" class="help-action">
+          <span class="ha-title">Open the example song</span>
+          <span class="ha-sub">A finished chart with sections, strumming and a riff, to try things on</span>
+        </button>
+      </div>
+      <div class="help-sub-head">Keyboard shortcuts</div>
       <div id="help-body" class="help-body"></div>
       <div class="share-actions"><button id="help-close">Close</button></div>
     </div>
@@ -589,11 +601,14 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=110"></script>
+  <script src="chords.js?v=111"></script>
   <!-- After chords.js: the theory charts are drawn with its renderers. -->
-  <script src="learn.js?v=110"></script>
-  <script src="pdf2cho.js?v=110"></script>
-  <script src="qr.js?v=110"></script>
-  <script src="app.js?v=110"></script>
+  <script src="learn.js?v=111"></script>
+  <script src="pdf2cho.js?v=111"></script>
+  <script src="qr.js?v=111"></script>
+  <!-- The guided tour: driver.js 1.8.0 (MIT, vendored), then the example song and tour steps. -->
+  <script src="vendor/driver/driver.js?v=1"></script>
+  <script src="tour.js?v=111"></script>
+  <script src="app.js?v=111"></script>
 </body>
 </html>

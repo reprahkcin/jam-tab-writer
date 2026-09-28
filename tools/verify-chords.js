@@ -453,6 +453,32 @@ for (const t of LAP_TUNINGS) {
   if (rows.some((r) => !r.grips.length) && !/no straight-bar triad/.test(svg)) bad('screen-triads', t.id, 'a gripless row says nothing');
 }
 
+// ---- 11. The example song ----------------------------------------------------
+// A new user's first screen: every chord in it must draw on every instrument
+// the reference offers, and it must carry the parts the tour points at.
+const tourSrc = fs.readFileSync(require('path').join(__dirname, '..', 'tour.js'), 'utf8');
+const exMatch = tourSrc.match(/const EXAMPLE_CHO = `([\s\S]*?)`;/);
+if (!exMatch) bad('example', 'tour.js', 'EXAMPLE_CHO not found');
+else {
+  const cho = exMatch[1];
+  const names = [...new Set([...cho.matchAll(/\[([^\]]+)\]/g)].map((m) => m[1]))];
+  for (const need of ['{title:', '{artist:', '{key:', '{tempo:', '{start_of_strum', '{start_of_tab', '{Verse 1}', '{Chorus}', '{Bridge}']) {
+    if (!cho.includes(need)) bad('example', need, 'missing from the example song');
+  }
+  if (names.length < 6) bad('example', 'chords', `only ${names.length} different chords`);
+  if (!names.some((n) => n.includes('/'))) bad('example', 'chords', 'no slash chord to show off');
+  const C6 = LAP_TUNINGS.find((t) => t.id === 'lapC6').strings.map(([n]) => midiOf(n));
+  for (const n of names) {
+    if (!chordIntervals(n)) { bad('example', n, 'not a chord the app can read'); continue; }
+    if (!chordVoicings(n).length) bad('example', n, 'no guitar diagram');
+    if (!ukeVoicing(n)) bad('example', n, 'no ukulele diagram');
+    if (!mandoVoicing(n)) bad('example', n, 'no mandolin diagram');
+    if (!lapVoicings(n, C6).length) bad('example', n, 'no lap steel grip in C6');
+  }
+  const lyricLines = cho.split('\n').filter((l) => /\[[^\]]+\][a-z]/i.test(l));
+  notes.push(`[example] ${names.length} chords (${names.join(' ')}), ${lyricLines.length} sung lines`);
+}
+
 console.log('\n--- PROBLEMS (' + problems.length + ') ---');
 problems.forEach((p) => console.log(p));
 console.log('\n--- NOTES (' + notes.length + ') ---');

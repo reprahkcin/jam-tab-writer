@@ -18,6 +18,35 @@ local server needed. (Editing `file://` locally still can't use folder mode; run
 Everything runs locally in the page. Your songs are saved automatically in the
 browser (localStorage), and you can also export/import them as files.
 
+## First visit: the example song and the tour
+
+A new browser opens on an **example song**, *Brackets and Bars* — an original
+song whose lyrics explain the writing syntax as you read them. It fills every
+chart from the first second: sections for the form, eight chords of different
+kinds (a slash chord, a sus, an add9, a 7th) for every instrument's diagrams,
+the key and tempo cards, two strumming patterns and an intro riff. A small card
+in the corner offers the tour; the example is yours to change or delete, and it
+never comes back uninvited once a browser has been offered it. A browser that
+already has songs, or folders waiting to reconnect, isn't given one.
+
+**Help** (the **?** button, or press **?**) holds two ways in, above the keyboard
+shortcuts:
+
+- **Take the tour** — about thirty steps through the whole app on the example
+  song: the library, the song strip, the editor and its tools, parts, the chart,
+  sharing and printing, every reference panel, and the tools and modes in the
+  header. Each step brings its pane on screen first — the Split view, the
+  right-hand tab, or on a phone the bottom tab — and at the end everything goes
+  back: the song you had open, the view, the tabs. An example the tour opened
+  just for itself is removed again unless you changed it. Arrow keys step
+  through; **Esc** leaves at any point.
+- **Open the example song** — opens the copy in your list, or a fresh one. With
+  a folder open it arrives as an unsaved draft, so nothing is written to disk
+  unless you press **Save**.
+
+The tour is drawn by [driver.js](https://driver.js.org) 1.8.0 (MIT), vendored in
+`vendor/driver/` so it needs no network.
+
 For **folder mode** (editing `.cho` files on disk, below) run it over localhost
 instead, since the browser only allows file access from `http://`/`https://`:
 
@@ -33,7 +62,7 @@ Controls live with the thing they act on, so the top row is short:
 
 | Where | Controls |
 | --- | --- |
-| Header | **Metronome**, **Tuner**, **Record** (the button lights while its panel is open; Record turns red while a take is rolling), then **Learn**, **Perform** (filled — the one you hit mid-song) and the **?** shortcuts sheet |
+| Header | **Metronome**, **Tuner**, **Record** (the button lights while its panel is open; Record turns red while a take is rolling), then **Learn**, **Perform** (filled — the one you hit mid-song) and **?** — Help: the tour, the example song and the keyboard shortcuts |
 | Songs sidebar | **New** and **Import** in its head — the two ways to add a song — and under them one **source picker** saying where the songs live: *Saved in this browser*, or your **Collection** and open folders. Pick an option to set up a Collection or open a folder; in folder mode **Reopen** appears when saved folders are waiting on a permission click. **Setlists** sits beside the search box, above the list it draws from |
 | Song strip | Row 1: title, artist, the save breadcrumb (folder mode) and the **View** switch. Row 2: three cards — **Key** (shapes · transpose · capo, what it sounds in, and **Apply to text**), **Tempo** (with **Count in**), **Tuning** |
 | Editor head | **Dictate**, **Page break**, then the chart-wide cleanup — **Reprocess**, **Clear chords** — quiet at the far end |
@@ -703,3 +732,8 @@ Everything prints with the sheet.
 - `styles.css` — styling (including print styles)
 - `app.js` — editor, rendering, transpose/capo, storage, import/export
 - `chords.js` — chord shape library, diagram SVGs, harmonica suggestions
+- `tour.js` — the example song, first-visit seeding, and the guided tour's steps
+- `vendor/driver/` — driver.js 1.8.0 (MIT, with its licence), which draws the tour
+- `tools/verify-chords.js` — `node tools/verify-chords.js` audits every chord
+  shape, the lap steel engine and insert, and that each chord in the example song
+  draws on every instrument
