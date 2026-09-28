@@ -603,7 +603,27 @@ every section whole.
   **position** they sit in — circle, square, diamond for the I, IV and V bars,
   the same shapes as the printed insert below — with a row of glyphs under
   the ruler showing where each position runs and a line beneath naming them.
-  The printout names the tuning.
+  The printout names the tuning, and the strings are named down the map's
+  left edge.
+  **Triads** (the switch in the panel's heading, on by default) are the map
+  for playing over a progression. A straight bar can't finger a chord, but it
+  can give a **triad**: three strings at one fret that spell the chord's root,
+  3rd and 5th once each. Under the fret map, each of this song's chords gets a
+  row — a small neck, in the order the song first plays them, with G and G7
+  sharing one — and every grip for it is drawn at its fret as a stroke across
+  the strings it takes: a dot on each string to pick, **solid for the root**, so
+  the inversion shows; where the stroke crosses a string without a dot, skip
+  that string. A fret with several grips (the inversions) spreads them side by
+  side, lowest strings first, with the fret number beside them. Reading down a
+  column shows what the song's chords are under one bar position; reading
+  across a row shows where to go next. The line beneath names the narrowest
+  stretch of neck holding the whole progression ("between frets 0 and 7, or 7
+  and 14"). Click a chord's name to light its notes on the map above, as a
+  chord diagram's name does; the others step back. A chord a straight bar
+  can't grip (a minor in an open major tuning) says so. A song with no chords
+  yet gets the key's own triads. Grips reach across four strings at most —
+  one string skipped — and 7ths, 6ths and added tones drop away (G7 plays
+  the G triad); a power chord has no 3rd, so no row.
   **Neck insert…** (beside the tuning picker) prints a **true-size paper
   fretboard** to cut out and slide beneath the strings: pick a tuning, key and
   scale (or **All notes**, a note map of the whole neck) and every scale tone
@@ -634,6 +654,19 @@ every section whole.
   with their chords, degrees and bar frets. In a tuning with only a major bar
   (the open tunings) a minor key's positions are its relative major's I, IV
   and V. The **All notes** map has no key, so no positions.
+  **Triads** (on by default) put the same grips on the insert, for the key's
+  own chords (I ii iii IV V vi vii°, from the seven-note scale behind a
+  pentatonic): just before each fret line where the bar makes one, a
+  **rail** per grip runs across the strip, a dot on each string to pick, the
+  root solid, a skipped string crossed without one. The chord and its numeral
+  are lettered at the far edge, I, IV and V nearest the line, and the chord
+  names beside the fret number step aside for them. A chord tone the scale
+  leaves out (the 4th of a major pentatonic, in the IV chord) gets a grey note
+  on that string. High up, where the frets close in, a second chord's rails
+  go just past the line instead; frets too tight even for that are left out,
+  and the legend says which — the grips repeat an octave lower. Rails never
+  cross a strip's cut edge. The legend draws a sample rail and lists the
+  key's triads, and any the tuning can't grip.
 - **Piano** — a keyboard per chord with the chord tones highlighted (root
   orange, other tones gold) and labelled by interval degree (R/3/5/7 …), plus a
   piano scale roll.

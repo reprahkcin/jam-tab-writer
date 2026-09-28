@@ -1144,6 +1144,27 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
 .scale-svg .sc-hi.sc-second, .scale-svg .sc-chordonly.sc-second { stroke: #ffe08a; }
 .scale-svg .sc-pos { fill: var(--muted); }
 .lap-ruler-note { font: 10px system-ui, sans-serif; color: var(--muted); margin-top: 2px; }
+/* Lap steel: the string names in the map's left margin, and the triad rows
+   under the ruler — a small neck per chord, each grip a stroke across the
+   strings it takes, a dot per string to pick, solid for the root. */
+.scale-svg .sc-strname { fill: var(--muted); font-size: 8px; font-family: system-ui, sans-serif; }
+.scale-svg .sc-grip-band { fill: var(--panel-2); }
+.scale-svg .sc-grip-band.odd { fill: transparent; }
+.scale-svg .sc-grip-string { stroke: var(--line); stroke-width: 0.7; }
+.scale-svg .sc-grip-nut { stroke: var(--muted); stroke-width: 1.5; }
+.scale-svg .sc-grip-name { fill: var(--chord); font-size: 9.5px; font-weight: 700; font-family: system-ui, sans-serif; }
+.scale-svg .sc-grip-name[data-chord] { cursor: pointer; }
+.scale-svg .sc-grip-name[data-chord]:hover { text-decoration: underline; }
+.scale-svg .sc-grip-fret { fill: var(--muted); font-size: 8px; font-family: system-ui, sans-serif; }
+.scale-svg .sc-grip-none { fill: var(--muted); font-size: 8px; font-style: italic; font-family: system-ui, sans-serif; }
+.scale-svg .sc-grip { stroke: var(--text); stroke-width: 0.9; }
+.scale-svg .sc-grip-root { fill: var(--accent); stroke: var(--text); stroke-width: 0.8; }
+.scale-svg .sc-grip-dot { fill: var(--panel); stroke: var(--text); stroke-width: 0.9; }
+/* The focus chord's row stands out; the others step back while it's picked. */
+.scale-svg .sc-grip-row.on .sc-grip-band { fill: rgba(255, 224, 138, 0.16); }
+.scale-svg .sc-grip-row.on .sc-grip-name { fill: #ffe08a; }
+.scale-svg.grip-focus .sc-grip-row:not(.on) { opacity: 0.45; }
+.lap-triads-ctl { margin-left: 8px; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); text-transform: none; letter-spacing: normal; font-weight: 400; cursor: pointer; }
 
 /* Harmonica panel */
 /* Compact single-line harmonica bar, sitting up near the header. */
@@ -1320,7 +1341,7 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   /* The per-instrument headings kept the screen's teal on paper — the last
      coloured text left in a printout that is otherwise black on white. */
   .inst-label, .inst-head { color: #000; }
-  .inst-head .lap-tuning, .inst-head .lap-insert-btn { display: none; }
+  .inst-head .lap-tuning, .inst-head .lap-insert-btn, .inst-head .lap-triads-ctl { display: none; }
   .lap-tuning-print { display: inline; margin-left: 6px; text-transform: none; letter-spacing: normal; font-weight: 400; }
   .chord-diagram svg .lap-bar { fill: #999; opacity: 1; }
   .chord-diagram svg .lap-tone, .cd-omit, .lap-ruler-note { fill: #333; color: #333; }
@@ -1373,6 +1394,17 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   .scale-svg .sc-label-open { fill: #000; }
   .scale-svg .sc-second { stroke: #333; }
   .scale-svg .sc-pos { fill: #333; }
+  .scale-svg .sc-strname, .scale-svg .sc-grip-none, .scale-svg .sc-grip-fret { fill: #333; }
+  .scale-svg .sc-grip-band, .scale-svg .sc-grip-row.on .sc-grip-band { fill: #eee; }
+  .scale-svg .sc-grip-band.odd { fill: transparent; }
+  .scale-svg .sc-grip-string { stroke: #bbb; }
+  .scale-svg .sc-grip-nut { stroke: #333; }
+  .scale-svg .sc-grip-name, .scale-svg .sc-grip-row.on .sc-grip-name { fill: #000; }
+  .scale-svg .sc-grip-row.on .sc-grip-name { text-decoration: underline; }
+  .scale-svg .sc-grip { stroke: #000; }
+  .scale-svg .sc-grip-root { fill: #000; stroke: #000; }
+  .scale-svg .sc-grip-dot { fill: #fff; stroke: #000; }
+  .scale-svg.grip-focus .sc-grip-row:not(.on) { opacity: 1; }
   .cd-name.focused { background: none; color: #000; text-decoration: underline; }
   .harmonica-panel:not(:empty) { background: #fff; border: 1px solid #999; }
   .harmonica-panel .hp-title { color: #000; }

@@ -702,6 +702,7 @@ function loadPrefs() {
     metro: { bpm: 100, steps: 16, click: true, pattern: null },
     tunerPreset: 'standard',
     lapTuning: 'lapC6', // a TUNER_PRESETS id; checked when it's read (see lapTuning)
+    lapTriads: true,    // the triad rows under the lap steel's fret map
     folded: {},         // reference sections folded shut on screen, by id
     rightTab: 'chart',  // the right column's tab in split view: 'chart' | 'ref'
   };
@@ -730,7 +731,7 @@ function loadPrefs() {
   p.learn = Object.assign({ topic: 'chords', lens: true }, p.learn);
   p.capture = Object.assign({ deviceId: null, deviceLabel: '', format: 'wav' }, p.capture);
   p.lapNeck = Object.assign({}, LAP_NECK_DEFAULTS, p.lapNeck);
-  p.lapInsert = Object.assign({ labels: 'both', color: true, bars: true, positions: true }, p.lapInsert);
+  p.lapInsert = Object.assign({ labels: 'both', color: true, bars: true, positions: true, triads: true }, p.lapInsert);
   return p;
 }
 let prefs = loadPrefs();
@@ -1105,10 +1106,10 @@ function renderInstruments(s) {
   const auto = s.scaleRoot === null || s.scaleRoot === undefined;
   const pc = auto ? soundingKeyPc(s) : s.scaleRoot;
   const scale = scaleById(prefs.scaleType);
-  let highlight = null;
+  let highlight = null, focusSounding = null;
   if (s.focusChord) {
-    const soundingName = s.capo ? transposeChord(s.focusChord, s.capo) : s.focusChord;
-    highlight = chordToneLabels(soundingName);
+    focusSounding = s.capo ? transposeChord(s.focusChord, s.capo) : s.focusChord;
+    highlight = chordToneLabels(focusSounding);
   }
   const showScale = (inst) => prefs.showScales && inst.scale && pc !== null;
 
@@ -1137,9 +1138,14 @@ function renderInstruments(s) {
             pos.list.map((q) => `${SHAPE_GLYPH[q.shape]} ${escapeHtml(q.chords.join(' / '))} (bar ${q.frets.join(', ')})`).join(' · ') +
             `. A note drawn with two shapes belongs to both.`
           : '';
-        map = scaleDiagramSVG(pc, scale.iv, highlight, lap.abs, { onWire: true, ruler, shapeAt: kindsAt }) +
+        const tri = prefs.lapTriads ? lapTriadRows(lap, pc, scale, focusSounding) : null;
+        map = scaleDiagramSVG(pc, scale.iv, highlight, lap.abs, {
+          onWire: true, ruler, shapeAt: kindsAt, gutter: 30, grips: tri ? tri.rows : [],
+          stringNames: lap.t.strings.map(([note]) => note.replace(/-?\d+$/, '')),
+        }) +
           `<div class="lap-ruler-note">Notes sit on the fret, where the bar goes. ` +
-          `Under the numbers: the chord a straight bar gives at each fret, this song’s in bold.${posNote}</div>`;
+          `Under the numbers: the chord a straight bar gives at each fret, this song’s in bold.${posNote}` +
+          (tri ? lapTriadNote(tri) : '') + `</div>`;
       } else map = scaleDiagramSVG(pc, scale.iv, highlight, inst.tuning);
       body += `<div class="inst-scale">${map}</div>`;
     }
@@ -1249,6 +1255,8 @@ function lapTuningPickerHtml(lap) {
     `<option value="${id}"${id === lap.id ? ' selected' : ''}>${escapeHtml(TUNER_PRESETS[id].name)}</option>`).join('');
   return `<select class="lap-tuning" title="Lap steel tuning">${opts}</select>` +
     `<button class="inline-btn lap-insert-btn" title="Print a true-size paper fretboard for a tuning and scale, to slide beneath the strings">Neck insert…</button>` +
+    (prefs.showScales ? `<label class="lap-triads-ctl" title="Under the fret map: every three-string grip for each of this song’s chords">` +
+      `<input type="checkbox" class="lap-triads"${prefs.lapTriads ? ' checked' : ''}/> Triads</label>` : '') +
     `<span class="lap-tuning-print">${escapeHtml(lap.t.name)}</span>`;
 }
 
@@ -1271,6 +1279,40 @@ function lapRuler(lap) {
     }
     return row;
   });
+}
+
+// The triad rows under the lap steel's fret map: this song's chords as the lap
+// plays them, one row per triad (G and G7 share one) in the order the song
+// first uses them, each with every straight-bar grip for it from the nut to
+// fret 15. A song with no chords yet gets the key's own triads instead.
+function lapTriadRows(lap, pc, scale, focusName) {
+  const ft = focusName ? chordTriad(focusName) : null;
+  const same = (a, b) => !!(a && b && a.rootPc === b.rootPc && a.quality === b.quality);
+  const rows = [];
+  for (const c of lap.chords) {
+    const triad = chordTriad(c.name);
+    if (!triad) continue;
+    const row = rows.find((r) => same(r.triad, triad));
+    if (row) { if (!row.names.includes(c.name)) row.names.push(c.name); continue; }
+    rows.push({ triad, label: triad.label, names: [c.name], focus: c.shape, on: same(triad, ft), grips: lapTriadGrips(triad, lap.abs, 15) });
+  }
+  rows.forEach((r) => { r.title = `${r.names.join(', ')} · click to light its notes on the map`; });
+  if (rows.length || pc === null) return { rows, key: false };
+  const names = lapInsertNoteNames(pc, scale);
+  const key = lapKeyTriads(lap.abs, pc, scale, 15, (p) => names[p]) || [];
+  return { rows: key.map((k) => ({ triad: k.triad, label: k.label, title: `${k.numeral} of the key`, on: same(k.triad, ft), grips: k.grips })), key: true };
+}
+
+// What the triad rows are, and — for a song's chords — the narrowest stretch
+// of neck that holds the whole progression.
+function lapTriadNote(tri) {
+  if (!tri.rows.length) return '';
+  const zones = tri.key ? [] : lapTriadZones(tri.rows);
+  const zone = zones.length
+    ? ` The whole progression fits between frets ${zones.map(([a, b]) => `${a} and ${b}`).join(', or ')}.` : '';
+  return ` Below that, the triads: a row for each chord of ${tri.key ? 'the key (the song has no chords yet)' : 'this song'},` +
+    ` with every straight-bar grip for it drawn at its fret. A dot is a string to pick, solid for the root;` +
+    ` skip any string the stroke crosses without one.${tri.key ? '' : ' Click a chord’s name to light its notes above.'}${zone}`;
 }
 
 // ---- Lap steel neck insert -------------------------------------------------
@@ -1339,6 +1381,7 @@ function lapInsertOptions() {
     color: prefs.lapInsert.color,
     bars: prefs.lapInsert.bars ? (n) => (t.bars || []).map((bar) => lapBarNameAt(bar, n)) : null,
     positions: prefs.lapInsert.positions && !all ? lapPositions(t.bars, insert.root, scale, lastFret) : null,
+    triads: prefs.lapInsert.triads && !all ? lapKeyTriads(t.strings.map(([note]) => noteToMidi(note)), insert.root, scale, lastFret, (pc) => names[pc]) : null,
   };
 }
 
@@ -1392,6 +1435,8 @@ function renderInsertForm() {
     `<label class="in-check"><input type="checkbox" id="insert-bars"${pi.bars ? ' checked' : ''}/> Straight-bar chords beside the fret numbers</label>` +
     `<label class="in-check" title="The scale around each chord bar of the key — I, IV and V — each position with its own mark shape, so they read on a black-and-white print">` +
       `<input type="checkbox" id="insert-positions"${pi.positions ? ' checked' : ''}${insert.scale === 'chromatic' ? ' disabled' : ''}/> Positions: a mark shape per chord bar (I · IV · V)</label>` +
+    `<label class="in-check" title="Beside each fret where the bar makes a chord of the key, a rail for every three strings that spell it: the triads to play over a progression">` +
+      `<input type="checkbox" id="insert-triads"${pi.triads ? ' checked' : ''}${insert.scale === 'chromatic' ? ' disabled' : ''}/> Triads: the three-string grips for each chord of the key</label>` +
     `<div class="in-neck"><div class="in-neck-head">Your neck <span class="muted">inches</span></div>` +
       LAP_NECK_FIELDS.map(([key, label, tip]) =>
         `<label class="in-row" title="${escapeHtml(tip)}"><span>${escapeHtml(label)}</span>` +
@@ -1403,11 +1448,15 @@ function renderInsertForm() {
   const pick = (id, apply) => form.querySelector(id).addEventListener('change', (e) => { apply(e.target); savePrefs(); renderInsertPreview(); });
   pick('#insert-tuning', (t) => { insert.tuning = t.value; });
   pick('#insert-root', (t) => { insert.root = parseInt(t.value, 10); });
-  pick('#insert-scale', (t) => { insert.scale = t.value; form.querySelector('#insert-positions').disabled = t.value === 'chromatic'; });
+  pick('#insert-scale', (t) => {
+    insert.scale = t.value;
+    for (const id of ['#insert-positions', '#insert-triads']) form.querySelector(id).disabled = t.value === 'chromatic';
+  });
   pick('#insert-labels', (t) => { prefs.lapInsert.labels = t.value; });
   pick('#insert-color', (t) => { prefs.lapInsert.color = t.checked; });
   pick('#insert-bars', (t) => { prefs.lapInsert.bars = t.checked; });
   pick('#insert-positions', (t) => { prefs.lapInsert.positions = t.checked; });
+  pick('#insert-triads', (t) => { prefs.lapInsert.triads = t.checked; });
   form.querySelectorAll('[data-neck]').forEach((input) => input.addEventListener('change', () => {
     const [key, , , min, max] = LAP_NECK_FIELDS.find((f) => f[0] === input.dataset.neck);
     const v = key === 'frets' ? parseInt(input.value, 10) : parseFloat(input.value);
@@ -1450,17 +1499,26 @@ function wireInstruments(s) {
     (prefs.pianoInv.piano || (prefs.pianoInv.piano = {}))[sel.dataset.chord] = parseInt(sel.value, 10);
     savePrefs(); renderInstruments(currentSong());
   }));
+  const toggleFocus = (shape) => {
+    const cur = currentSong();
+    cur.focusChord = cur.focusChord === shape ? null : shape;
+    cur.updated = Date.now();
+    schedulePersist();
+    renderPreview();
+  };
   el.instPanels.querySelectorAll('.cd-name').forEach((nm) => {
     const shape = nm.dataset.chord;
     if (s.focusChord === shape) nm.classList.add('focused');
     nm.title = 'Click to highlight this chord’s notes on the scale maps';
-    nm.addEventListener('click', () => {
-      const cur = currentSong();
-      cur.focusChord = cur.focusChord === shape ? null : shape;
-      cur.updated = Date.now();
-      schedulePersist();
-      renderPreview();
-    });
+    nm.addEventListener('click', () => toggleFocus(shape));
+  });
+  el.instPanels.querySelectorAll('.sc-grip-name[data-chord]').forEach((nm) => {
+    nm.addEventListener('click', () => toggleFocus(nm.dataset.chord));
+  });
+  const triBox = el.instPanels.querySelector('.lap-triads');
+  if (triBox) triBox.addEventListener('change', () => {
+    prefs.lapTriads = triBox.checked;
+    savePrefs(); renderInstruments(currentSong());
   });
   const rootSel = document.getElementById('scale-root');
   if (rootSel) rootSel.addEventListener('change', (e) => {

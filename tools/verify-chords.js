@@ -329,6 +329,130 @@ for (const t of LAP_TUNINGS) {
 const chrom = lapPositions(['C', 'Am'], 0, { id: 'chromatic', iv: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] }, 28);
 if (chrom !== null) bad('positions', 'chromatic', 'the all-notes map should have no positions');
 
+// ---- 10. Lap steel triads ----------------------------------------------------
+// Three strings at one fret spelling a chord's root, 3rd and 5th once each:
+// every grip returned must be one, none may be missed, and the insert must
+// find room for them without running them into a strip's cut edge.
+const TR = vm.runInContext(`({ chordTriad, lapTriadGrips, keyTriads, lapKeyTriads, lapTriadZones, lapTriadLayout,
+  lapBand, lapMarkRadius, LAP_TRI_GAP, TRIAD_TONES, lapInsertNoteNames: typeof lapInsertNoteNames })`, ctx);
+const TRIAD_EXPECT = {
+  G: ['major', 7], G7: ['major', 7], Cmaj7: ['major', 0], Am7: ['m', 9], 'Bm7b5': ['dim', 11], 'F#dim7': ['dim', 6],
+  'C+': ['aug', 0], Dsus4: ['sus4', 2], Asus2: ['sus2', 9], 'A/C#': ['major', 9], Bbadd9: ['major', 10], Em9: ['m', 4],
+};
+for (const [name, [q, pc]] of Object.entries(TRIAD_EXPECT)) {
+  const t = TR.chordTriad(name);
+  if (!t || t.quality !== q || t.rootPc !== pc) bad('triads', name, `reduced to ${JSON.stringify(t)}, expected ${q} on ${SHARP[pc]}`);
+}
+if (TR.chordTriad('E5') !== null) bad('triads', 'E5', 'a power chord is not a triad');
+if (TR.chordTriad('Bm7b5').label !== 'B°' || TR.chordTriad('Bb').label !== 'Bb') bad('triads', 'labels', 'triad labels misspelled');
+let gripCount = 0;
+for (const t of LAP_TUNINGS) {
+  const tuning = t.strings.map(([n]) => midiOf(n));
+  for (let rootPc = 0; rootPc < 12; rootPc++) {
+    for (const [quality, tones] of Object.entries(TR.TRIAD_TONES)) {
+      const triad = { rootPc, quality, tones, label: SHARP[rootPc] + quality };
+      const want = new Set(tones.map((x) => (rootPc + x) % 12));
+      const grips = TR.lapTriadGrips(triad, tuning, 28);
+      gripCount += grips.length;
+      // Independent count: every three strings within four, every fret.
+      let expect = 0;
+      for (let f = 0; f <= 28; f++) {
+        const pcs = tuning.map((a) => (a + f) % 12);
+        for (let a = 0; a < 6; a++) for (let b = a + 1; b < 6; b++) for (let c = b + 1; c < 6 && c - a <= 3; c++) {
+          const trio = new Set([pcs[a], pcs[b], pcs[c]]);
+          if (trio.size === 3 && [...trio].every((x) => want.has(x))) expect++;
+        }
+      }
+      if (grips.length !== expect) bad('triads', `${t.id} ${triad.label}`, `${grips.length} grips, expected ${expect}`);
+      for (const gr of grips) {
+        const [a, b, c] = gr.strings;
+        const pcs = gr.strings.map((i) => (tuning[i] + gr.fret) % 12);
+        if (!(a < b && b < c) || c - a > 3) bad('triads', `${t.id} ${triad.label}`, `bad string set ${gr.strings}`);
+        if (new Set(pcs).size !== 3 || !pcs.every((x) => want.has(x))) bad('triads', `${t.id} ${triad.label}`, `fret ${gr.fret} ${gr.strings} spells ${pcs.map(pcName)}`);
+        gr.roles.forEach((role, k) => {
+          const iv = (pcs[k] - rootPc + 12) % 12;
+          if (role !== ['R', '3', '5'][tones.indexOf(iv)]) bad('triads', `${t.id} ${triad.label}`, `role ${role} on ${pcName(pcs[k])}`);
+        });
+      }
+    }
+  }
+  // Each straight-bar chord of the tuning is a triad the open strings grip.
+  for (const bar of t.bars) {
+    const tb = TR.chordTriad(bar);
+    if (!TR.lapTriadGrips(tb, tuning, 0).length) bad('triads', `${t.id} ${bar}`, 'its own bar chord has no open triad');
+  }
+}
+notes.push(`[triads] ${gripCount} grips checked across ${LAP_TUNINGS.length} tunings, 12 roots and ${Object.keys(TR.TRIAD_TONES).length} qualities`);
+// The key's triads: numerals and spellings for a major and a minor key.
+const kC = TR.keyTriads(0, SCALES.find((x) => x.id === 'major'), (pc) => SHARP[pc]);
+if (kC.map((k) => `${k.numeral} ${k.label}`).join(',') !== 'I C,ii Dm,iii Em,IV F,V G,vi Am,vii° B°') bad('triads', 'C major', kC.map((k) => k.numeral + ' ' + k.label).join(','));
+const kA = TR.keyTriads(9, SCALES.find((x) => x.id === 'minPent'), (pc) => SHARP[pc]);
+if (kA.map((k) => k.numeral).join(',') !== 'i,ii°,III,iv,v,VI,VII') bad('triads', 'A minor pentatonic', kA.map((k) => k.numeral).join(','));
+if (TR.keyTriads(0, { id: 'chromatic', iv: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] }, (pc) => SHARP[pc]) !== null) bad('triads', 'chromatic', 'all notes has no key');
+// The narrowest stretch holding a whole progression.
+const C6 = LAP_TUNINGS.find((t) => t.id === 'lapC6').strings.map(([n]) => midiOf(n));
+const rowsOf = (names) => names.map((n) => ({ grips: TR.lapTriadGrips(TR.chordTriad(n), C6, 15) }));
+if (JSON.stringify(TR.lapTriadZones(rowsOf(['G', 'C', 'D', 'Em']))) !== '[[0,7],[7,14]]') bad('triads', 'zones G C D Em', JSON.stringify(TR.lapTriadZones(rowsOf(['G', 'C', 'D', 'Em']))));
+if (JSON.stringify(TR.lapTriadZones(rowsOf(['F', 'Dm']))) !== '[[5,5]]') bad('triads', 'zones F Dm', 'F and Dm share fret 5 in C6');
+if (TR.lapTriadZones(rowsOf(['G'])).length) bad('triads', 'zones G', 'one chord is no progression');
+// The insert: each fret's stack inside its band, on its own strip.
+let crowdedLow = 0, stacks = 0;
+for (const neck of NECKS) {
+  const g = lapInsertGeometry(neck, 6), last = g.d.length - 1;
+  const cuts = lapInsertCuts(g.d, g.length).slice(1, -1);
+  for (const t of LAP_TUNINGS) {
+    const tuning = t.strings.map(([n]) => midiOf(n));
+    for (const scale of SCALES) {
+      for (let rootPc = 0; rootPc < 12; rootPc++) {
+        const label = `${neck.scale}in ${t.id} ${SHARP[rootPc]} ${scale.id}`;
+        const o = { neck, tuning, rootPc, scale, positions: lapPositions(t.bars, rootPc, scale, last), triads: TR.lapKeyTriads(tuning, rootPc, scale, last, (pc) => SHARP[pc]) };
+        if (!o.triads) continue;
+        const lay = TR.lapTriadLayout(o, g), rr = TR.lapMarkRadius(o, g);
+        for (const [n, st] of lay.at) {
+          stacks++;
+          const { from, to } = TR.lapBand(g, rr, n);
+          const top = to - TR.LAP_TRI_GAP - st.nut.total;
+          if (top < from + 0.05 - 1e-9) bad('insert-triads', label, `fret ${n} stack runs past its band`);
+          if (cuts.some((c) => c > top - 1e-9 && c < to)) bad('insert-triads', label, `fret ${n} stack crosses a strip cut`);
+          if (st.body) {
+            const start = g.d[n] + rr(n) + TR.LAP_TRI_GAP, stop = start + st.body.total;
+            if (lay.at.has(n + 1)) bad('insert-triads', label, `fret ${n} spills into fret ${n + 1}'s rails`);
+            if (stop > TR.lapBand(g, rr, n + 1).to - 0.05 + 1e-9) bad('insert-triads', label, `fret ${n} spill runs into fret ${n + 1}'s notes`);
+            if (cuts.some((c) => c > g.d[n] && c < stop + 1e-9)) bad('insert-triads', label, `fret ${n} spill crosses a strip cut`);
+          }
+          if (st.lane < 0.042 - 1e-9 || !(st.size > 0)) bad('insert-triads', label, `fret ${n} drawn too small`);
+        }
+        if (neck === NECKS[0]) crowdedLow += lay.crowded.filter((n) => n <= 15).length;
+        const frets = new Set(o.triads.flatMap((x) => x.grips.map((gr) => gr.fret)).filter((f) => f >= 1 && f <= last));
+        if ([...frets].some((f) => !lay.at.has(f) && !lay.crowded.includes(f))) bad('insert-triads', label, 'a triad fret neither drawn nor listed as crowded');
+      }
+    }
+    const pages = lapInsertPages({
+      neck, tuning, tuningName: t.name, shortName: t.id, rootPc: 7, scale: SCALES[0], scaleTitle: 'G', names: SHARP, dimPcs: null,
+      labels: 'both', color: false, bars: (n) => t.bars.map((b) => b), positions: lapPositions(t.bars, 7, SCALES[0], last),
+      triads: TR.lapKeyTriads(tuning, 7, SCALES[0], last, (pc) => SHARP[pc]),
+    });
+    if (pages.some((svg) => /NaN|undefined|Infinity/.test(svg))) bad('insert-triads', `${neck.scale}in ${t.id}`, 'broken drawing');
+  }
+}
+if (crowdedLow) bad('insert-triads', 'default neck', `${crowdedLow} frets at or below 15 left without their triads`);
+notes.push(`[insert triads] ${stacks} fret stacks placed across ${NECKS.length} necks, every tuning, key and scale`);
+// On screen: one stroke per grip up to fret 15, under the ruler.
+for (const t of LAP_TUNINGS) {
+  const abs = t.strings.map(([n]) => midiOf(n));
+  const rows = ['G', 'Em', 'C', 'D', 'F#°'].map((name) => {
+    const triad = name === 'F#°' ? { rootPc: 6, quality: 'dim', tones: [0, 3, 6], label: name } : TR.chordTriad(name);
+    return { label: name, focus: name, on: name === 'C', grips: TR.lapTriadGrips(triad, abs, 15) };
+  });
+  const svg = scaleDiagramSVG(7, SCALES[0].iv, null, abs, { onWire: true, gutter: 30, grips: rows, stringNames: t.strings.map(([n]) => n) });
+  const strokes = (svg.match(/class="sc-grip"/g) || []).length, want = rows.reduce((a, r) => a + r.grips.length, 0);
+  if (/NaN|undefined/.test(svg)) bad('screen-triads', t.id, 'broken triad rows');
+  if (strokes !== want) bad('screen-triads', t.id, `${strokes} grip strokes drawn, expected ${want}`);
+  if ((svg.match(/class="sc-grip-row/g) || []).length !== rows.length) bad('screen-triads', t.id, 'a triad row is missing');
+  if (!/sc-grip-row on/.test(svg) || !/grip-focus/.test(svg)) bad('screen-triads', t.id, 'the focus row is not marked');
+  if (rows.some((r) => !r.grips.length) && !/no straight-bar triad/.test(svg)) bad('screen-triads', t.id, 'a gripless row says nothing');
+}
+
 console.log('\n--- PROBLEMS (' + problems.length + ') ---');
 problems.forEach((p) => console.log(p));
 console.log('\n--- NOTES (' + notes.length + ') ---');
