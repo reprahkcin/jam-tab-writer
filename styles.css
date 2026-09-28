@@ -1144,26 +1144,35 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
 .scale-svg .sc-hi.sc-second, .scale-svg .sc-chordonly.sc-second { stroke: #ffe08a; }
 .scale-svg .sc-pos { fill: var(--muted); }
 .lap-ruler-note { font: 10px system-ui, sans-serif; color: var(--muted); margin-top: 2px; }
-/* Lap steel: the string names in the map's left margin, and the triad rows
-   under the ruler — a small neck per chord, each grip a stroke across the
-   strings it takes, a dot per string to pick, solid for the root. */
+/* Lap steel: the string names in the fret map's left margin. */
 .scale-svg .sc-strname { fill: var(--muted); font-size: 8px; font-family: system-ui, sans-serif; }
-.scale-svg .sc-grip-band { fill: var(--panel-2); }
-.scale-svg .sc-grip-band.odd { fill: transparent; }
-.scale-svg .sc-grip-string { stroke: var(--line); stroke-width: 0.7; }
-.scale-svg .sc-grip-nut { stroke: var(--muted); stroke-width: 1.5; }
-.scale-svg .sc-grip-name { fill: var(--chord); font-size: 9.5px; font-weight: 700; font-family: system-ui, sans-serif; }
-.scale-svg .sc-grip-name[data-chord] { cursor: pointer; }
-.scale-svg .sc-grip-name[data-chord]:hover { text-decoration: underline; }
-.scale-svg .sc-grip-fret { fill: var(--muted); font-size: 8px; font-family: system-ui, sans-serif; }
-.scale-svg .sc-grip-none { fill: var(--muted); font-size: 8px; font-style: italic; font-family: system-ui, sans-serif; }
-.scale-svg .sc-grip { stroke: var(--text); stroke-width: 0.9; }
-.scale-svg .sc-grip-root { fill: var(--accent); stroke: var(--text); stroke-width: 0.8; }
-.scale-svg .sc-grip-dot { fill: var(--panel); stroke: var(--text); stroke-width: 0.9; }
-/* The focus chord's row stands out; the others step back while it's picked. */
-.scale-svg .sc-grip-row.on .sc-grip-band { fill: rgba(255, 224, 138, 0.16); }
-.scale-svg .sc-grip-row.on .sc-grip-name { fill: #ffe08a; }
-.scale-svg.grip-focus .sc-grip-row:not(.on) { opacity: 0.45; }
+/* Triad zones under the lap steel's fret map: each chord's cluster of three
+   notes joined by a line, in the chord's shape and colour (shapes alone on
+   paper), with brackets for the zones and a small tab per zone. */
+.zm-head { display: flex; align-items: center; gap: 8px; margin: 14px 0 4px; }
+.zm-title { font: 700 11px system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.6px; color: var(--section); }
+.zm-head select { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 2px 6px; font: 12px system-ui, sans-serif; }
+.zm-set-print { display: none; }
+.zone-svg { width: 100%; max-width: 560px; height: auto; display: block; }
+.zone-svg .zm-string, .zone-svg .zm-fret { stroke: var(--line); stroke-width: 1; }
+.zone-svg .zm-nut { stroke: var(--muted); stroke-width: 3; }
+.zone-svg .zm-strname, .zone-svg .zm-fretnum, .zone-svg .zm-zone { fill: var(--muted); font-size: 9px; font-family: system-ui, sans-serif; }
+.zone-svg .zm-key { fill: var(--text); font-size: 10px; font-weight: 600; font-family: system-ui, sans-serif; }
+.zone-svg .zm-bracket { fill: none; stroke: var(--muted); stroke-width: 1; }
+.zone-svg .zm-line { fill: none; stroke: var(--zc); stroke-width: 2; stroke-linejoin: round; opacity: 0.85; }
+.zone-svg .zm-mark { fill: var(--zc); stroke: var(--panel); stroke-width: 1; }
+.zone-svg .zm-ring { fill: none; stroke: var(--zc); stroke-width: 1.5; }
+.zone-svg .zm-label { fill: #1e1e1e; font-size: 8.5px; font-weight: 700; font-family: system-ui, sans-serif; pointer-events: none; }
+.zm-c0 { --zc: #5dcaa5; } .zm-c1 { --zc: #f0997b; } .zm-c2 { --zc: #afa9ec; }
+.zm-c3 { --zc: #fac775; } .zm-c4 { --zc: #ed93b1; } .zm-c5 { --zc: #85b7eb; }
+.zm-tabs { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 6px 0 4px; }
+.zm-tab-head { font: 600 11px system-ui, sans-serif; color: var(--text); margin-bottom: 3px; }
+.zm-again { font-weight: 400; color: var(--muted); }
+.zm-tab table { border-collapse: collapse; font: 12px var(--mono); }
+.zm-tab th, .zm-tab td { padding: 1px 7px; text-align: center; }
+.zm-tab thead th { font: 700 11px system-ui, sans-serif; color: var(--zc, var(--muted)); }
+.zm-tab tbody th { font: 400 10px system-ui, sans-serif; color: var(--muted); text-align: left; padding-left: 0; }
+.zm-tab td { color: var(--text); }
 .lap-triads-ctl { margin-left: 8px; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); text-transform: none; letter-spacing: normal; font-weight: 400; cursor: pointer; }
 
 /* Harmonica panel */
@@ -1394,17 +1403,25 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   .scale-svg .sc-label-open { fill: #000; }
   .scale-svg .sc-second { stroke: #333; }
   .scale-svg .sc-pos { fill: #333; }
-  .scale-svg .sc-strname, .scale-svg .sc-grip-none, .scale-svg .sc-grip-fret { fill: #333; }
-  .scale-svg .sc-grip-band, .scale-svg .sc-grip-row.on .sc-grip-band { fill: #eee; }
-  .scale-svg .sc-grip-band.odd { fill: transparent; }
-  .scale-svg .sc-grip-string { stroke: #bbb; }
-  .scale-svg .sc-grip-nut { stroke: #333; }
-  .scale-svg .sc-grip-name, .scale-svg .sc-grip-row.on .sc-grip-name { fill: #000; }
-  .scale-svg .sc-grip-row.on .sc-grip-name { text-decoration: underline; }
-  .scale-svg .sc-grip { stroke: #000; }
-  .scale-svg .sc-grip-root { fill: #000; stroke: #000; }
-  .scale-svg .sc-grip-dot { fill: #fff; stroke: #000; }
-  .scale-svg.grip-focus .sc-grip-row:not(.on) { opacity: 1; }
+  .scale-svg .sc-strname { fill: #333; }
+  .zm-head select { display: none; }
+  .zm-title { color: #000; }
+  .zm-set-print { display: inline; color: #333; font-size: 10px; }
+  .zone-svg .zm-string, .zone-svg .zm-fret { stroke: #999; }
+  .zone-svg .zm-nut { stroke: #333; }
+  .zone-svg .zm-strname, .zone-svg .zm-fretnum, .zone-svg .zm-zone { fill: #333; }
+  .zone-svg .zm-key, .zone-svg .zm-label { fill: #000; }
+  .zone-svg .zm-bracket { stroke: #333; }
+  .zone-svg .zm-mark { fill: #fff; stroke: #000; stroke-width: 1; }
+  .zone-svg .zm-ring { stroke: #000; }
+  .zone-svg .zm-line { stroke: #000; opacity: 1; stroke-width: 1.3; }
+  .zone-svg .zm-line.zm-c1 { stroke-dasharray: 5 3; }
+  .zone-svg .zm-line.zm-c2 { stroke-dasharray: 0.1 3; stroke-linecap: round; stroke-width: 2; }
+  .zone-svg .zm-line.zm-c3 { stroke-dasharray: 8 3 2 3; }
+  .zone-svg .zm-line.zm-c4 { stroke-dasharray: 3 3; }
+  .zone-svg .zm-line.zm-c5 { stroke-dasharray: 1 4; stroke-linecap: round; }
+  .zm-tab-head, .zm-tab td { color: #000; }
+  .zm-tab thead th, .zm-tab tbody th, .zm-again { color: #333; }
   .cd-name.focused { background: none; color: #000; text-decoration: underline; }
   .harmonica-panel:not(:empty) { background: #fff; border: 1px solid #999; }
   .harmonica-panel .hp-title { color: #000; }
