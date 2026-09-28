@@ -702,7 +702,8 @@ function loadPrefs() {
     metro: { bpm: 100, steps: 16, click: true, pattern: null },
     tunerPreset: 'standard',
     lapTuning: 'lapC6', // a TUNER_PRESETS id; checked when it's read (see lapTuning)
-    lapTriads: true,    // the triad rows under the lap steel's fret map
+    lapZones: true,     // the triad zones under the lap steel's fret map
+    lapZoneSet: 0,      // which three strings they're on: 0 = strings 1–3, 1 = 2–4 …
     folded: {},         // reference sections folded shut on screen, by id
     rightTab: 'chart',  // the right column's tab in split view: 'chart' | 'ref'
   };
@@ -731,7 +732,7 @@ function loadPrefs() {
   p.learn = Object.assign({ topic: 'chords', lens: true }, p.learn);
   p.capture = Object.assign({ deviceId: null, deviceLabel: '', format: 'wav' }, p.capture);
   p.lapNeck = Object.assign({}, LAP_NECK_DEFAULTS, p.lapNeck);
-  p.lapInsert = Object.assign({ labels: 'both', color: true, bars: true, positions: true, triads: true }, p.lapInsert);
+  p.lapInsert = Object.assign({ labels: 'both', color: true, bars: true, positions: true, zones: true }, p.lapInsert);
   return p;
 }
 let prefs = loadPrefs();
@@ -1138,14 +1139,13 @@ function renderInstruments(s) {
             pos.list.map((q) => `${SHAPE_GLYPH[q.shape]} ${escapeHtml(q.chords.join(' / '))} (bar ${q.frets.join(', ')})`).join(' · ') +
             `. A note drawn with two shapes belongs to both.`
           : '';
-        const tri = prefs.lapTriads ? lapTriadRows(lap, pc, scale, focusSounding) : null;
         map = scaleDiagramSVG(pc, scale.iv, highlight, lap.abs, {
-          onWire: true, ruler, shapeAt: kindsAt, gutter: 30, grips: tri ? tri.rows : [],
+          onWire: true, ruler, shapeAt: kindsAt, gutter: 30,
           stringNames: lap.t.strings.map(([note]) => note.replace(/-?\d+$/, '')),
         }) +
           `<div class="lap-ruler-note">Notes sit on the fret, where the bar goes. ` +
-          `Under the numbers: the chord a straight bar gives at each fret, this song’s in bold.${posNote}` +
-          (tri ? lapTriadNote(tri) : '') + `</div>`;
+          `Under the numbers: the chord a straight bar gives at each fret, this song’s in bold.${posNote}</div>` +
+          (prefs.lapZones ? lapZoneHtml(lapZoneData(s, lap, pc, scale), lap, pc, scale) : '');
       } else map = scaleDiagramSVG(pc, scale.iv, highlight, inst.tuning);
       body += `<div class="inst-scale">${map}</div>`;
     }
@@ -1255,8 +1255,8 @@ function lapTuningPickerHtml(lap) {
     `<option value="${id}"${id === lap.id ? ' selected' : ''}>${escapeHtml(TUNER_PRESETS[id].name)}</option>`).join('');
   return `<select class="lap-tuning" title="Lap steel tuning">${opts}</select>` +
     `<button class="inline-btn lap-insert-btn" title="Print a true-size paper fretboard for a tuning and scale, to slide beneath the strings">Neck insert…</button>` +
-    (prefs.showScales ? `<label class="lap-triads-ctl" title="Under the fret map: every three-string grip for each of this song’s chords">` +
-      `<input type="checkbox" class="lap-triads"${prefs.lapTriads ? ' checked' : ''}/> Triads</label>` : '') +
+    (prefs.showScales ? `<label class="lap-triads-ctl" title="Under the fret map: where each of this song’s chords can be picked as a three-note cluster, and the zones that hold them all">` +
+      `<input type="checkbox" class="lap-zones"${prefs.lapZones ? ' checked' : ''}/> Triad zones</label>` : '') +
     `<span class="lap-tuning-print">${escapeHtml(lap.t.name)}</span>`;
 }
 
@@ -1281,38 +1281,94 @@ function lapRuler(lap) {
   });
 }
 
-// The triad rows under the lap steel's fret map: this song's chords as the lap
-// plays them, one row per triad (G and G7 share one) in the order the song
-// first uses them, each with every straight-bar grip for it from the nut to
-// fret 15. A song with no chords yet gets the key's own triads instead.
-function lapTriadRows(lap, pc, scale, focusName) {
-  const ft = focusName ? chordTriad(focusName) : null;
-  const same = (a, b) => !!(a && b && a.rootPc === b.rootPc && a.quality === b.quality);
-  const rows = [];
+// The chords in the order the song plays them, as guitar shapes, with a chord
+// that follows itself counted once.
+function chordSequence(s) {
+  const shapeSh = shapeShift(s), out = [];
+  for (const tok of s.body.match(/\[([^\]]*)\]/g) || []) {
+    const name = tok.slice(1, -1);
+    if (!isChord(name)) continue;
+    const shape = transposeChord(name, shapeSh);
+    if (out[out.length - 1] !== shape) out.push(shape);
+  }
+  return out;
+}
+
+// The triad zones under the lap steel's fret map. Each of this song's chords,
+// as the lap plays it, becomes a row — one per triad, so G and G7 share — with
+// every single-note cluster it has on the chosen three strings, frets 0–15;
+// the zones are where they all sit together, chosen for how little the song
+// has to move in the order it plays them. A song with no chords yet gets the
+// key's I, IV and V.
+function lapZoneData(s, lap, pc, scale) {
+  const sets = lapStringSets(lap.abs.length);
+  const set = sets[Math.max(0, Math.min(prefs.lapZoneSet || 0, sets.length - 1))];
+  const same = (a, b) => a.rootPc === b.rootPc && a.quality === b.quality;
+  const rows = [], rowOf = new Map();
   for (const c of lap.chords) {
     const triad = chordTriad(c.name);
     if (!triad) continue;
-    const row = rows.find((r) => same(r.triad, triad));
-    if (row) { if (!row.names.includes(c.name)) row.names.push(c.name); continue; }
-    rows.push({ triad, label: triad.label, names: [c.name], focus: c.shape, on: same(triad, ft), grips: lapTriadGrips(triad, lap.abs, 15) });
+    let i = rows.findIndex((r) => same(r.triad, triad));
+    if (i < 0) { i = rows.length; rows.push({ triad, label: triad.label, names: [], clusters: lapClusters(triad, lap.abs, set, 15) }); }
+    if (!rows[i].names.includes(c.name)) rows[i].names.push(c.name);
+    rowOf.set(c.shape, i);
   }
-  rows.forEach((r) => { r.title = `${r.names.join(', ')} · click to light its notes on the map`; });
-  if (rows.length || pc === null) return { rows, key: false };
-  const names = lapInsertNoteNames(pc, scale);
-  const key = lapKeyTriads(lap.abs, pc, scale, 15, (p) => names[p]) || [];
-  return { rows: key.map((k) => ({ triad: k.triad, label: k.label, title: `${k.numeral} of the key`, on: same(k.triad, ft), grips: k.grips })), key: true };
+  let seq = chordSequence(s).map((shape) => rowOf.get(shape)).filter((i) => i !== undefined);
+  let key = false;
+  if (!rows.length && pc !== null) {
+    key = true;
+    const names = lapInsertNoteNames(pc, scale);
+    for (const k of keyPrimaries(pc, scale, (p) => names[p])) {
+      rows.push({ triad: k.triad, label: k.label, numeral: k.numeral, names: [k.label], clusters: lapClusters(k.triad, lap.abs, set, 15) });
+    }
+    seq = rows.length === 3 ? [0, 1, 0, 2] : rows.map((r, i) => i);
+  }
+  const z = lapZones(rows, seq, 15);
+  return Object.assign({ set, sets, rows, key, missing: z.missing, span: z.span, zones: z.zones }, lapZoneNames(z.zones, rows));
 }
 
-// What the triad rows are, and — for a song's chords — the narrowest stretch
-// of neck that holds the whole progression.
-function lapTriadNote(tri) {
-  if (!tri.rows.length) return '';
-  const zones = tri.key ? [] : lapTriadZones(tri.rows);
-  const zone = zones.length
-    ? ` The whole progression fits between frets ${zones.map(([a, b]) => `${a} and ${b}`).join(', or ')}.` : '';
-  return ` Below that, the triads: a row for each chord of ${tri.key ? 'the key (the song has no chords yet)' : 'this song'},` +
-    ` with every straight-bar grip for it drawn at its fret. A dot is a string to pick, solid for the root;` +
-    ` skip any string the stroke crosses without one.${tri.key ? '' : ' Click a chord’s name to light its notes above.'}${zone}`;
+// The zone map, its tab and a word on reading them; the string-set picker in
+// its heading. Everything here also prints, bar the picker.
+function lapZoneHtml(zd, lap, pc, scale) {
+  if (!zd.rows.length) return '';
+  const N = lap.abs.length;
+  const spell = pc === null ? SHARP : lapInsertNoteNames(pc, scale);
+  const noteName = (p) => spell[p];
+  const nums = (set) => set.map((si) => N - si);
+  const setLabel = (set) => { const n = nums(set); return `strings ${Math.min(...n)}–${Math.max(...n)}`; };
+  const opts = zd.sets.map((set, i) => `<option value="${i}"${set === zd.set ? ' selected' : ''}>${setLabel(set)} (${set.slice().reverse().map((si) => noteName(lap.abs[si] % 12)).join(' ')})</option>`).join('');
+  let html = `<div class="zm-head"><span class="zm-title">Triad zones</span>` +
+    `<select class="lap-zone-set" title="Which three strings the clusters are on">${opts}</select>` +
+    `<span class="zm-set-print">${setLabel(zd.set)}</span></div>`;
+  html += lapZoneSVG(lap.abs, zd.set, zd.rows, zd.zones, zd.names, { gutter: 30, noteName });
+  // The tab: one small table per zone, top string first; octave repeats are
+  // named on the zone they repeat instead of getting a table of their own.
+  const top = zd.set.slice().reverse();
+  const tabs = zd.zones.map((z, i) => {
+    if (zd.repeats[i] || z.to > 15) return '';
+    const again = zd.zones.filter((w, j) => zd.repeats[j] && zd.names[j].startsWith(zd.names[i] + ' ') && w.to <= 15).map((w) => w.from);
+    const head = `<th></th>` + zd.rows.map((r, ri) => `<th class="zm-c${ri % 6}">${escapeHtml(r.label)}</th>`).join('');
+    const body = top.map((si) => {
+      const k = zd.set.indexOf(si);
+      return `<tr><th>${N - si} ${escapeHtml(noteName(lap.abs[si] % 12))}</th>` +
+        zd.rows.map((r, ri) => `<td>${z.picks[ri] === null ? '–' : r.clusters[z.picks[ri]].frets[k]}</td>`).join('') + '</tr>';
+    }).join('');
+    return `<div class="zm-tab"><div class="zm-tab-head">${escapeHtml(zd.names[i])} · frets ${z.from}–${z.to}` +
+      (again.length ? ` <span class="zm-again">again from ${again.join(', ')}</span>` : '') + `</div>` +
+      `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  }).join('');
+  if (tabs) html += `<div class="zm-tabs">${tabs}</div>`;
+  const none = zd.missing.map((i) => zd.rows[i].label);
+  const n = nums(zd.set);
+  html += `<div class="lap-ruler-note">Triad zones: each chord’s root, 3rd and 5th on ${setLabel(zd.set)}, picked one note at a time, ` +
+    `never more than two frets apart and joined by a line in the chord’s shape. ` +
+    (zd.zones.length
+      ? `In each zone every chord has one, so the whole ${zd.key ? 'I–IV–V' : 'progression'} stays in one place, and the zones are picked for how little the notes move from chord to chord. ` +
+        `The tab gives each zone’s frets, string ${Math.min(...n)} at the top. `
+      : `No stretch of ${LAP_ZONE_SPANS[LAP_ZONE_SPANS.length - 1] + 1} frets holds a cluster for every chord here; try other strings. `) +
+    (zd.key ? 'The song has no chords yet, so these are the key’s I, IV and V. ' : '') +
+    (none.length ? `${none.join(', ')} ${none.length > 1 ? 'have' : 'has'} no cluster on these strings.` : '') + `</div>`;
+  return html;
 }
 
 // ---- Lap steel neck insert -------------------------------------------------
@@ -1381,7 +1437,7 @@ function lapInsertOptions() {
     color: prefs.lapInsert.color,
     bars: prefs.lapInsert.bars ? (n) => (t.bars || []).map((bar) => lapBarNameAt(bar, n)) : null,
     positions: prefs.lapInsert.positions && !all ? lapPositions(t.bars, insert.root, scale, lastFret) : null,
-    triads: prefs.lapInsert.triads && !all ? lapKeyTriads(t.strings.map(([note]) => noteToMidi(note)), insert.root, scale, lastFret, (pc) => names[pc]) : null,
+    zones: prefs.lapInsert.zones && !all ? lapKeyZones(t.strings.map(([note]) => noteToMidi(note)), insert.root, scale, (pc) => names[pc], lastFret) : null,
   };
 }
 
@@ -1435,8 +1491,8 @@ function renderInsertForm() {
     `<label class="in-check"><input type="checkbox" id="insert-bars"${pi.bars ? ' checked' : ''}/> Straight-bar chords beside the fret numbers</label>` +
     `<label class="in-check" title="The scale around each chord bar of the key — I, IV and V — each position with its own mark shape, so they read on a black-and-white print">` +
       `<input type="checkbox" id="insert-positions"${pi.positions ? ' checked' : ''}${insert.scale === 'chromatic' ? ' disabled' : ''}/> Positions: a mark shape per chord bar (I · IV · V)</label>` +
-    `<label class="in-check" title="Beside each fret where the bar makes a chord of the key, a rail for every three strings that spell it: the triads to play over a progression">` +
-      `<input type="checkbox" id="insert-triads"${pi.triads ? ' checked' : ''}${insert.scale === 'chromatic' ? ' disabled' : ''}/> Triads: the three-string grips for each chord of the key</label>` +
+    `<label class="in-check" title="Where the key’s I, IV and V can each be picked as a three-note cluster on the top strings, in zones that hold all three: a line joins each chord’s notes">` +
+      `<input type="checkbox" id="insert-zones"${pi.zones ? ' checked' : ''}${insert.scale === 'chromatic' ? ' disabled' : ''}/> Triad zones: I, IV and V clusters on strings 1–3</label>` +
     `<div class="in-neck"><div class="in-neck-head">Your neck <span class="muted">inches</span></div>` +
       LAP_NECK_FIELDS.map(([key, label, tip]) =>
         `<label class="in-row" title="${escapeHtml(tip)}"><span>${escapeHtml(label)}</span>` +
@@ -1450,13 +1506,13 @@ function renderInsertForm() {
   pick('#insert-root', (t) => { insert.root = parseInt(t.value, 10); });
   pick('#insert-scale', (t) => {
     insert.scale = t.value;
-    for (const id of ['#insert-positions', '#insert-triads']) form.querySelector(id).disabled = t.value === 'chromatic';
+    for (const id of ['#insert-positions', '#insert-zones']) form.querySelector(id).disabled = t.value === 'chromatic';
   });
   pick('#insert-labels', (t) => { prefs.lapInsert.labels = t.value; });
   pick('#insert-color', (t) => { prefs.lapInsert.color = t.checked; });
   pick('#insert-bars', (t) => { prefs.lapInsert.bars = t.checked; });
   pick('#insert-positions', (t) => { prefs.lapInsert.positions = t.checked; });
-  pick('#insert-triads', (t) => { prefs.lapInsert.triads = t.checked; });
+  pick('#insert-zones', (t) => { prefs.lapInsert.zones = t.checked; });
   form.querySelectorAll('[data-neck]').forEach((input) => input.addEventListener('change', () => {
     const [key, , , min, max] = LAP_NECK_FIELDS.find((f) => f[0] === input.dataset.neck);
     const v = key === 'frets' ? parseInt(input.value, 10) : parseFloat(input.value);
@@ -1512,12 +1568,14 @@ function wireInstruments(s) {
     nm.title = 'Click to highlight this chord’s notes on the scale maps';
     nm.addEventListener('click', () => toggleFocus(shape));
   });
-  el.instPanels.querySelectorAll('.sc-grip-name[data-chord]').forEach((nm) => {
-    nm.addEventListener('click', () => toggleFocus(nm.dataset.chord));
+  const zoneBox = el.instPanels.querySelector('.lap-zones');
+  if (zoneBox) zoneBox.addEventListener('change', () => {
+    prefs.lapZones = zoneBox.checked;
+    savePrefs(); renderInstruments(currentSong());
   });
-  const triBox = el.instPanels.querySelector('.lap-triads');
-  if (triBox) triBox.addEventListener('change', () => {
-    prefs.lapTriads = triBox.checked;
+  const zoneSet = el.instPanels.querySelector('.lap-zone-set');
+  if (zoneSet) zoneSet.addEventListener('change', () => {
+    prefs.lapZoneSet = parseInt(zoneSet.value, 10) || 0;
     savePrefs(); renderInstruments(currentSong());
   });
   const rootSel = document.getElementById('scale-root');

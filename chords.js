@@ -383,12 +383,9 @@ function scaleDiagramSVG(rootPc, intervals, highlight, tuning = STRING_ABS, opts
   const set = new Set(intervals.map((i) => (rootPc + i) % 12));
   const hi = highlight && highlight.size ? highlight : null;
   const N = tuning.length;
-  // `gutter` widens the left margin: room for the string names and for the
-  // names of the triad rows (`grips`) drawn under the ruler.
+  // `gutter` widens the left margin, for the string names (`stringNames`).
   const FR = 15, left = 26 + (opts.gutter || 0), top = 14, rowH = 18, colW = 30, rulerH = 11;
   const ruler = opts.ruler || [];
-  const grips = opts.grips || [];
-  const gGap = 5.6, gPad = 6, gH = (N - 1) * gGap + 2 * gPad;
   const shapeAt = opts.shapeAt || (() => ['circle']);
   const mark = (f, cx, cy, cls, r) => {
     const kinds = shapeAt(f);
@@ -398,8 +395,7 @@ function scaleDiagramSVG(rootPc, intervals, highlight, tuning = STRING_ABS, opts
   };
   const width = left + FR * colW + 12;
   const numY = top + (N - 1) * rowH + 16;
-  const gripTop = numY + 8 + ruler.length * rulerH + (grips.length ? 8 : 0);
-  const height = gripTop + grips.length * gH;
+  const height = numY + 8 + ruler.length * rulerH;
   const x = (f) => left + f * colW;
   const y = (i) => top + (N - 1 - i) * rowH; // string 0 (lowest) at the bottom
   // Where fret f's note is drawn: behind the fret for fingers, on it for a bar.
@@ -443,45 +439,75 @@ function scaleDiagramSVG(rootPc, intervals, highlight, tuning = STRING_ABS, opts
       }
     }
   }
-  // Triad rows: one small neck per chord, high string on top as above, with
-  // each grip a stroke across the strings it takes at the fret it's played
-  // on — a dot per string to pick (solid for the root), and where the stroke
-  // passes a string without a dot, that string is skipped. A fret with several
-  // grips spreads them side by side, lowest strings first, with the fret
-  // number beside them so it reads without a trip back up to the ruler.
-  grips.forEach((row, r) => {
-    const rt = gripTop + r * gH, sy = (i) => rt + gPad + (N - 1 - i) * gGap;
-    let g = `<rect class="sc-grip-band${r % 2 ? ' odd' : ''}" x="0" y="${rt}" width="${width}" height="${gH}"/>`;
-    for (let i = 0; i < N; i++) g += `<line class="sc-grip-string" x1="${x(0)}" y1="${sy(i)}" x2="${x(FR)}" y2="${sy(i)}"/>`;
-    g += `<line class="sc-grip-nut" x1="${x(0)}" y1="${sy(N - 1)}" x2="${x(0)}" y2="${sy(0)}"/>`;
-    const long = row.label.length > 5 ? ` textLength="${left - 16}" lengthAdjust="spacingAndGlyphs"` : '';
-    g += `<text class="sc-grip-name"${row.focus ? ` data-chord="${escapeHtml(row.focus)}"` : ''} x="2" y="${rt + gH / 2}" dominant-baseline="central"${long}>` +
-      `${escapeHtml(row.label)}${row.title ? `<title>${escapeHtml(row.title)}</title>` : ''}</text>`;
-    if (!row.grips.length) {
-      g += `<text class="sc-grip-none" x="${x(0) + 8}" y="${rt + gH / 2}" dominant-baseline="central">no straight-bar triad in this tuning</text>`;
+  const cls = 'scale-svg' + (hi ? ' has-hi' : '');
+  return `<svg class="${cls}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMinYMin meet">${p}</svg>`;
+}
+
+// The triad-zone map under the lap steel's fret map, on the same fret columns
+// so the two read as one: the three strings of `set` (indices into `tuning`,
+// low→high, drawn high on top), and for each zone every chord's cluster — its
+// three notes, joined by a line, each marked with its chord's shape. A note in
+// two chords' clusters wears the second one's shape as a ring. Brackets under
+// the fret numbers show where each zone runs; a legend names the shapes.
+//   rows   [{ label, clusters }]  (lapClusters), in the song's order
+//   zones  lapZones(…).zones;  names  lapZoneNames(…).names
+function lapZoneSVG(tuning, set, rows, zones, names, opts = {}) {
+  const FR = 15, left = 26 + (opts.gutter || 0), colW = 30, rowH = 26, top = 18;
+  const x = (f) => left + f * colW;
+  const at = (f) => (f === 0 ? left - 12 : x(f));
+  const y = (k) => top + (2 - k) * rowH;          // k: 0 = the set's lowest string
+  const width = left + FR * colW + 12;
+  const numY = y(0) + 24;
+  const kind = (ri) => LAP_SHAPES[ri % LAP_SHAPES.length];
+  const cls = (ri) => `zm-c${ri % 6}`;
+  let p = '';
+  for (let k = 0; k < 3; k++) p += `<line class="zm-string" x1="${x(0)}" y1="${y(k)}" x2="${x(FR)}" y2="${y(k)}"/>`;
+  for (let f = 0; f <= FR; f++) p += `<line class="${f ? 'zm-fret' : 'zm-nut'}" x1="${x(f)}" y1="${y(2) - 10}" x2="${x(f)}" y2="${y(0) + 10}"/>`;
+  set.forEach((si, k) => {
+    p += `<text class="zm-strname" x="2" y="${y(k)}" dominant-baseline="central">${tuning.length - si} ${escapeHtml(opts.noteName ? opts.noteName(tuning[si] % 12) : SHARP[tuning[si] % 12])}</text>`;
+  });
+  for (const f of [3, 5, 7, 9, 12, 15]) p += `<text class="zm-fretnum" x="${at(f)}" y="${numY}" text-anchor="middle">${f}</text>`;
+
+  let lines = '', marks = '', rings = '';
+  const shown = zones.filter((z) => z.to <= FR);
+  shown.forEach((z) => {
+    const here = new Map(); // "k,f" → [row…]
+    rows.forEach((row, ri) => {
+      if (z.picks[ri] === null) return;
+      const c = row.clusters[z.picks[ri]];
+      lines += `<polyline class="zm-line ${cls(ri)}" points="${c.frets.map((f, k) => `${at(f)},${y(k)}`).join(' ')}"/>`;
+      c.frets.forEach((f, k) => { const key = `${k},${f}`; here.set(key, (here.get(key) || []).concat([ri])); });
+    });
+    for (const [key, list] of here) {
+      const [k, f] = key.split(',').map(Number);
+      const pc = (tuning[set[k]] + f) % 12;
+      // The chord whose root it is wears it; the others ring it.
+      const own = list.find((ri) => rows[ri].clusters[z.picks[ri]].roles[k] === 'R');
+      const inner = own === undefined ? list[0] : own;
+      marks += markShape(kind(inner), at(f), y(k), 8.5, `class="zm-mark ${cls(inner)}"`) +
+        `<text class="zm-label" x="${at(f)}" y="${y(k)}" text-anchor="middle" dominant-baseline="central">${escapeHtml(opts.noteName ? opts.noteName(pc) : SHARP[pc])}</text>`;
+      list.filter((ri) => ri !== inner).forEach((ri, n) => { rings += markShape(kind(ri), at(f), y(k), 11.5 + 3 * n, `class="zm-ring ${cls(ri)}"`); });
     }
-    const byFret = new Map();
-    for (const gr of row.grips) if (gr.fret <= FR) byFret.set(gr.fret, (byFret.get(gr.fret) || []).concat([gr]));
-    for (const [f, list] of byFret) {
-      const lane = Math.min(7.5, 22 / list.length), half = (list.length - 1) / 2 * lane;
-      list.forEach((gr, k) => {
-        const gx = at(f) + (k - (list.length - 1) / 2) * lane;
-        g += `<line class="sc-grip" x1="${gx}" y1="${sy(gr.strings[0])}" x2="${gx}" y2="${sy(gr.strings[2])}"/>`;
-        gr.strings.forEach((si, j) => {
-          g += `<circle class="${gr.roles[j] === 'R' ? 'sc-grip-root' : 'sc-grip-dot'}" cx="${gx}" cy="${sy(si)}" r="2.4"/>`;
-        });
-      });
-      if (f > 0) {
-        const right = f < FR;
-        g += `<text class="sc-grip-fret" x="${at(f) + (right ? half + 5 : -half - 5)}" y="${rt + gH / 2}" ` +
-          `text-anchor="${right ? 'start' : 'end'}" dominant-baseline="central">${f}</text>`;
-      }
-    }
-    p += `<g class="sc-grip-row${row.on ? ' on' : ''}">${g}</g>`;
   });
 
-  const cls = 'scale-svg' + (hi ? ' has-hi' : '') + (grips.some((row) => row.on) ? ' grip-focus' : '');
-  return `<svg class="${cls}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMinYMin meet">${p}</svg>`;
+  // Zone brackets, alternating two rows so neighbours sharing a fret stay apart.
+  let brackets = '';
+  shown.forEach((z, i) => {
+    const by = numY + 14 + (i % 2) * 22, a = at(z.from) - 10, b = at(z.to) + 10;
+    brackets += `<path class="zm-bracket" d="M${a} ${by - 4} V${by} H${b} V${by - 4}"/>` +
+      `<text class="zm-zone" x="${(a + b) / 2}" y="${by + 11}" text-anchor="middle">${escapeHtml(names[zones.indexOf(z)])}</text>`;
+  });
+  // Legend: each chord's shape and name, wrapping to a second line if need be.
+  let legend = '', lx = left, ly = numY + 14 + 2 * 22 + 14;
+  rows.forEach((row, ri) => {
+    const w = 30 + 7 * row.label.length;
+    if (lx + w > width) { lx = left; ly += 20; }
+    legend += markShape(kind(ri), lx + 8, ly, 7, `class="zm-mark ${cls(ri)}"`) +
+      `<text class="zm-key" x="${lx + 20}" y="${ly}" dominant-baseline="central">${escapeHtml(row.label)}${row.clusters.length ? '' : ' (none here)'}</text>`;
+    lx += w;
+  });
+  const height = ly + 14;
+  return `<svg class="zone-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMinYMin meet">${p}${lines}${marks}${rings}${brackets}${legend}</svg>`;
 }
 
 // ---- Piano diagrams --------------------------------------------------------
@@ -834,14 +860,16 @@ function lapPositions(bars, rootPc, scale, lastFret) {
   return { list, at };
 }
 
-// ---- Triads on a straight bar ---------------------------------------------
-// A bar can't finger a chord, but it can give a triad: three strings at one
-// fret that spell a chord's root, 3rd and 5th once each. The string sets that
-// do it belong to the tuning and repeat at every fret, so each chord gets a
-// few grips — its inversions — an octave apart. That's the map for playing
-// triads over a progression: where every chord is, and on which strings.
-const LAP_TRIAD_SPAN = 3; // a grip reaches across four strings at most
+// ---- Triad zones ----------------------------------------------------------
+// Single-note triads: a chord's root, 3rd and 5th picked one at a time on
+// three neighbouring strings, all within two frets, so the bar — or its tip —
+// barely moves. A zone is a stretch of neck where every chord of a progression
+// has one of those clusters: the whole song, played in one place. In open G,
+// for a I–IV–V, one chord in each zone is a straight bar and the other two lean
+// off it by a fret or two, keeping a note in common at every change.
 const TRIAD_SUFFIX = { major: '', m: 'm', dim: '°', aug: '+', sus4: 'sus4', sus2: 'sus2' };
+const LAP_CLUSTER_SPAN = 2;   // frets a cluster may spread across
+const LAP_ZONE_SPANS = [4, 6]; // frets a zone may spread across, tried in turn
 
 // The triad a chord comes down to: { rootPc, quality, tones, label }. 7ths,
 // 6ths and added tones drop away; a power chord has no 3rd to make one.
@@ -859,27 +887,113 @@ function chordTriad(name) {
   return { rootPc: ci.rootPc, quality, tones: TRIAD_TONES[quality], label: m[1] + m[2] + TRIAD_SUFFIX[quality] };
 }
 
-// Every straight-bar grip for a triad in a tuning (absolute semitones, low
-// string first) from the nut to lastFret: [{ fret, strings: [lo, mid, hi],
-// roles }], fret by fret, lowest strings first. `roles` is the chord tone each
-// string sounds: 'R', '3' or '5' (a b3, b5, #5 or sus tone counts as the 3rd
-// or 5th it stands in for).
-function lapTriadGrips(triad, tuning, lastFret) {
-  const N = tuning.length, out = [];
+// The three-string sets to play clusters on, as string indices low→high,
+// from the top of the neck's pitch down: strings 1–3 first.
+function lapStringSets(nStrings) {
+  const out = [];
+  for (let lo = nStrings - 3; lo >= 0; lo--) out.push([lo, lo + 1, lo + 2]);
+  return out;
+}
+
+// Every cluster for a triad on a string set (indices into `tuning`, absolute
+// semitones low→high), frets 0–lastFret: [{ frets, pcs, roles, lo, hi }], one
+// fret per string of the set, lowest first. `roles` names each string's tone,
+// 'R', '3' or '5' (a b3, b5, #5 or sus tone counts as the 3rd or 5th).
+function lapClusters(triad, tuning, set, lastFret) {
   const role = (pc) => ['R', '3', '5'][triad.tones.findIndex((t) => (triad.rootPc + t) % 12 === pc)];
-  for (let f = 0; f <= lastFret; f++) {
-    const pcs = tuning.map((abs) => (abs + f) % 12);
-    for (let a = 0; a < N; a++) {
-      for (let b = a + 1; b < N; b++) {
-        for (let c = b + 1; c < N && c - a <= LAP_TRIAD_SPAN; c++) {
-          const trio = [pcs[a], pcs[b], pcs[c]];
-          if (new Set(trio).size < 3 || !trio.every((pc) => role(pc))) continue;
-          out.push({ fret: f, strings: [a, b, c], roles: trio.map(role) });
-        }
+  const frets = set.map((si) => {
+    const out = [];
+    for (let f = 0; f <= lastFret; f++) if (role((tuning[si] + f) % 12)) out.push(f);
+    return out;
+  });
+  const out = [];
+  for (const a of frets[0]) {
+    for (const b of frets[1]) {
+      if (Math.abs(a - b) > LAP_CLUSTER_SPAN) continue;
+      for (const c of frets[2]) {
+        const fr = [a, b, c], lo = Math.min(a, b, c), hi = Math.max(a, b, c);
+        if (hi - lo > LAP_CLUSTER_SPAN) continue;
+        const pcs = set.map((si, k) => (tuning[si] + fr[k]) % 12);
+        if (new Set(pcs).size < 3) continue;
+        out.push({ frets: fr, pcs, roles: pcs.map(role), lo, hi });
       }
     }
   }
-  return out;
+  return out.sort((x, y) => x.lo - y.lo || x.hi - y.hi);
+}
+
+// The zones for a progression. `rows` are its triads, each { clusters }; `seq`
+// is the order the song plays them, as row indices (consecutive repeats
+// dropped; it loops round). A zone is one cluster per row inside a few frets —
+// four, or six if four holds none — chosen so the song moves as little as
+// possible from chord to chord, counting every fret each string travels. The
+// best zones are taken first and no cluster serves two, which leaves the few
+// natural positions up the neck.
+//   → { zones: [{ from, to, picks, cost }], span, missing: [row…] }
+//     picks[row] is a cluster index, or null for a row with no cluster at all.
+function lapZones(rows, seq, lastFret) {
+  const live = rows.map((r, i) => i).filter((i) => rows[i].clusters.length);
+  const missing = rows.map((r, i) => i).filter((i) => !rows[i].clusters.length);
+  if (!live.length) return { zones: [], span: 0, missing };
+  let path = (seq || []).filter((i) => live.includes(i)).filter((i, k, a) => k === 0 || a[k - 1] !== i);
+  if (path.length > 1 && path[0] === path[path.length - 1]) path.pop();
+  if (path.length < 2) path = live;
+  const move = (p, q) => p.frets.reduce((sum, f, k) => sum + Math.abs(f - q.frets[k]), 0);
+  const costOf = (pick) => {
+    let cost = 0;
+    for (let k = 0; k < path.length; k++) {
+      const a = path[k], b = path[(k + 1) % path.length];
+      if (a !== b) cost += move(rows[a].clusters[pick[a]], rows[b].clusters[pick[b]]);
+    }
+    return cost;
+  };
+  for (const span of LAP_ZONE_SPANS) {
+    const found = new Map();
+    for (let from = 0; from <= lastFret; from++) {
+      const to = from + span;
+      const options = live.map((i) => rows[i].clusters.map((c, ci) => ci).filter((ci) => rows[i].clusters[ci].lo >= from && rows[i].clusters[ci].hi <= to));
+      if (options.some((o) => !o.length)) continue;
+      // Every combination: a chord seldom has more than two clusters in reach.
+      let best = null;
+      const pick = rows.map(() => null);
+      const walk = (k) => {
+        if (k === live.length) {
+          const cost = costOf(pick);
+          const chosen = live.map((i) => rows[i].clusters[pick[i]]);
+          const lo = Math.min(...chosen.map((c) => c.lo)), hi = Math.max(...chosen.map((c) => c.hi));
+          if (!best || cost < best.cost || (cost === best.cost && hi - lo < best.to - best.from)) best = { picks: pick.slice(), cost, from: lo, to: hi };
+          return;
+        }
+        for (const ci of options[k].slice(0, 6)) { pick[live[k]] = ci; walk(k + 1); }
+      };
+      walk(0);
+      found.set(best.picks.join(','), best);
+    }
+    const ranked = [...found.values()].sort((a, b) => a.cost - b.cost || (a.to - a.from) - (b.to - b.from) || a.from - b.from);
+    const used = new Set(), zones = [];
+    for (const z of ranked) {
+      const keys = live.map((i) => `${i}:${z.picks[i]}`);
+      if (keys.some((k) => used.has(k))) continue;
+      keys.forEach((k) => used.add(k));
+      zones.push(z);
+    }
+    if (zones.length) return { zones: zones.sort((a, b) => a.from - b.from), span, missing };
+  }
+  return { zones: [], span: 0, missing };
+}
+
+// Names for zones in neck order: "Zone 1", "Zone 2" … and, for one that is an
+// earlier zone an octave up (every cluster twelve frets higher), that zone's
+// name again with "octave up". Returns the names, and whether each repeats.
+function lapZoneNames(zones, rows) {
+  const names = [], repeats = [];
+  let n = 0;
+  zones.forEach((z, i) => {
+    const j = zones.findIndex((w, k) => k < i && rows.every((r, ri) => (z.picks[ri] === null) === (w.picks[ri] === null) &&
+      (z.picks[ri] === null || r.clusters[z.picks[ri]].frets.every((f, s) => f === r.clusters[w.picks[ri]].frets[s] + 12))));
+    if (j >= 0) { names.push(`${names[j].replace(/ · octave up$/, '')} · octave up`); repeats.push(true); } else { names.push(`Zone ${++n}`); repeats.push(false); }
+  });
+  return { names, repeats };
 }
 
 // A key's triads, one per degree of the seven-note scale behind `scale` (so a
@@ -903,32 +1017,24 @@ function keyTriads(rootPc, scale, nameOf) {
   return out;
 }
 
-// The key's triads that a tuning can bar, each with its grips from the nut to
-// lastFret: [{ label, numeral, triad, grips }], or null for none.
-function lapKeyTriads(tuning, rootPc, scale, lastFret, nameOf) {
-  const out = (keyTriads(rootPc, scale, nameOf) || [])
-    .map((k) => Object.assign(k, { grips: lapTriadGrips(k.triad, tuning, lastFret) }))
-    .filter((k) => k.grips.length);
-  return out.length ? out : null;
+// A key's primary chords, I, IV and V (i, iv and v in a minor key), from
+// keyTriads: what a key's insert draws its zones for, and a song with no
+// chords yet gets on screen.
+function keyPrimaries(rootPc, scale, nameOf) {
+  return (keyTriads(rootPc, scale, nameOf) || []).filter((k) => /^(I|IV|V)$/i.test(k.numeral));
 }
 
-// The narrowest stretches of neck, [[from, to]…], holding a grip of every
-// triad in `rows` (each { grips }) — where a whole progression can be played
-// with the bar hardly travelling. Triads with no grip are left out of it.
-function lapTriadZones(rows) {
-  const sets = rows.map((r) => [...new Set(r.grips.map((g) => g.fret))]).filter((s) => s.length);
-  if (sets.length < 2) return [];
-  let best = Infinity, out = [];
-  for (const from of [...new Set(sets.flat())].sort((a, b) => a - b)) {
-    let to = from;
-    for (const s of sets) {
-      const up = s.filter((f) => f >= from);
-      to = up.length ? Math.max(to, Math.min(...up)) : Infinity;
-    }
-    if (to === Infinity) continue;
-    if (to - from < best) { best = to - from; out = [[from, to]]; } else if (to - from === best) out.push([from, to]);
-  }
-  return out;
+// The triad zones for a key's I, IV and V on a lap steel's top three strings,
+// frets 0–lastFret, moving I–IV–I–V: { set, rows, zones, names }, or null.
+function lapKeyZones(tuning, rootPc, scale, nameOf, lastFret) {
+  const prim = keyPrimaries(rootPc, scale, nameOf);
+  if (prim.length < 2) return null;
+  const set = lapStringSets(tuning.length)[0];
+  const rows = prim.map((k) => ({ label: k.label, numeral: k.numeral, triad: k.triad, clusters: lapClusters(k.triad, tuning, set, lastFret) }));
+  const seq = rows.length === 3 ? [0, 1, 0, 2] : rows.map((r, i) => i);
+  const z = lapZones(rows, seq, lastFret);
+  if (!z.zones.length) return null;
+  return { set, rows, zones: z.zones, names: lapZoneNames(z.zones, rows).names };
 }
 
 // "bar 5", "open", "bar 3 · no b7" — what a grip is, in a player's words.
@@ -1132,83 +1238,15 @@ function lapBand(g, rr, n) {
   return { from: g.d[n - 1] + (n === 1 ? 2 * rr(0) + 0.035 : rr(n - 1)), to: g.d[n] - rr(n) };
 }
 
-// Where the key's triads go on the insert: for every fret from 1 up, the
-// triads a bar gives there, I, IV and V first, each a group of grips — and
-// how big a stack of them fits in the clear band just before the fret line,
-// on the same strip as the line. Where it doesn't, the later groups go just
-// past the line instead, into the band beyond, when nothing else is drawn
-// there. Frets too crowded even for that are left out (the grips repeat an
-// octave lower), and so are the open strings, which have fret 12's.
-//   → { at: Map(fret → { lane, size, nut, body }), drawn, crowded }, where
-//     nut and body (or null) are { groups: [{ t, grips }], labels, extents, total }
-//     and each label is [chord, numeral], or [numeral] where room is short.
-const LAP_TRI_GAP = 0.03, LAP_TRI_GROUP = 0.03, LAP_TRI_DOT = 0.028;
-function lapTriadLayout(o, g) {
-  const rr = lapMarkRadius(o, g), last = g.d.length - 1;
-  const byFret = new Map();
-  for (const t of o.triads || []) {
-    for (const gr of t.grips) {
-      if (gr.fret < 1 || gr.fret > last) continue;
-      const groups = byFret.get(gr.fret) || [];
-      let grp = groups.find((x) => x.t === t);
-      if (!grp) groups.push(grp = { t, grips: [] });
-      grp.grips.push(gr);
-      byFret.set(gr.fret, groups);
-    }
-  }
-  const rank = (grp) => lapRank((grp.t.triad.rootPc - o.rootPc + 12) % 12);
-  const cuts = lapInsertCuts(g.d, g.length).slice(1, -1);
-  const cutIn = (a, b) => cuts.find((c) => c > a && c < b);
-  // Rails and labels shrink together; a label drops its chord name for the
-  // numeral alone before a fret gives up on them. Labels are two short turned
-  // lines in the margin past the top string, so their size is capped by it.
-  const sized = (groups, k, short, cap) => {
-    const lane = 0.07 * k, size = Math.min(0.07 * k, cap);
-    const labels = groups.map((grp) => (short ? [grp.t.numeral] : [grp.t.label, grp.t.numeral]));
-    const extents = groups.map((grp, i) =>
-      Math.max(grp.grips.length * lane, 0.6 * size * Math.max(...labels[i].map((l) => l.length)) + 0.015));
-    return { groups, labels, extents, lane, size, total: extents.reduce((a, b) => a + b, 0) + (groups.length - 1) * LAP_TRI_GROUP };
-  };
-  const at = new Map(), drawn = [], crowded = [];
-  for (const n of [...byFret.keys()].sort((a, b) => a - b)) {
-    const groups = byFret.get(n).sort((a, b) => rank(a) - rank(b));
-    const y = g.d[n], { from, to } = lapBand(g, rr, n);
-    const cutA = cutIn(g.d[n - 1], y);
-    const nutRoom = to - LAP_TRI_GAP - Math.max(from + 0.05, cutA === undefined ? -Infinity : cutA + 0.04);
-    let bodyRoom = 0;
-    if (n < last && !byFret.has(n + 1)) {
-      const next = lapBand(g, rr, n + 1), cutB = cutIn(y, g.d[n + 1]);
-      bodyRoom = Math.min(next.to - 0.05, cutB === undefined ? Infinity : cutB - 0.04) - (y + rr(n) + LAP_TRI_GAP);
-    }
-    const margin = g.halfW(y) + g.stringX(0, y);
-    const cap = (margin - 0.035 - LAP_TRI_DOT - 0.012) / 2.1;
-    // Split across the line, a lone chord goes half and half, labelled twice.
-    const half = Math.ceil(groups[0].grips.length / 2);
-    const units = groups.length > 1 ? groups
-      : [{ t: groups[0].t, grips: groups[0].grips.slice(0, half) }, { t: groups[0].t, grips: groups[0].grips.slice(half) }];
-    const tryFit = (k, short, list, split) => {
-      const nut = sized(list.slice(0, split), k, short, short ? 2.1 * cap : cap);
-      const body = split < list.length ? sized(list.slice(split), k, short, short ? 2.1 * cap : cap) : null;
-      return nut.total <= nutRoom && (!body || body.total <= bodyRoom) ? { lane: nut.lane, size: nut.size, nut, body } : null;
-    };
-    // Everything before the line first; then split across it, as many groups
-    // before the line as fit — shrinking a little for each, then further, and
-    // only then down to bare numerals.
-    let lay = null;
-    const passes = [[false, 0.8, false], [false, 0.8, true], [false, 0.6, false], [false, 0.6, true], [true, 0.6, false], [true, 0.6, true]];
-    search: for (const [short, minK, spill] of passes) {
-      if (spill && (bodyRoom <= 0 || !units[units.length - 1].grips.length)) continue;
-      for (let k = 1; k > minK - 0.01; k -= 0.05) {
-        for (let split = spill ? units.length - 1 : groups.length; split >= 1; split--) {
-          if ((lay = tryFit(k, short, spill ? units : groups, split))) break search;
-          if (!spill) break;
-        }
-      }
-    }
-    if (lay) { at.set(n, lay); drawn.push(n); } else crowded.push(n);
-  }
-  return { at, drawn, crowded };
-}
+// How a zone's chords are drawn on the insert: a ring round each of a
+// cluster's three notes — solid for the first chord (I), dashed for the second
+// (IV), dotted for the third (V) — so they part on a black-and-white print too.
+// Rings, not the screen's joining lines: at true scale the frets near the nut
+// are over an inch apart, and a line that long runs under other notes.
+const LAP_ZONE_INK = {
+  color: [{ stroke: '#1D9E75', width: 1.5 }, { stroke: '#D85A30', width: 1.5, dash: '5 3' }, { stroke: '#7F77DD', width: 1.8, dash: '0.1 3' }],
+  mono: [{ stroke: '#111', width: 1.3 }, { stroke: '#111', width: 1.3, dash: '5 3' }, { stroke: '#111', width: 1.8, dash: '0.1 3' }],
+};
 
 // The whole neck, drawn once in its own coordinates: x from the centre line,
 // y from the nut. Each strip shows its own stretch of this through a clip.
@@ -1216,7 +1254,8 @@ function lapTriadLayout(o, g) {
 //   o.rootPc, o.scale { name, iv }, o.names[pc], o.dimPcs (Set, drawn fainter)
 //   o.labels   'both' | 'notes' | 'degrees';  o.color  true | false
 //   o.bars     (fret) => the chords a straight bar gives there ([] for none)
-//   o.positions  lapPositions(…), or null;  o.triads  lapKeyTriads(…), or null
+//   o.positions  lapPositions(…), or null
+//   o.zones    { set, rows: [{ label, numeral, clusters }], zones, names }, or null
 //   o.shortName, o.scaleTitle   what the strips are labelled with
 function lapNeckContent(o, g) {
   const N = o.tuning.length;
@@ -1225,7 +1264,6 @@ function lapNeckContent(o, g) {
   const last = g.d.length - 1;
   const pos = o.positions || null;
   const rr = lapMarkRadius(o, g);
-  const tri = o.triads ? lapTriadLayout(o, g) : null;
   const kindsAt = (n, open) => (pos ? pos.at(n).map((i) => pos.list[i].shape) : [open ? 'open' : 'circle']);
   let under = '', lines = '', marks = '', text = '';
 
@@ -1250,67 +1288,66 @@ function lapNeckContent(o, g) {
       : lapNoteMark(x, openY, r0, { fill: 'none', stroke: '#bbb', text: '#888' }, [o.names[pc]], ['open']);
   }
 
+  // Triad zones: each cluster's three notes ringed in its chord's style, the
+  // numeral beside the top string's note. A note two chords share wears both
+  // rings, one round the other.
+  let zl = '';
+  const zoneAt = new Set(); // "string,fret" for every note a drawn cluster uses
+  if (o.zones) {
+    const Z = o.zones, zInk = LAP_ZONE_INK[o.color ? 'color' : 'mono'];
+    const noteY = (f) => (f === 0 ? openY : g.d[f]);
+    const rings = new Map(); // "string,fret" → [row…]
+    for (const z of Z.zones) {
+      if (z.to > last) continue;
+      const tags = new Map(); // fret of the top-string note → numerals
+      Z.rows.forEach((row, ri) => {
+        if (z.picks[ri] === null) return;
+        const c = row.clusters[z.picks[ri]];
+        c.frets.forEach((f, k) => {
+          const key = `${Z.set[k]},${f}`;
+          zoneAt.add(key);
+          if (!(rings.get(key) || []).includes(ri)) rings.set(key, (rings.get(key) || []).concat([ri]));
+        });
+        const topF = c.frets[2];
+        tags.set(topF, (tags.get(topF) || []).concat([row.numeral]));
+      });
+      for (const [f, labs] of tags) {
+        const yy = noteY(f), r = rr(f) * 1.5, ty = f === 0 ? yy + r + 0.03 : yy - r - 0.03;
+        text += lapText(g.halfW(yy) - 0.035 - 0.033, ty, labs.join(' '), 0.066, { turn: true, anchor: f === 0 ? 'start' : 'end', mid: true, bold: true });
+      }
+    }
+    for (const [key, list] of rings) {
+      const [si, f] = key.split(',').map(Number);
+      const yy = noteY(f), cx = g.stringX(si, yy);
+      list.sort((a, b) => a - b).forEach((ri, n) => {
+        const st = zInk[ri % zInk.length];
+        zl += `<circle cx="${lu(cx)}" cy="${lu(yy)}" r="${lu(rr(f) * (1.25 + 0.2 * n))}" fill="none" stroke="${st.stroke}" stroke-width="${st.width}"` +
+          `${st.dash ? ` stroke-dasharray="${st.dash}"` : ''} stroke-linecap="round"/>`;
+      });
+    }
+  }
+
   for (let n = 1; n <= last; n++) {
     const y = g.d[n], r = rr(n);
     const heavy = n % 12 === 0;
     lines += `<line x1="${lu(-g.halfW(y))}" y1="${lu(y)}" x2="${lu(g.halfW(y))}" y2="${lu(y)}" stroke="#111" stroke-width="${heavy ? 4.5 : 3}"/>`;
 
-    // The clear band between this fret's dots and the last one's, and the
-    // triad rails for this fret: a stack at the band's far end, and maybe a
-    // second one just past the line, in the band beyond.
-    const { from, to } = lapBand(g, rr, n);
-    const band = to - from;
-    const here = tri && tri.at.get(n);
-    const triTop = here ? to - LAP_TRI_GAP - here.nut.total : to;
-    const prev = tri && tri.at.get(n - 1);
-    const bandFrom = prev && prev.body ? g.d[n - 1] + rr(n - 1) + LAP_TRI_GAP + prev.body.total + 0.02 : from;
-    const triStrings = new Set();
-    // A stack runs from `edge` away from the fret line (dir -1 towards the
-    // nut, +1 towards the body): one rail per grip, lowest strings nearest
-    // the line, centred in its group's share; the label down the far edge.
-    const stack = (st, edge, dir) => {
-      const lane = here.lane, dr = Math.min(LAP_TRI_DOT, 0.4 * lane), size = here.size;
-      st.groups.forEach((grp, gi) => {
-        const ext = st.extents[gi], start = edge + dir * (ext - grp.grips.length * lane) / 2;
-        grp.grips.forEach((gr, j) => {
-          const ly = start + dir * (j + 0.5) * lane;
-          const xs = gr.strings.map((si) => g.stringX(si, ly));
-          marks += `<line x1="${lu(xs[0])}" y1="${lu(ly)}" x2="${lu(xs[2])}" y2="${lu(ly)}" stroke="#111" stroke-width="0.8"/>`;
-          gr.strings.forEach((si, k) => {
-            triStrings.add(si);
-            marks += `<circle cx="${lu(xs[k])}" cy="${lu(ly)}" r="${lu(dr)}" ` + (gr.roles[k] === 'R'
-              ? `fill="${ink.root.fill}" stroke="${ink.root.stroke}" stroke-width="0.6"/>`
-              : 'fill="#fff" stroke="#111" stroke-width="0.7"/>');
-          });
-        });
-        // Chord above, numeral below, as read from the playing position.
-        const mid = edge + dir * ext / 2, [top, below] = st.labels[gi];
-        const x1 = g.halfW(mid) - 0.035 - size / 2;
-        text += lapText(x1, mid, top, size, { turn: true, mid: true, bold: true });
-        if (below) text += lapText(x1 - 1.1 * size, mid, below, size, { turn: true, mid: true, fill: '#333' });
-        edge += dir * (ext + LAP_TRI_GROUP);
-      });
-    };
-    if (here) {
-      stack(here.nut, to - LAP_TRI_GAP, -1);
-      if (here.body) stack(here.body, y + r + LAP_TRI_GAP, 1);
-    }
-
-    // A rail can take a chord tone the scale leaves out (the 4th of a major
+    // A cluster can take a chord tone the scale leaves out (the 4th of a major
     // pentatonic, in the IV chord): that string gets a ghost of its note.
     for (let i = 0; i < N; i++) {
       const pc = (o.tuning[i] + n) % 12;
       if (inScale.has(pc)) marks += lapNoteMark(g.stringX(i, y), y, r, inkFor(pc), labelFor(pc, r), kindsAt(n, false));
-      else if (triStrings.has(i)) marks += lapNoteMark(g.stringX(i, y), y, r, { fill: '#fff', stroke: '#999', text: '#666' }, [o.names[pc]], ['circle']);
+      else if (zoneAt.has(`${i},${n}`)) marks += lapNoteMark(g.stringX(i, y), y, r, { fill: '#fff', stroke: '#999', text: '#666' }, [o.names[pc]], ['circle']);
     }
 
-    // The board's own marker, in whatever the rails leave of the band.
+    // The clear band between this fret's dots and the last one's.
+    const { from, to } = lapBand(g, rr, n);
+    const band = to - from;
     const kind = lapMarkerAt(n);
-    const markTo = here ? triTop - 0.02 : to;
-    if (kind && markTo - bandFrom > 0.05) {
+    if (kind && band > 0.05) {
       const space = y - g.d[n - 1];
-      const h = Math.min((kind === 'bar' ? 0.62 : 0.45) * space, 0.85 * (markTo - bandFrom));
-      under += lapMarkerShape(kind, (bandFrom + markTo) / 2, h, 2 * g.halfW(y));
+      const h = Math.min((kind === 'bar' ? 0.62 : 0.45) * space, 0.85 * band);
+      under += lapMarkerShape(kind, (from + to) / 2, h, 2 * g.halfW(y));
     }
 
     // Fret number — led by the glyph of its position, when those are on —
@@ -1326,29 +1363,20 @@ function lapNeckContent(o, g) {
         const gy = end - 0.62 * numSize * String(n).length - (0.5 + 0.9 * k) * numSize;
         under += lapShape(pos.list[i].shape, left + 0.36 * numSize, gy, 0.3 * numSize, 'fill="#111"');
       });
-      // A chord the triad labels already name isn't lettered twice, and any
-      // left over stops short of the rails, which reach the near string.
-      const named = here ? [...here.nut.groups, ...(here.body ? here.body.groups : [])].map((grp) => grp.t.triad) : [];
-      const chords = (o.bars ? o.bars(n) : []).filter((c) => {
-        const t = chordTriad(c);
-        return !named.some((x) => t && x.rootPc === t.rootPc && x.quality === t.quality);
-      });
-      const chEnd = here ? triTop - 0.02 : end;
+      const chords = o.bars ? o.bars(n) : [];
       const longest = Math.max(0, ...chords.map((c) => c.length));
-      const chSize = Math.min(0.085, (chEnd - bandFrom - 0.025) / (0.6 * longest));
+      const chSize = Math.min(0.085, room / (0.6 * longest));
       if (longest && chSize >= 0.06) {
-        chords.forEach((c, k) => { text += lapText(left + 0.11 + k * 0.095, chEnd, c, chSize, { turn: true, anchor: 'end', fill: '#444' }); });
+        chords.forEach((c, k) => { text += lapText(left + 0.11 + k * 0.095, end, c, chSize, { turn: true, anchor: 'end', fill: '#444' }); });
       }
     }
   }
 
   // What this strip is, so a drawer full of them can be told apart: along the
-  // first fret space on the nut strip, clear of any triad rails there…
-  const t1 = tri && tri.at.get(1);
-  const idEnd = t1 ? g.d[1] - rr(1) - LAP_TRI_GAP - t1.nut.total - 0.02 : g.d[1] - g.r[1];
-  const idRoom = idEnd - (2 * r0 + 0.035) - 0.12;
+  // first fret space on the nut strip…
+  const idRoom = g.d[1] - g.r[1] - (2 * r0 + 0.035) - 0.12;
   if (last >= 1 && idRoom >= 0.4) {
-    const mid = (2 * r0 + 0.035 + idEnd) / 2;
+    const mid = (2 * r0 + 0.035 + g.d[1] - g.r[1]) / 2;
     const fit = (str, max, wide) => Math.min(max, idRoom / (wide * str.length));
     text += lapText(0.12, mid, o.shortName, fit(o.shortName, 0.12, 0.6), { turn: true, mid: true, bold: true });
     text += lapText(-0.06, mid, o.scaleTitle, fit(o.scaleTitle, 0.1, 0.56), { turn: true, mid: true, fill: '#333' });
@@ -1363,7 +1391,7 @@ function lapNeckContent(o, g) {
     text += lapText(-half * 0.5, y, o.shortName, size, { mid: true, bold: true });
     text += lapText(half * 0.5, y, o.scaleTitle, size, { mid: true, fill: '#333' });
   }
-  return under + lines + marks + text;
+  return under + lines + marks + zl + text;
 }
 
 // Break a sentence into lines of at most `max` characters.
@@ -1412,28 +1440,33 @@ function lapInsertInfo(o, g, x, y, w) {
     }
     para('Each fret belongs to the nearest chord bar. A mark drawn with two shapes sits midway between two positions and belongs to both.', 0.1, { fill: '#333' });
   }
-  const tri = o.triads ? lapTriadLayout(o, g) : null;
-  if (tri && tri.drawn.length) {
+  const Z = o.zones;
+  if (Z && Z.zones.length) {
+    const top = Z.set.map((si) => o.tuning.length - si).reverse(); // lap numbers, top string first
     cy += 0.06;
-    para('TRIADS', 0.085, { bold: true, fill: '#666' });
-    // A sample rail: four strings, three dots, the root solid, one skipped.
-    const sx = (k) => x + 0.05 + k * 0.1, ry = cy - 0.035;
-    for (let k = 0; k < 4; k++) out += `<line x1="${lu(sx(k))}" y1="${lu(ry - 0.07)}" x2="${lu(sx(k))}" y2="${lu(ry + 0.07)}" stroke="#cfcfcf" stroke-width="0.6"/>`;
-    out += `<line x1="${lu(sx(0))}" y1="${lu(ry)}" x2="${lu(sx(3))}" y2="${lu(ry)}" stroke="#111" stroke-width="0.8"/>`;
-    [[0, true], [1, false], [3, false]].forEach(([k, root]) => {
-      out += `<circle cx="${lu(sx(k))}" cy="${lu(ry)}" r="${lu(0.028)}" ` +
-        (root ? `fill="${ink.root.fill}" stroke="${ink.root.stroke}" stroke-width="0.6"/>` : 'fill="#fff" stroke="#111" stroke-width="0.7"/>');
+    para(`TRIAD ZONES · STRINGS ${top[0]}–${top[2]}`, 0.085, { bold: true, fill: '#666' });
+    // The ring styles, with their chords.
+    const zInk = LAP_ZONE_INK[o.color ? 'color' : 'mono'];
+    Z.rows.forEach((row, ri) => {
+      const st = zInk[ri % zInk.length], ly = cy - 0.035;
+      out += `<circle cx="${lu(x + 0.08)}" cy="${lu(ly)}" r="${lu(0.065)}" fill="none" stroke="${st.stroke}" stroke-width="${st.width}"` +
+        `${st.dash ? ` stroke-dasharray="${st.dash}"` : ''} stroke-linecap="round"/>`;
+      out += lapText(x + 0.22, cy, `${row.numeral} ${row.label}${row.clusters.length ? '' : ' · no cluster'}`, 0.105, { anchor: 'start', bold: true });
+      cy += 0.17;
     });
-    out += lapText(x + 0.45, cy, 'one triad', 0.105, { anchor: 'start', bold: true });
-    cy += 0.2;
-    // A numeral and its chord never part at a line break.
-    para(o.triads.map((t) => `${t.numeral}\u00a0${t.label}`).join(' · '), 0.105, { bold: true });
-    const missing = (keyTriads(o.rootPc, o.scale, (pc) => o.names[pc]) || [])
-      .filter((k) => !o.triads.some((t) => t.numeral === k.numeral)).map((k) => `${k.numeral}\u00a0${k.label}`);
-    para('Beside a fret, a rail for each three strings that make a chord of the key there. Pick the dotted strings (solid: the root) and skip any the rail crosses. The chord is named at the far edge; a grey note is a chord tone outside the scale. ' +
-      (missing.length ? `No straight-bar grip for ${missing.join(', ')}. ` : '') +
-      (o.triads.some((t) => t.grips.some((gr) => gr.fret === 0)) ? 'Open strings: as fret 12. ' : '') +
-      (tri.crowded.length ? `Fret${tri.crowded.length > 1 ? 's' : ''} ${tri.crowded.join(', ')}: too tight to draw, as an octave lower.` : ''), 0.1, { fill: '#333' });
+    cy += 0.03;
+    para('A ring marks each chord’s three notes, its numeral by the top one: pick them one at a time. In every zone each chord has three, never more than two frets apart, so the whole progression stays in one place. A note two chords share wears both rings; a grey note is a chord tone outside the scale.', 0.1, { fill: '#333' });
+    // Each zone's frets as tab, top string first; octave repeats folded in.
+    const { names, repeats } = lapZoneNames(Z.zones, Z.rows);
+    Z.zones.forEach((z, i) => {
+      if (repeats[i] || z.to > g.d.length - 1) return;
+      const again = Z.zones.filter((w, j) => repeats[j] && names[j].startsWith(names[i] + ' ') && w.to <= g.d.length - 1).map((w) => w.from);
+      const where = `frets ${z.from}–${z.to}` + (again.length ? `, again from ${again.join(' and ')}` : '');
+      const tab = Z.rows.map((row, ri) => (z.picks[ri] === null ? null : `${row.numeral} ${row.clusters[z.picks[ri]].frets.slice().reverse().join('·')}`)).filter(Boolean);
+      para(`${names[i]} · ${where}`, 0.1, { bold: true });
+      para(tab.join('   '), 0.1, { fill: '#333' });
+    });
+    para(`Frets are for strings ${top.join('·')}, top string first.`, 0.095, { fill: '#666' });
   }
   cy += 0.05;
   para('Lettering reads from the playing position: nut to your left, low string nearest you (the left edge of each strip).', 0.105, { fill: '#333' });
