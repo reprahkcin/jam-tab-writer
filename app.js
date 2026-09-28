@@ -6362,8 +6362,8 @@ function boot() {
   el.toggleNumbers.checked = prefs.nashville;
   applyLayout();
   applyPrintCols();
-  // No demo/seed content — start empty and let the user create the first song
-  // (or reconnect a folder below).
+  // A first visit gets the example song once the folders have had their say
+  // (see maybeSeedExample in tour.js); otherwise open the last song.
   if (songs.length) {
     const last = localStorage.getItem(LAST_KEY);
     const startId = songs.some((s) => s.id === last)
@@ -6374,10 +6374,10 @@ function boot() {
     showEmptyState();
   }
 
-  // Reconnect any remembered folders (some may need a permission click).
-  bootFolders();
-  // Import a shared song if the URL carries one.
-  importSharedSong();
+  // Reconnect any remembered folders (some may need a permission click) and
+  // import a shared song if the URL carries one; only then, with both settled,
+  // offer a first-time visitor the example song.
+  Promise.allSettled([bootFolders(), importSharedSong()]).then(() => maybeSeedExample());
 }
 
 // Nothing selected: blank the workspace and invite the user to create a song.
