@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1" />
   <meta name="theme-color" content="#1e1e1e" />
   <link rel="stylesheet" href="vendor/driver/driver.css?v=1" />
-  <link rel="stylesheet" href="styles.css?v=112" />
+  <link rel="stylesheet" href="styles.css?v=113" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -547,9 +547,41 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
           <span class="ha-sub">A finished chart with sections, strumming and a riff, to try things on</span>
         </button>
       </div>
+      <label class="help-intro-ctl"><input type="checkbox" id="help-intro" /> Show the welcome screen each time the app opens</label>
       <div class="help-sub-head">Keyboard shortcuts</div>
       <div id="help-body" class="help-body"></div>
       <div class="share-actions"><button id="help-close">Close</button></div>
+    </div>
+  </div>
+
+  <!-- Welcome: what the app is and the ways in, each time it opens — unless
+       the tick box turns it off (Help turns it back on). Filled by tour.js. -->
+  <div id="intro-modal" class="share-modal intro-modal" hidden role="dialog" aria-modal="true" aria-labelledby="intro-title">
+    <div class="share-card intro-card">
+      <div class="intro-head">
+        <img class="intro-logo" src="favicon.svg?v=1" alt="" width="44" height="44" />
+        <div>
+          <div id="intro-title" class="intro-title">Jam Tab Writer</div>
+          <div class="intro-tag">Write a song, and it charts itself for everyone in the room.</div>
+        </div>
+      </div>
+      <ul class="intro-points">
+        <li><svg class="ico" aria-hidden="true"><use href="#i-edit"/></svg>
+          <span><b>Write.</b> Type the lyrics, drop chords in square brackets, and the chart lays itself out as you go.</span></li>
+        <li><svg class="ico" aria-hidden="true"><use href="#i-charts"/></svg>
+          <span><b>Every player.</b> Chord diagrams, scale maps and triad zones for guitars, lap steel, mandolin, ukulele, piano, bass and harmonica.</span></li>
+        <li><svg class="ico" aria-hidden="true"><use href="#i-perform"/></svg>
+          <span><b>Take it to the room.</b> Perform full screen with auto-scroll, share a link, or print for the band.</span></li>
+      </ul>
+      <div class="intro-actions">
+        <button id="intro-tour" class="intro-primary">Take the tour</button>
+        <button id="intro-example">Open the example song</button>
+        <button id="intro-continue">Continue</button>
+      </div>
+      <div class="intro-foot">
+        <label class="intro-hide"><input type="checkbox" id="intro-hide" /> Don’t show this when the app opens</label>
+        <span class="intro-where">The tour, and a switch to bring this back, live in Help: the <b>?</b> button.</span>
+      </div>
     </div>
   </div>
 
@@ -601,14 +633,14 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=112"></script>
+  <script src="chords.js?v=113"></script>
   <!-- After chords.js: the theory charts are drawn with its renderers. -->
-  <script src="learn.js?v=112"></script>
-  <script src="pdf2cho.js?v=112"></script>
-  <script src="qr.js?v=112"></script>
+  <script src="learn.js?v=113"></script>
+  <script src="pdf2cho.js?v=113"></script>
+  <script src="qr.js?v=113"></script>
   <!-- The guided tour: driver.js 1.8.0 (MIT, vendored), then the example song and tour steps. -->
   <script src="vendor/driver/driver.js?v=1"></script>
-  <script src="tour.js?v=112"></script>
-  <script src="app.js?v=112"></script>
+  <script src="tour.js?v=113"></script>
+  <script src="app.js?v=113"></script>
 </body>
 </html>

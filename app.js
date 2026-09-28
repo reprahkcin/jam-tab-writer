@@ -702,6 +702,7 @@ function loadPrefs() {
     metro: { bpm: 100, steps: 16, click: true, pattern: null },
     tunerPreset: 'standard',
     lapTuning: 'lapC6', // a TUNER_PRESETS id; checked when it's read (see lapTuning)
+    showIntro: true,    // the welcome screen, each time the app opens
     lapZones: true,     // the triad zones under the lap steel's fret map
     lapZoneSet: 0,      // which three strings they're on: 0 = strings 1–3, 1 = 2–4 …
     folded: {},         // reference sections folded shut on screen, by id
@@ -4481,7 +4482,11 @@ function renderHelp() {
       `<div class="help-row"><span class="help-keys">${keys.map((k) => `<kbd>${escapeHtml(k)}</kbd>`).join('<span class="help-or">or</span>')}</span>` +
       `<span class="help-desc">${escapeHtml(desc)}</span></div>`).join('') + '</div>').join('');
 }
-function openHelp() { renderHelp(); document.getElementById('help-modal').hidden = false; }
+function openHelp() {
+  renderHelp();
+  document.getElementById('help-intro').checked = prefs.showIntro !== false;
+  document.getElementById('help-modal').hidden = false;
+}
 function closeHelp() { document.getElementById('help-modal').hidden = true; }
 document.getElementById('help-btn').addEventListener('click', openHelp);
 document.getElementById('help-close').addEventListener('click', closeHelp);
@@ -6420,8 +6425,9 @@ function boot() {
   el.toggleNumbers.checked = prefs.nashville;
   applyLayout();
   applyPrintCols();
-  // A first visit gets the example song once the folders have had their say
-  // (see maybeSeedExample in tour.js); otherwise open the last song.
+  // A first visit gets the example song once the folders have had their say,
+  // and everyone the welcome screen unless they've turned it off (both in
+  // tour.js); otherwise open the last song.
   if (songs.length) {
     const last = localStorage.getItem(LAST_KEY);
     const startId = songs.some((s) => s.id === last)
@@ -6435,7 +6441,7 @@ function boot() {
   // Reconnect any remembered folders (some may need a permission click) and
   // import a shared song if the URL carries one; only then, with both settled,
   // offer a first-time visitor the example song.
-  Promise.allSettled([bootFolders(), importSharedSong()]).then(() => maybeSeedExample());
+  Promise.allSettled([bootFolders(), importSharedSong()]).then(() => maybeSeedExample()).finally(() => maybeShowIntro());
 }
 
 // Nothing selected: blank the workspace and invite the user to create a song.

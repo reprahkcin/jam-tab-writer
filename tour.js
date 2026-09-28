@@ -89,8 +89,8 @@ function openExampleSong() {
 }
 
 // A first visit — nothing in this browser, no folders waiting — opens on the
-// example, with an offer of the tour. Anyone else is marked as having seen it,
-// so emptying a library later never brings it back uninvited.
+// example (the welcome screen offers the tour). Anyone else is marked as
+// having seen it, so emptying a library later never brings it back uninvited.
 async function maybeSeedExample() {
   let seen = false;
   try { seen = localStorage.getItem(EXAMPLE_SEEN_KEY) === '1'; } catch { return; }
@@ -102,25 +102,24 @@ async function maybeSeedExample() {
   if ((saved && saved.length) || mode !== 'local' || songs.length) { markSeen(); return; }
   openExampleSong();
   markSeen();
-  showTourInvite();
 }
 
-// A quiet card in the corner, once: take the tour now, or not.
-function showTourInvite() {
-  if (document.getElementById('tour-invite')) return;
-  const card = document.createElement('div');
-  card.id = 'tour-invite';
-  card.className = 'tour-invite';
-  card.setAttribute('role', 'dialog');
-  card.setAttribute('aria-label', 'Welcome');
-  card.innerHTML = '<div class="ti-title">Welcome to Jam Tab Writer</div>' +
-    '<div class="ti-body">This is an example song, there to show how a chart comes together. ' +
-    'Change it, delete it, or take a two-minute tour of everything the app does.</div>' +
-    '<div class="ti-actions"><button class="ti-go">Take the tour</button><button class="ti-later">Not now</button></div>' +
-    '<div class="ti-foot">The tour is always in Help, the <b>?</b> button.</div>';
-  document.body.appendChild(card);
-  card.querySelector('.ti-go').addEventListener('click', () => { card.remove(); startTour(); });
-  card.querySelector('.ti-later').addEventListener('click', () => card.remove());
+// ---- The welcome screen ------------------------------------------------------
+// What the app is and the three ways in — the tour, the example song, or
+// straight on — each time the app opens, until its tick box says otherwise.
+// Help carries the same switch, to bring it back.
+function openIntro() {
+  document.getElementById('intro-hide').checked = prefs.showIntro === false;
+  document.getElementById('intro-modal').hidden = false;
+  document.getElementById('intro-tour').focus();
+}
+function closeIntro() { document.getElementById('intro-modal').hidden = true; }
+function maybeShowIntro() { if (prefs.showIntro !== false) openIntro(); }
+function setShowIntro(on) {
+  prefs.showIntro = on;
+  savePrefs();
+  document.getElementById('intro-hide').checked = !on;
+  document.getElementById('help-intro').checked = on;
 }
 
 // ---- The tour -----------------------------------------------------------------
@@ -242,7 +241,7 @@ function tourSteps(exampleStays) {
     { el: '#perform-btn', where: 'header', only: 'desktop', title: 'Perform',
       text: 'The chart full screen for the stage: columns, type size, auto-scroll, and song to song through a setlist.' },
     { el: '#help-btn', where: 'header', title: 'Help',
-      text: 'Come back here for this tour, the example song, and the keyboard shortcuts. <kbd>?</kbd> opens it too.' },
+      text: 'Come back here for this tour, the example song, the keyboard shortcuts, and the switch for the welcome screen. <kbd>?</kbd> opens it too.' },
 
     { title: 'That’s the tour',
       text: exampleStays
@@ -260,7 +259,7 @@ function startTour() {
     return;
   }
   closeHelp();
-  document.getElementById('tour-invite')?.remove();
+  closeIntro();
   const before = { id: currentId, layout: prefs.layout, rightTab: prefs.rightTab, phoneTab: prefs.phoneTab };
   const existed = songs.some((s) => s.example);
   const ex = openExampleSong();
@@ -324,6 +323,18 @@ function startTour() {
   tour.drive();
 }
 
-// The Help dialog's two ways in.
+// The Help dialog's two ways in, and its welcome-screen switch.
 document.getElementById('help-tour').addEventListener('click', startTour);
 document.getElementById('help-example').addEventListener('click', () => { closeHelp(); openExampleSong(); });
+document.getElementById('help-intro').addEventListener('change', (e) => setShowIntro(e.target.checked));
+
+// The welcome screen's.
+document.getElementById('intro-tour').addEventListener('click', () => { closeIntro(); startTour(); });
+document.getElementById('intro-example').addEventListener('click', () => { closeIntro(); openExampleSong(); });
+document.getElementById('intro-continue').addEventListener('click', closeIntro);
+document.getElementById('intro-hide').addEventListener('change', (e) => setShowIntro(!e.target.checked));
+// A click on the dimmed backdrop, or Esc, is Continue.
+document.getElementById('intro-modal').addEventListener('click', (e) => { if (e.target.id === 'intro-modal') closeIntro(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !document.getElementById('intro-modal').hidden) closeIntro();
+});
