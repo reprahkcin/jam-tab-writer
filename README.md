@@ -18,19 +18,25 @@ local server needed. (Editing `file://` locally still can't use folder mode; run
 Everything runs locally in the page. Your songs are saved automatically in the
 browser (localStorage), and you can also export/import them as files.
 
-## First visit: the example song and the tour
+## Opening the app: the welcome screen, the example song and the tour
 
-A new browser opens on an **example song**, *Brackets and Bars* — an original
+Each time the app opens it shows a **welcome screen**: what the app does in
+three lines, and the three ways in — **Take the tour**, **Open the example
+song**, or **Continue** to where you left off (so do Esc and a click outside
+it). Its tick box, *Don't show this when the app opens*, turns it off for this
+browser; **Help** has the same switch to bring it back.
+
+A new browser also opens on an **example song**, *Brackets and Bars* — an original
 song whose lyrics explain the writing syntax as you read them. It fills every
 chart from the first second: sections for the form, eight chords of different
 kinds (a slash chord, a sus, an add9, a 7th) for every instrument's diagrams,
-the key and tempo cards, two strumming patterns and an intro riff. A small card
-in the corner offers the tour; the example is yours to change or delete, and it
-never comes back uninvited once a browser has been offered it. A browser that
+the key and tempo cards, two strumming patterns and an intro riff. The example
+is yours to change or delete, and it never comes back uninvited once a browser
+has been offered it. A browser that
 already has songs, or folders waiting to reconnect, isn't given one.
 
-**Help** (the **?** button, or press **?**) holds two ways in, above the keyboard
-shortcuts:
+**Help** (the **?** button, or press **?**) holds two ways in and the
+welcome-screen switch, above the keyboard shortcuts:
 
 - **Take the tour** — about thirty steps through the whole app on the example
   song: the library, the song strip, the editor and its tools, parts, the chart,
