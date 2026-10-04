@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1" />
   <meta name="theme-color" content="#1e1e1e" />
   <link rel="stylesheet" href="vendor/driver/driver.css?v=1" />
-  <link rel="stylesheet" href="styles.css?v=113" />
+  <link rel="stylesheet" href="styles.css?v=114" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -262,6 +262,8 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
             <span class="pane-both-label">Chart &amp; reference</span>
             <span class="view-toggles">
               <label title="Show chords as Nashville numbers (scale degrees relative to the key)"><input type="checkbox" id="toggle-numbers" /> Numbers</label>
+              <!-- Preview view only: the reference column beside the chart, or the chart alone. -->
+              <label class="ref-toggle" title="Show the reference column beside the chart in Preview view"><input type="checkbox" id="toggle-preview-ref" /> Reference</label>
             </span>
             <!-- How the chart leaves the room — link, file, paper — with the
                  column setting Print obeys. -->
@@ -633,14 +635,14 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=113"></script>
+  <script src="chords.js?v=114"></script>
   <!-- After chords.js: the theory charts are drawn with its renderers. -->
-  <script src="learn.js?v=113"></script>
-  <script src="pdf2cho.js?v=113"></script>
-  <script src="qr.js?v=113"></script>
+  <script src="learn.js?v=114"></script>
+  <script src="pdf2cho.js?v=114"></script>
+  <script src="qr.js?v=114"></script>
   <!-- The guided tour: driver.js 1.8.0 (MIT, vendored), then the example song and tour steps. -->
   <script src="vendor/driver/driver.js?v=1"></script>
-  <script src="tour.js?v=113"></script>
-  <script src="app.js?v=113"></script>
+  <script src="tour.js?v=114"></script>
+  <script src="app.js?v=114"></script>
 </body>
 </html>

@@ -707,6 +707,7 @@ function loadPrefs() {
     lapZoneSet: 0,      // which three strings they're on: 0 = strings 1–3, 1 = 2–4 …
     folded: {},         // reference sections folded shut on screen, by id
     rightTab: 'chart',  // the right column's tab in split view: 'chart' | 'ref'
+    previewRef: true,   // Preview view: the reference column beside the chart
   };
   let p = defaults;
   try { p = Object.assign(defaults, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}')); } catch { /* keep defaults */ }
@@ -3261,7 +3262,19 @@ function applyLayout() {
   document.querySelectorAll('#view-switch .vs-btn').forEach((b) => {
     b.setAttribute('aria-pressed', b.dataset.view === mode ? 'true' : 'false');
   });
+  // The Preview view's reference column can be put away, leaving the chart the
+  // whole width; its heading says which it is showing.
+  const ref = prefs.previewRef !== false;
+  document.body.classList.toggle('preview-noref', !ref);
+  document.getElementById('toggle-preview-ref').checked = ref;
+  document.querySelector('.pane-both-label').textContent = ref ? 'Chart & reference' : 'Chart';
 }
+document.getElementById('toggle-preview-ref').addEventListener('change', (e) => {
+  prefs.previewRef = e.target.checked;
+  savePrefs();
+  applyLayout();
+  if (currentSong()) renderPreview(); // the chart lays out at its new width
+});
 document.querySelectorAll('#view-switch .vs-btn').forEach((b) => {
   b.addEventListener('click', () => {
     prefs.layout = b.dataset.view;
