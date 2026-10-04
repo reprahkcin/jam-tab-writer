@@ -543,6 +543,10 @@ main { display: flex; flex: 1; min-height: 0; }
   body.view-preview #preview > #capo-banner { grid-column: 1 / -1; }
   body.view-preview #preview > .chart-col { grid-column: 1; grid-row: 3; overflow-y: auto; min-height: 0; padding-bottom: 14px; }
   body.view-preview #preview > .ref-col { grid-column: 2; grid-row: 3; overflow-y: auto; min-height: 0; padding: 0 0 14px 18px; border-left: 1px solid var(--line); }
+  /* …or, with the Reference box unticked, the chart alone at the full width. */
+  body.view-preview.preview-noref #preview { grid-template-columns: minmax(0, 1fr); }
+  body.view-preview.preview-noref #preview > .ref-col { display: none; }
+  body.view-preview .view-toggles label.ref-toggle { display: flex; }
   body.view-preview .instrument-bar { grid-template-columns: repeat(8, minmax(0, 1fr)); }
   body.view-preview .inst-chip { font-size: 11px; padding: 3px 4px; }
 }
@@ -843,6 +847,8 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
 /* Stands in for the tabs where both columns are on view (the Preview view). */
 .pane-both-label { display: none; }
 .view-toggles label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+/* The Reference switch belongs to the Preview view, where both columns show. */
+.view-toggles label.ref-toggle { display: none; }
 .view-toggles input { accent-color: var(--accent); }
 /* Share, Export and Print at the end of the Chart pane header. Print opens a
    small menu holding the paper-only options, so a column setting never reads

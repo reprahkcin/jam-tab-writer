@@ -141,6 +141,7 @@ function tourReveal(where) {
   if (where === 'edit' && layout === 'preview') want = 'split';
   if ((where === 'chart' || where === 'ref') && layout === 'editor') want = 'split';
   if (want !== layout) { prefs.layout = want; applyLayout(); renderPreview(); }
+  if (where === 'ref' && want === 'preview' && prefs.previewRef === false) { prefs.previewRef = true; applyLayout(); renderPreview(); }
   if ((where === 'chart' || where === 'ref') && (prefs.layout || 'split') === 'split' && prefs.rightTab !== where) setRightTab(where);
 }
 
@@ -200,7 +201,7 @@ function tourSteps(exampleStays) {
     { el: '#pane-resizer', where: 'chart', only: 'desktop', title: 'Make room',
       text: 'Drag to share the width between the editor and the chart. Double-click to even it up again.' },
     { el: '.pane-tabs', where: 'chart', only: 'desktop', title: 'Chart and Reference',
-      text: 'The right-hand column has two tabs: the chart you read, and the reference charts for the band. The Preview view shows both side by side.' },
+      text: 'The right-hand column has two tabs: the chart you read, and the reference charts for the band. The Preview view shows both side by side, or the chart alone with its Reference box unticked.' },
     { el: '#roadmap', where: 'chart', title: 'The form',
       text: 'The song’s sections in order. Click one to jump the chart to it.' },
     { el: '#preview-body', where: 'chart', side: 'left', title: 'The chart',
@@ -260,7 +261,7 @@ function startTour() {
   }
   closeHelp();
   closeIntro();
-  const before = { id: currentId, layout: prefs.layout, rightTab: prefs.rightTab, phoneTab: prefs.phoneTab };
+  const before = { id: currentId, layout: prefs.layout, rightTab: prefs.rightTab, phoneTab: prefs.phoneTab, previewRef: prefs.previewRef };
   const existed = songs.some((s) => s.example);
   const ex = openExampleSong();
   const stamp = ex.updated;
@@ -277,12 +278,39 @@ function startTour() {
     popover: { title: st.title, description: st.text, side: phone ? undefined : st.side },
   }));
   let tour = null;
+  // Put everything back, once, however the tour ends. driver.js only reports
+  // an ending (onDestroyed) once a step has finished arriving, so leaving
+  // mid-move would skip it; the closing hook and the Done button call this too.
+  let restored = false;
+  const restore = () => {
+    if (restored) return;
+    restored = true;
+    const s = songs.find((x) => x.id === ex.id);
+    let removed = false;
+    if (!existed && s && s.updated === stamp) {
+      songs = songs.filter((x) => x.id !== ex.id);
+      if (mode === 'local') saveSongs(songs);
+      removed = true;
+    }
+    prefs.layout = before.layout;
+    prefs.previewRef = before.previewRef;
+    applyLayout();
+    setRightTab(before.rightTab);
+    if (phone) setPhoneTab(before.phoneTab || 'edit'); else prefs.phoneTab = before.phoneTab;
+    savePrefs();
+    if (before.id && songs.some((x) => x.id === before.id)) selectSong(before.id);
+    else if (removed) {
+      if (songs.length) selectSong([...songs].sort((a, b) => b.updated - a.updated)[0].id);
+      else showEmptyState();
+    }
+    renderList();
+  };
   const go = (dir) => {
     const to = (tour.getActiveIndex() ?? 0) + dir;
     if (to < 0) return;
-    if (to >= plan.length) { tour.destroy(); return; }
+    if (to >= plan.length) { tour.destroy(); restore(); return; }
     tourReveal(plan[to].where);
-    requestAnimationFrame(() => tour.moveTo(to)); // after the revealed pane has laid out
+    setTimeout(() => tour.moveTo(to), 0); // once the reveal has run; a timer, since rAF never fires in a background tab
   };
 
   tour = window.driver.js.driver({
@@ -299,26 +327,8 @@ function startTour() {
     smoothScroll: true,
     onNextClick: () => go(1),
     onPrevClick: () => go(-1),
-    onDestroyed: () => {
-      const s = songs.find((x) => x.id === ex.id);
-      let removed = false;
-      if (!existed && s && s.updated === stamp) {
-        songs = songs.filter((x) => x.id !== ex.id);
-        if (mode === 'local') saveSongs(songs);
-        removed = true;
-      }
-      prefs.layout = before.layout;
-      applyLayout();
-      setRightTab(before.rightTab);
-      if (phone) setPhoneTab(before.phoneTab || 'edit'); else prefs.phoneTab = before.phoneTab;
-      savePrefs();
-      if (before.id && songs.some((x) => x.id === before.id)) selectSong(before.id);
-      else if (removed) {
-        if (songs.length) selectSong([...songs].sort((a, b) => b.updated - a.updated)[0].id);
-        else showEmptyState();
-      }
-      renderList();
-    },
+    onDestroyStarted: () => { tour.destroy(); restore(); },
+    onDestroyed: restore,
   });
   tour.drive();
 }
