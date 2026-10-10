@@ -11,6 +11,12 @@
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 }
 
+/* A name for screen readers on a control whose purpose is plain on screen. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
 * { box-sizing: border-box; }
 
 html, body {
@@ -428,7 +434,7 @@ main { display: flex; flex: 1; min-height: 0; }
   border-radius: 6px;
   padding: 4px 8px;
 }
-.stepper label { font-size: 12px; color: var(--muted); }
+.stepper .ctl-label { font-size: 12px; color: var(--muted); }
 .stepper button { padding: 2px 9px; font-size: 15px; }
 .stepper span { min-width: 22px; text-align: center; font-variant-numeric: tabular-nums; }
 .tempo-input {
@@ -1686,7 +1692,7 @@ body.performing { overflow: hidden; }
   white-space: nowrap;
 }
 .pf-group { display: flex; align-items: center; gap: 6px; }
-.pf-group label { color: var(--muted); text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+.pf-group .ctl-label { color: var(--muted); text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
 .pf-num { min-width: 20px; text-align: center; font-variant-numeric: tabular-nums; }
 .perform-bar button {
   background: var(--panel-2);

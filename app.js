@@ -102,7 +102,7 @@ function renderLine(raw, semitones, numKey, li) {
   // Walk the line, pulling out [chords] and tracking their column in the lyric.
   const chords = [];
   let lyric = '';
-  const re = /\[([^\]]*)\]/g;
+  const re = /\[([^\[\]]*)\]/g;
   let last = 0, m;
   while ((m = re.exec(raw)) !== null) {
     lyric += raw.slice(last, m.index);
@@ -172,7 +172,7 @@ function renderLineWrapped(raw, semitones, numKey) {
   // Same parse as renderLine: pull out [chords] and note where each lands.
   const chords = [];
   let lyric = '';
-  const re = /\[([^\]]*)\]/g;
+  const re = /\[([^\[\]]*)\]/g;
   let last = 0, m;
   while ((m = re.exec(raw)) !== null) {
     lyric += raw.slice(last, m.index);
@@ -187,7 +187,12 @@ function renderLineWrapped(raw, semitones, numKey) {
 
   // One segment per word (leading space kept with its word) so the line can
   // break between words while each chord stays glued above its syllable.
-  const toks = lyric.match(/\s*\S+|\s+/g) || [];
+  const toks = [];
+  let lead = '';
+  for (const part of lyric.match(/\s+|\S+/g) || []) {
+    if (part.trim()) { toks.push(lead + part); lead = ''; } else lead = part;
+  }
+  if (lead) toks.push(lead);
   const segs = [];
   let i = 0;
   for (const t of toks) {
@@ -375,7 +380,7 @@ async function loadLibrarySongs(lib) {
   const loose = [];
   await scanDir(lib.handle, '', found, dirs, loose);
   lib.subdirs = dirs;
-  if (loose.length) tidyLooseTakes(loose);
+  if (loose.length) void tidyLooseTakes(loose);
   found.sort((a, b) => a.path.localeCompare(b.path));
   const loaded = [];
   for (const f of found) {
@@ -396,7 +401,7 @@ function persistLibraries() {
 
 // Turn a title into a safe, unique .cho filename within a folder.
 function slugFilename(title, used) {
-  const base = (title || 'untitled').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'untitled';
+  const base = (title || 'untitled').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'untitled';
   let name = base + '.cho', i = 2;
   while (used.has(name.toLowerCase())) name = base + '-' + (i++) + '.cho';
   used.add(name.toLowerCase());
@@ -769,7 +774,7 @@ function selectSong(id) {
     // Selecting a chart points the new-file target at its folder + subfolder, so
     // + New / Import / PDF-drop land next to what you're looking at.
     if (s.libId) { activeLibId = s.libId; activeSubpath = (s.path || '').split('/').slice(0, -1).join('/'); }
-    if (s.path) idbSet('lastPath', s.path);
+    if (s.path) void idbSet('lastPath', s.path);
   }
   el.title.value = s.title;
   el.artist.value = s.artist;
@@ -787,7 +792,7 @@ function selectSong(id) {
   // The takes list is a view on the open song, so it follows the selection
   // whenever the capture panel is showing. (renderTakes is defined later.)
   const capPanel = document.getElementById('capture-panel');
-  if (capPanel && !capPanel.hidden) renderTakes();
+  if (capPanel && !capPanel.hidden) void renderTakes();
 }
 
 // Two views of every chord:
@@ -933,7 +938,7 @@ function activeInstruments() { return INSTRUMENTS.filter((i) => prefs.ensemble[i
 function chordListFor(s) {
   const shapeSh = shapeShift(s);
   const seen = new Set(), out = [];
-  for (const tok of s.body.match(/\[([^\]]*)\]/g) || []) {
+  for (const tok of s.body.match(/\[([^\[\]]*)\]/g) || []) {
     const name = tok.slice(1, -1);
     if (!isChord(name)) continue;
     const shape = transposeChord(name, shapeSh);
@@ -1073,7 +1078,7 @@ function renderTheory(s) {
     // s.key is stored as the sounding key, so a capo has to be added back on.
     cur.key = e.target.value === 'auto'
       ? null
-      : (((parseInt(e.target.value, 10) + (cur.capo || 0)) % 12) + 12) % 12;
+      : (((Number.parseInt(e.target.value, 10) + (cur.capo || 0)) % 12) + 12) % 12;
     cur.updated = Date.now();
     schedulePersist();
     renderPreview();
@@ -1149,7 +1154,7 @@ function renderInstruments(s) {
           : '';
         map = scaleDiagramSVG(pc, scale.iv, highlight, lap.abs, {
           onWire: true, ruler, shapeAt: kindsAt, gutter: 30,
-          stringNames: lap.t.strings.map(([note]) => note.replace(/-?\d+$/, '')),
+          stringNames: lap.t.strings.map(([note]) => note.replace(/-?\d{1,2}$/, '')),
         }) +
           `<div class="lap-ruler-note">Notes sit on the fret, where the bar goes. ` +
           `Under the numbers: the chord a straight bar gives at each fret, this song’s in bold.${posNote}</div>` +
@@ -1293,7 +1298,7 @@ function lapRuler(lap) {
 // that follows itself counted once.
 function chordSequence(s) {
   const shapeSh = shapeShift(s), out = [];
-  for (const tok of s.body.match(/\[([^\]]*)\]/g) || []) {
+  for (const tok of s.body.match(/\[([^\[\]]*)\]/g) || []) {
     const name = tok.slice(1, -1);
     if (!isChord(name)) continue;
     const shape = transposeChord(name, shapeSh);
@@ -1511,7 +1516,7 @@ function renderInsertForm() {
   const form = document.getElementById('insert-form');
   const pick = (id, apply) => form.querySelector(id).addEventListener('change', (e) => { apply(e.target); savePrefs(); renderInsertPreview(); });
   pick('#insert-tuning', (t) => { insert.tuning = t.value; });
-  pick('#insert-root', (t) => { insert.root = parseInt(t.value, 10); });
+  pick('#insert-root', (t) => { insert.root = Number.parseInt(t.value, 10); });
   pick('#insert-scale', (t) => {
     insert.scale = t.value;
     for (const id of ['#insert-positions', '#insert-zones']) form.querySelector(id).disabled = t.value === 'chromatic';
@@ -1523,7 +1528,7 @@ function renderInsertForm() {
   pick('#insert-zones', (t) => { prefs.lapInsert.zones = t.checked; });
   form.querySelectorAll('[data-neck]').forEach((input) => input.addEventListener('change', () => {
     const [key, , , min, max] = LAP_NECK_FIELDS.find((f) => f[0] === input.dataset.neck);
-    const v = key === 'frets' ? parseInt(input.value, 10) : parseFloat(input.value);
+    const v = key === 'frets' ? Number.parseInt(input.value, 10) : Number.parseFloat(input.value);
     if (!(v >= min && v <= max)) { flashInvalid(input); input.value = prefs.lapNeck[key]; return; }
     prefs.lapNeck[key] = v;
     savePrefs(); renderInsertPreview();
@@ -1549,7 +1554,7 @@ document.addEventListener('keydown', (e) => {
 
 function wireInstruments(s) {
   el.instPanels.querySelectorAll('.cd-voicing').forEach((sel) => sel.addEventListener('change', () => {
-    (prefs.voicings[sel.dataset.inst] || (prefs.voicings[sel.dataset.inst] = {}))[sel.dataset.chord] = parseInt(sel.value, 10);
+    (prefs.voicings[sel.dataset.inst] || (prefs.voicings[sel.dataset.inst] = {}))[sel.dataset.chord] = Number.parseInt(sel.value, 10);
     savePrefs(); renderInstruments(currentSong());
   }));
   const lapSel = el.instPanels.querySelector('.lap-tuning');
@@ -1560,7 +1565,7 @@ function wireInstruments(s) {
   const lapInsertBtn = el.instPanels.querySelector('.lap-insert-btn');
   if (lapInsertBtn) lapInsertBtn.addEventListener('click', openLapInsert);
   el.instPanels.querySelectorAll('.pk-inv').forEach((sel) => sel.addEventListener('change', () => {
-    (prefs.pianoInv.piano || (prefs.pianoInv.piano = {}))[sel.dataset.chord] = parseInt(sel.value, 10);
+    (prefs.pianoInv.piano || (prefs.pianoInv.piano = {}))[sel.dataset.chord] = Number.parseInt(sel.value, 10);
     savePrefs(); renderInstruments(currentSong());
   }));
   const toggleFocus = (shape) => {
@@ -1583,13 +1588,13 @@ function wireInstruments(s) {
   });
   const zoneSet = el.instPanels.querySelector('.lap-zone-set');
   if (zoneSet) zoneSet.addEventListener('change', () => {
-    prefs.lapZoneSet = parseInt(zoneSet.value, 10) || 0;
+    prefs.lapZoneSet = Number.parseInt(zoneSet.value, 10) || 0;
     savePrefs(); renderInstruments(currentSong());
   });
   const rootSel = document.getElementById('scale-root');
   if (rootSel) rootSel.addEventListener('change', (e) => {
     const cur = currentSong();
-    cur.scaleRoot = e.target.value === 'auto' ? null : parseInt(e.target.value, 10);
+    cur.scaleRoot = e.target.value === 'auto' ? null : Number.parseInt(e.target.value, 10);
     cur.updated = Date.now(); schedulePersist(); renderInstruments(cur);
   });
   const typeSel = document.getElementById('scale-type');
@@ -1604,7 +1609,7 @@ function wireInstruments(s) {
 
 // First chord's root is our best guess at the tonic.
 function firstChordPc(body) {
-  const m = body.match(/\[([^\]]*)\]/g);
+  const m = body.match(/\[([^\[\]]*)\]/g);
   if (!m) return null;
   for (const tok of m) {
     const name = tok.slice(1, -1);
@@ -1660,7 +1665,7 @@ function renderCapoBanner(s) {
 // Unique chord shapes used in the song, in order of first appearance.
 function uniqueShapes(s) {
   const shift = shapeShift(s);
-  const matches = s.body.match(/\[([^\]]*)\]/g) || [];
+  const matches = s.body.match(/\[([^\[\]]*)\]/g) || [];
   const seen = new Set();
   const out = [];
   for (const tok of matches) {
@@ -1705,7 +1710,7 @@ function renderHarmonica(s) {
     `</span></span>`;
   document.getElementById('key-select').addEventListener('change', (e) => {
     const cur = currentSong();
-    cur.key = e.target.value === 'auto' ? null : parseInt(e.target.value, 10);
+    cur.key = e.target.value === 'auto' ? null : Number.parseInt(e.target.value, 10);
     cur.updated = Date.now();
     schedulePersist();
     renderPreview();
@@ -1884,7 +1889,7 @@ function caretCoords(ta, pos) {
   div.appendChild(span);
   document.body.appendChild(div);
   const rect = ta.getBoundingClientRect();
-  const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2;
+  const lh = Number.parseFloat(cs.lineHeight) || Number.parseFloat(cs.fontSize) * 1.2;
   const top = rect.top + span.offsetTop - ta.scrollTop + lh;
   const left = rect.left + span.offsetLeft - ta.scrollLeft;
   document.body.removeChild(div);
@@ -2013,7 +2018,7 @@ function unpinPaletteChord(chord) {
 
 function renderPalette() {
   const s = currentSong();
-  const re = /\[([^\]]*)\]/g;
+  const re = /\[([^\[\]]*)\]/g;
   const seen = new Set();
   const textList = [];
   let m;
@@ -2110,7 +2115,7 @@ function replaceChordText(text, from, to) {
 function parseLineChords(raw) {
   const chords = [];
   let lyric = '';
-  const re = /\[([^\]]*)\]/g;
+  const re = /\[([^\[\]]*)\]/g;
   let last = 0, m;
   while ((m = re.exec(raw)) !== null) {
     lyric += raw.slice(last, m.index);
@@ -2135,7 +2140,7 @@ function buildLineChords(lyric, chords) {
     out += text.slice(at, c.pos) + '[' + c.token + ']';
     at = c.pos;
   }
-  return (out + text.slice(at)).replace(/[ \t]+$/, '');
+  return trimEndBlanks(out + text.slice(at));
 }
 
 // Move one chord to a new column, and possibly a new line: the chord row is
@@ -2461,8 +2466,8 @@ function renderTreeNode(lib, node, subpath, depth) {
       `<button class="lib-btn sf-add" title="New subfolder inside">+</button>`;
     row.querySelector('.lib-caret').addEventListener('click', (e) => { e.stopPropagation(); toggleCollapse(key); });
     row.querySelector('.sf-name').addEventListener('click', () => setActiveTarget(lib.id, childPath));
-    row.querySelector('.sf-locate').addEventListener('click', (e) => { e.stopPropagation(); revealFolder(lib, childPath); });
-    row.querySelector('.sf-add').addEventListener('click', (e) => { e.stopPropagation(); createSubfolder(lib, childPath); });
+    row.querySelector('.sf-locate').addEventListener('click', (e) => { e.stopPropagation(); void revealFolder(lib, childPath); });
+    row.querySelector('.sf-add').addEventListener('click', (e) => { e.stopPropagation(); void createSubfolder(lib, childPath); });
     el.list.appendChild(row);
     if (!isCollapsed) renderTreeNode(lib, child, childPath, depth + 1);
   }
@@ -2533,14 +2538,14 @@ function renderList() {
       `<button class="lib-btn lib-close" title="Close this folder">×</button>`;
     header.querySelector('.lib-caret').addEventListener('click', () => toggleCollapse(lib.id));
     header.querySelector('.lib-name').addEventListener('click', () => setActiveTarget(lib.id, ''));
-    header.querySelector('.lib-locate').addEventListener('click', (e) => { e.stopPropagation(); revealFolder(lib, ''); });
-    header.querySelector('.sf-add').addEventListener('click', (e) => { e.stopPropagation(); createSubfolder(lib, ''); });
+    header.querySelector('.lib-locate').addEventListener('click', (e) => { e.stopPropagation(); void revealFolder(lib, ''); });
+    header.querySelector('.sf-add').addEventListener('click', (e) => { e.stopPropagation(); void createSubfolder(lib, ''); });
     header.querySelector('.lib-reload').addEventListener('click', (e) => {
-      e.stopPropagation(); reloadLibrary(lib.id);
+      e.stopPropagation(); void reloadLibrary(lib.id);
     });
     header.querySelector('.lib-close').addEventListener('click', (e) => {
       e.stopPropagation();
-      if (confirm(`Close "${lib.name}"? The files stay on disk; the folder is just removed from the sidebar.`)) closeLibrary(lib.id);
+      if (confirm(`Close "${lib.name}"? The files stay on disk; the folder is just removed from the sidebar.`)) void closeLibrary(lib.id);
     });
     el.list.appendChild(header);
     if (!isCollapsed) renderTreeNode(lib, buildLibTree(lib), '', 1);
@@ -3054,20 +3059,20 @@ function parseCho(text, fallbackTitle) {
       }
       continue;
     }
-    const sot = line.match(/^\{(?:start_of_tab|sot)\s*:?\s*(.*)\}\s*$/i);
-    if (sot) { sawDirective = true; tabLabel = sot[1].trim() || 'Riff'; tabLines = []; continue; }
-    const sos = line.match(/^\{start_of_strum\s*:?\s*(.*)\}\s*$/i);
-    if (sos) { sawDirective = true; strumLabel = sos[1].trim() || 'Strum'; strumLines = []; continue; }
-    const t = line.match(/^\{(title|artist|transpose|capo|key|tempo|tuning|palette)\s*:\s*(.*)\}\s*$/i);
+    const sot = directiveParts(line, /^\{(start_of_tab|sot)/i, false);
+    if (sot) { sawDirective = true; tabLabel = sot[2].trim() || 'Riff'; tabLines = []; continue; }
+    const sos = directiveParts(line, /^\{(start_of_strum)/i, false);
+    if (sos) { sawDirective = true; strumLabel = sos[2].trim() || 'Strum'; strumLines = []; continue; }
+    const t = directiveParts(line, /^\{(title|artist|transpose|capo|key|tempo|tuning|palette)/i, true);
     if (t) {
       sawDirective = true;
       const key = t[1].toLowerCase();
       if (key === 'title') s.title = t[2].trim();
       else if (key === 'artist') s.artist = t[2].trim();
-      else if (key === 'transpose') s.transpose = parseInt(t[2], 10) || 0;
-      else if (key === 'capo') s.capo = Math.max(0, Math.min(11, parseInt(t[2], 10) || 0));
+      else if (key === 'transpose') s.transpose = Number.parseInt(t[2], 10) || 0;
+      else if (key === 'capo') s.capo = Math.max(0, Math.min(11, Number.parseInt(t[2], 10) || 0));
       else if (key === 'key') s.key = noteToPc(t[2]);
-      else if (key === 'tempo') s.tempo = Math.max(20, Math.min(400, parseInt(t[2], 10))) || null;
+      else if (key === 'tempo') s.tempo = Math.max(20, Math.min(400, Number.parseInt(t[2], 10))) || null;
       else if (key === 'tuning') { const v = t[2].trim(); s.tuning = isSongTuning(v) ? v : null; }
       else if (key === 'palette') s.palette = t[2].trim().split(/\s+/).map(normalizeChordInput).filter(isChord);
     } else {
@@ -3211,8 +3216,8 @@ document.getElementById('tr-down').addEventListener('click', () => setTranspose(
 document.getElementById('capo-up').addEventListener('click', () => setCapo(1));
 document.getElementById('capo-down').addEventListener('click', () => setCapo(-1));
 el.shapeGoal.addEventListener('change', () => {
-  const pc = parseInt(el.shapeGoal.value, 10);
-  if (!isNaN(pc)) applyShapeGoal(pc);
+  const pc = Number.parseInt(el.shapeGoal.value, 10);
+  if (!Number.isNaN(pc)) applyShapeGoal(pc);
 });
 document.getElementById('tempo-up').addEventListener('click', () => bumpTempo(5));
 document.getElementById('tempo-down').addEventListener('click', () => bumpTempo(-5));
@@ -3226,7 +3231,7 @@ el.songTuning.addEventListener('change', () => {
   renderTuningBanner(s);
 });
 el.tempoInput.addEventListener('change', () => {
-  const v = parseInt(el.tempoInput.value, 10);
+  const v = Number.parseInt(el.tempoInput.value, 10);
   setTempo(Number.isFinite(v) && v > 0 ? v : null);
 });
 
@@ -3336,7 +3341,7 @@ document.getElementById('export-btn').addEventListener('click', exportSong);
 function b64urlEncode(bytes) {
   let bin = '';
   for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/={1,2}$/, '');
 }
 function b64urlDecode(str) {
   str = str.replace(/-/g, '+').replace(/_/g, '/');
@@ -3590,7 +3595,7 @@ function applyPrintCols() {
   printColsSel.value = String(prefs.printCols);
 }
 printColsSel.addEventListener('change', () => {
-  prefs.printCols = parseInt(printColsSel.value, 10) || 1;
+  prefs.printCols = Number.parseInt(printColsSel.value, 10) || 1;
   savePrefs();
   applyPrintCols();
   computePrintFont();
@@ -3625,7 +3630,7 @@ function computePrintFont() {
   const usablePt = 528 - 72;     // ~6.3in, in points
   const gapPt = 22;              // ~30px column gap
   const colPt = (usablePt - (cols - 1) * gapPt) / cols;
-  const screenFontPx = parseFloat(getComputedStyle(el.previewBody).fontSize) || 14;
+  const screenFontPx = Number.parseFloat(getComputedStyle(el.previewBody).fontSize) || 14;
   const widest = widestBodyLinePx();
   // Editor-only view hides the preview, so every line measures zero and the fit
   // maths would happily settle on the 14pt ceiling and clip a wide chart. Keep
@@ -3675,8 +3680,8 @@ function renderSourcePicker() {
 document.getElementById('source-select').addEventListener('change', (e) => {
   const pick = e.target.value;
   renderSourcePicker();
-  if (pick === 'collection') setupCollection();
-  else if (pick === 'folder') openFolder();
+  if (pick === 'collection') void setupCollection();
+  else if (pick === 'folder') void openFolder();
 });
 // Filled at boot as well as on every mode change: in plain browser mode
 // nothing else would ever call updateModeUI.
@@ -3746,7 +3751,7 @@ function updateModeUI() {
 document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
     e.preventDefault();
-    saveCurrentNow();
+    void saveCurrentNow();
   }
   // Cmd/Ctrl+Alt+1/2/3 switch the desktop layout (Split / Editor / Preview).
   // Alt is included so this doesn't collide with the browser's own Cmd/Ctrl+
@@ -3777,13 +3782,21 @@ document.getElementById('pagebreak-btn').addEventListener('click', () => {
   el.editor.dispatchEvent(new Event('input'));
 });
 
+// Drop trailing spaces and tabs. A loop, not /[ \t]+$/, which rescans from
+// every run of blanks on a long line.
+function trimEndBlanks(str) {
+  let end = str.length;
+  while (end && (str[end - 1] === ' ' || str[end - 1] === '\t')) end--;
+  return str.slice(0, end);
+}
+
 // Strip every [chord] token from the text, keeping lyrics, section labels
 // ({Verse}, or a lone bracketed word like [Chorus]), and {page} markers. Only
 // tokens that actually parse as chords are removed. Trailing whitespace left
 // behind by a removed chord is trimmed per line.
 function stripChords(text) {
   return text.split('\n').map((line) =>
-    line.replace(/\[([^\[\]]*)\]/g, (m, inner) => (isChord(inner) ? '' : m)).replace(/[ \t]+$/, '')
+    trimEndBlanks(line.replace(/\[([^\[\]]*)\]/g, (m, inner) => (isChord(inner) ? '' : m)))
   ).join('\n');
 }
 
@@ -3803,9 +3816,28 @@ function editorNote(msg) {
 // field with a default whether or not the text said anything, so a reprocess has
 // to know what was really there — otherwise re-running would quietly zero the
 // transpose of a chart whose text never mentioned it.
-const DIRECTIVE_LINE = /^\{(title|artist|transpose|capo|key|tempo|tuning)\s*:\s*(.*)\}\s*$/gim;
+const DIRECTIVE_NAME = /^\{(title|artist|transpose|capo|key|tempo|tuning)/i;
 function declaredDirectives(text) {
-  return new Set([...text.matchAll(DIRECTIVE_LINE)].map((m) => m[1].toLowerCase()));
+  const found = new Set();
+  for (const line of text.split('\n')) {
+    const d = directiveParts(line, DIRECTIVE_NAME, true);
+    if (d) found.add(d[1].toLowerCase());
+  }
+  return found;
+}
+
+// Split a "{name: value}" line into [line, name, value], or null when it isn't
+// one. `opener` matches "{name"; the colon may be left out unless needColon.
+// Taken apart by hand: one pattern for the whole line backtracks badly on a
+// long line that never closes its brace.
+function directiveParts(line, opener, needColon) {
+  const whole = line.trimEnd();
+  const head = opener.exec(whole);
+  if (!head || !whole.endsWith('}')) return null;
+  let rest = whole.slice(head[0].length, -1).trimStart();
+  if (rest.startsWith(':')) rest = rest.slice(1).trimStart();
+  else if (needColon) return null;
+  return [line, head[1], rest];
 }
 
 // Run this chart through the import processing again.
@@ -3869,7 +3901,7 @@ function reprocessChart() {
         liftedRiffs = parsed.riffs.length;
       }
       body = parsed.body;
-      if (liftedFields) bits.push(`${[...declared].sort().join(', ')} lifted out of the text`);
+      if (liftedFields) bits.push(`${[...declared].sort((a, b) => a.localeCompare(b)).join(', ')} lifted out of the text`);
       if (liftedRiffs) bits.push(`${liftedRiffs} tab block${liftedRiffs === 1 ? '' : 's'} lifted into riffs`);
     }
   }
@@ -3951,11 +3983,11 @@ importInput.addEventListener('change', () => {
   const file = importInput.files[0];
   if (!file) return;
   importInput.value = '';
-  if (isPdf(file)) { convertPdfFile(file); return; }
+  if (isPdf(file)) { void convertPdfFile(file); return; }
   const reader = new FileReader();
   reader.onload = () => {
     const name = file.name.replace(/\.[^.]+$/, '');
-    importText(String(reader.result), name);
+    void importText(String(reader.result), name);
   };
   reader.readAsText(file);
 });
@@ -4057,7 +4089,7 @@ window.addEventListener('drop', (e) => {
   if (converting) return;
   const file = Array.from(e.dataTransfer.files).find(isPdf);
   if (!file) { hidePdfOverlay(); return; }
-  convertPdfFile(file);
+  void convertPdfFile(file);
 });
 
 // Replace a range of the editor text (undo-friendly), then fire input.
@@ -4521,7 +4553,7 @@ document.addEventListener('keydown', (e) => {
   // reload, and a modifier means you meant something else.
   if ((e.key === 'r' || e.key === 'R') && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
     e.preventDefault();
-    captureToggle();
+    void captureToggle();
   }
   // "D" starts dictation. Only a start: once it's running your caret is in the
   // editor, so stopping goes through Esc or the button instead of a bare letter.
@@ -5810,7 +5842,7 @@ async function captureStart() {
   cap.timer = setInterval(capTick, 200);
   capLevelLoop();
   // Names only appear once permission exists; the first take unlocks the list.
-  if (!cap.devicesLoaded) capLoadDevices();
+  if (!cap.devicesLoaded) void capLoadDevices();
 }
 
 function capTick() {
@@ -5887,7 +5919,7 @@ async function captureStop() {
   capSetStatus(wrote
     ? `Saved ${take.name} — filed in the takes folder beside the chart.`
     : `Saved ${take.name}.`);
-  renderTakes();
+  void renderTakes();
 }
 
 function capTeardown() {
@@ -6014,11 +6046,11 @@ async function renderTakes() {
   box.innerHTML = html;
 
   const tog = box.querySelector('.cap-unfiled-toggle');
-  if (tog && cur) tog.addEventListener('click', () => { capUnfiledOpen = !capUnfiledOpen; renderTakes(); });
+  if (tog && cur) tog.addEventListener('click', () => { capUnfiledOpen = !capUnfiledOpen; void renderTakes(); });
 
   box.querySelectorAll('.cap-del').forEach((b) => b.addEventListener('click', async () => {
     await takesDelete(b.dataset.id);
-    renderTakes();
+    void renderTakes();
   }));
   box.querySelectorAll('.cap-file').forEach((b) => b.addEventListener('click', async () => {
     const s = currentSong();
@@ -6030,7 +6062,7 @@ async function renderTakes() {
     t.songTitle = s.title || 'Untitled';
     await takesPut(t);
     await capWriteToDisk(t);
-    renderTakes();
+    void renderTakes();
   }));
 }
 
@@ -6136,7 +6168,7 @@ function dictPhrases() {
   if (s.title) { add(s.title, 3.0); s.title.split(/\s+/).forEach((w) => add(w, 2.0)); }
   if (s.artist) s.artist.split(/\s+/).forEach((w) => add(w, 2.0));
   // Uncommon words already in the lyrics: capitalised or simply rare-looking.
-  const body = s.body.replace(/\[[^\]]*\]/g, ' ').replace(/\{[^}]*\}/g, ' ');
+  const body = s.body.replace(/\[[^\[\]]*\]/g, ' ').replace(/\{[^{}]*\}/g, ' ');
   for (const w of body.match(/\b[A-Z][a-z']{2,}\b/g) || []) add(w, 2.0);
   return out;
 }
@@ -6175,7 +6207,7 @@ function dictWatchInstall() {
     try {
       dict.modelState = await SRec.available({ langs: [dict.lang], processLocally: true });
     } catch { /* keep the last known state */ }
-    if (dict.modelState === 'available') { dict.installing = false; dictStopWatch(); dictRefreshModel(); return; }
+    if (dict.modelState === 'available') { dict.installing = false; dictStopWatch(); void dictRefreshModel(); return; }
     dictPaintProgress();
   }, 1000);
   dictPaintProgress();
@@ -6208,7 +6240,7 @@ function dictStart() {
   if (dict.modelState !== 'available') {
     dict.showInstall = true;
     dictPaint();
-    dictRefreshModel();
+    void dictRefreshModel();
     return;
   }
   dict.showInstall = false;
@@ -6304,7 +6336,7 @@ function toggleTool(name) {
   // Closing the panel must never drop a take in progress — recording is deliberately
   // independent of whether you're looking at it.
   if (panel.hidden) { if (name === 'metro') metroStop(); if (name === 'tuner') tunerStop(); }
-  if (name === 'capture' && !panel.hidden) { capLoadDevices(); renderTakes(); }
+  if (name === 'capture' && !panel.hidden) { void capLoadDevices(); void renderTakes(); }
   // These three show as icons in the header, so the button itself has to say
   // which tool you left open — there's no label to read.
   const btn = document.getElementById(name + '-btn');
@@ -6320,7 +6352,7 @@ document.getElementById('dictate-btn').addEventListener('click', dictToggle);
 document.getElementById('dict-install').addEventListener('click', dictInstallModel);
 // Ask once at startup whether the local model is here, so the button can hide
 // itself entirely where dictation can't run.
-dictRefreshModel();
+void dictRefreshModel();
 document.getElementById('cap-toggle').addEventListener('click', captureToggle);
 document.getElementById('cap-device').addEventListener('change', (e) => {
   prefs.capture.deviceId = e.target.value || null;
@@ -6462,7 +6494,7 @@ function boot() {
   // Reconnect any remembered folders (some may need a permission click) and
   // import a shared song if the URL carries one; only then, with both settled,
   // offer a first-time visitor the example song.
-  Promise.allSettled([bootFolders(), importSharedSong()]).then(() => maybeSeedExample()).finally(() => maybeShowIntro());
+  void Promise.allSettled([bootFolders(), importSharedSong()]).then(() => maybeSeedExample()).finally(() => maybeShowIntro());
 }
 
 // Nothing selected: blank the workspace and invite the user to create a song.

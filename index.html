@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1" />
   <meta name="theme-color" content="#1e1e1e" />
   <link rel="stylesheet" href="vendor/driver/driver.css?v=1" />
-  <link rel="stylesheet" href="styles.css?v=115" />
+  <link rel="stylesheet" href="styles.css?v=116" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -103,6 +103,7 @@
         </button>
       </div>
       <div class="search-row">
+        <label for="song-search" class="sr-only">Search songs</label>
         <input id="song-search" class="song-search" type="search" placeholder="Search songs…" spellcheck="false" />
         <!-- Setlists draw from this list, so the button lives with it. -->
         <button id="setlist-btn" class="side-btn" title="Build and perform setlists" aria-label="Setlists">
@@ -111,6 +112,7 @@
       </div>
       <div id="folder-bar" class="folder-bar" hidden></div>
       <ul id="song-list"></ul>
+      <label for="import-input" hidden>Import a chart file</label>
       <input type="file" id="import-input" accept=".txt,.cho,.chordpro,.crd,.pdf,text/plain,application/pdf" hidden />
     </aside>
     <!-- Desktop only: drag to resize the song list; double-click resets. -->
@@ -121,7 +123,9 @@
            at it. The breadcrumb carries the folder path + save state; in the
            browser the sidebar's source picker already says where songs live. -->
       <div class="meta-row">
+        <label for="title-input" class="sr-only">Song title</label>
         <input id="title-input" class="title-input" type="text" placeholder="Song title" />
+        <label for="artist-input" class="sr-only">Artist</label>
         <input id="artist-input" class="artist-input" type="text" placeholder="Artist (optional)" />
         <div id="save-breadcrumb" class="save-breadcrumb" hidden></div>
         <span id="save-status" class="muted save-status"></span>
@@ -146,16 +150,17 @@
                family you want under your fingers and transpose + capo move in
                opposite directions, so the song keeps sounding in the same key. -->
           <div class="stepper shape-goal" id="shape-goal-wrap" hidden>
+            <label for="shape-goal" class="sr-only">Shapes</label>
             <select id="shape-goal" title="Play this song with the open chords of a key you're comfortable in — transpose and capo adjust together so it still sounds in the same key" aria-label="Shapes"></select>
           </div>
           <div class="stepper">
-            <label>Transpose</label>
+            <span class="ctl-label">Transpose</span>
             <button id="tr-down" title="Down a semitone">&minus;</button>
             <span id="tr-amount">0</span>
             <button id="tr-up" title="Up a semitone">+</button>
           </div>
           <div class="stepper">
-            <label>Capo</label>
+            <span class="ctl-label">Capo</span>
             <button id="capo-down" title="Move capo down a fret">&minus;</button>
             <span id="capo-amount">0</span>
             <button id="capo-up" title="Move capo up a fret">+</button>
@@ -221,14 +226,17 @@
             <span class="palette-tools">
               <button id="replace-toggle" class="inline-btn quiet" aria-expanded="false" aria-controls="replace-tools" title="Replace every instance of one chord with another">Replace…</button>
               <span id="replace-tools" class="etool" hidden>
+                <label for="replace-from" class="sr-only">Chord to replace</label>
                 <select id="replace-from" class="repl-sel" title="Chord to replace"></select>
                 &rarr;
+                <label for="replace-to" class="sr-only">Replacement chord</label>
                 <input id="replace-to" class="repl-in" type="text" placeholder="chord" spellcheck="false" title="Replacement chord" />
                 <button id="replace-go" class="inline-btn" title="Replace every instance of this chord">Go</button>
                 <button id="replace-close" class="inline-btn quiet repl-close" title="Close (Esc)" aria-label="Close the chord replacer">&#215;</button>
               </span>
             </span>
           </div>
+          <label for="editor" class="sr-only">Lyrics and chords</label>
           <textarea id="editor" spellcheck="false" placeholder="[G]Type your lyrics here and drop [C]chords in [D]brackets...
 
 Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
@@ -353,6 +361,7 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
         <button id="metro-up" title="Faster">+</button>
         <span class="metro-unit">BPM</span>
       </div>
+      <label for="metro-slider" class="sr-only">Tempo in beats per minute</label>
       <input id="metro-slider" class="metro-slider" type="range" min="40" max="240" value="100" />
       <div class="metro-row">
         <span class="dm-steps-ctl">Steps
@@ -470,7 +479,7 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
     <div id="perform-bar" class="perform-bar">
       <span class="pf-song" id="pf-song"></span>
       <div class="pf-group pf-desk-only">
-        <label>Columns</label>
+        <span class="ctl-label">Columns</span>
         <button id="pf-col-down" title="Fewer columns">&minus;</button>
         <span id="pf-cols" class="pf-num">4</span>
         <button id="pf-col-up" title="More columns">+</button>
@@ -478,27 +487,27 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
       <!-- Phone: auto-scroll speed instead of page auto-advance. -->
       <div class="pf-group pf-phone-only">
         <button id="pf-scroll-play" title="Start or stop scrolling">&#9654;</button>
-        <label>Speed</label>
+        <span class="ctl-label">Speed</span>
         <button id="pf-scroll-slower" title="Scroll slower">&minus;</button>
         <span id="pf-scroll-speed" class="pf-num">30</span>
         <button id="pf-scroll-faster" title="Scroll faster">+</button>
       </div>
       <div class="pf-group">
-        <label>Size</label>
+        <span class="ctl-label">Size</span>
         <button id="pf-font-down" title="Smaller text">&minus;</button>
         <span id="pf-font" class="pf-num">22</span>
         <button id="pf-font-up" title="Larger text">+</button>
         <button id="pf-fit" class="pf-toggle" title="Auto-fit every song to one screen at the largest size that fits">Fit</button>
       </div>
       <div class="pf-group pf-desk-only">
-        <label>Auto</label>
+        <span class="ctl-label">Auto</span>
         <button id="pf-auto" title="Auto-advance pages hands-free (play/pause)">&#9654;</button>
         <button id="pf-auto-slower" title="Slower auto-advance">&minus;</button>
         <span id="pf-auto-secs" class="pf-num">25</span>
         <button id="pf-auto-faster" title="Faster auto-advance">+</button>
       </div>
       <div class="pf-group pf-toggles pf-desk-only">
-        <label>Show</label>
+        <span class="ctl-label">Show</span>
         <button class="pf-toggle" data-panel="instruments" title="The reference for every instrument in the jam, harmonica included">Instruments</button>
       </div>
       <div class="pf-group">
@@ -625,6 +634,7 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
       <div class="share-head">Share this song</div>
       <div class="share-sub">Anyone who opens this link gets the chart on their device.</div>
       <div id="share-qr" class="share-qr"></div>
+      <label for="share-url" class="sr-only">Share link</label>
       <input id="share-url" class="share-url" type="text" readonly />
       <div class="share-actions">
         <button id="share-copy" class="tool-start">Copy link</button>
@@ -635,14 +645,14 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=115"></script>
+  <script src="chords.js?v=116"></script>
   <!-- After chords.js: the theory charts are drawn with its renderers. -->
-  <script src="learn.js?v=115"></script>
-  <script src="pdf2cho.js?v=115"></script>
-  <script src="qr.js?v=115"></script>
+  <script src="learn.js?v=116"></script>
+  <script src="pdf2cho.js?v=116"></script>
+  <script src="qr.js?v=116"></script>
   <!-- The guided tour: driver.js 1.8.0 (MIT, vendored), then the example song and tour steps. -->
   <script src="vendor/driver/driver.js?v=1"></script>
-  <script src="tour.js?v=115"></script>
-  <script src="app.js?v=115"></script>
+  <script src="tour.js?v=116"></script>
+  <script src="app.js?v=116"></script>
 </body>
 </html>

@@ -16,7 +16,7 @@ shopt -s nullglob
 for pdf in "$SRC"/*.pdf; do
   n=$((n+1))
   stem="$(basename "${pdf%.pdf}")"
-  if python3 "$DIR/pdf2cho.py" "$pdf" > "$OUT/$stem.cho" 2>/dev/null && [ -s "$OUT/$stem.cho" ]; then
+  if python3 "$DIR/pdf2cho.py" "$pdf" > "$OUT/$stem.cho" 2>/dev/null && [[ -s "$OUT/$stem.cho" ]]; then
     ok=$((ok+1)); echo "[$n] OK   $stem"
   else
     fail=$((fail+1)); echo "[$n] FAIL $stem"

@@ -199,7 +199,10 @@ for (let rootPc = 0; rootPc < 12; rootPc++) {
 // ---- 7. Lap steel grips in every lap steel tuning --------------------------
 // The tunings live with the tuner presets in app.js; pull those entries out.
 const appSrc = fs.readFileSync(require('path').join(__dirname, '..', 'app.js'), 'utf8');
-const LAP_TUNINGS = [...appSrc.matchAll(/^\s*(lap\w+): (\{ name: .*inst: 'Lap steel'.*\}),$/gm)]
+const LAP_TUNINGS = appSrc.split('\n')
+  .filter((line) => line.includes("inst: 'Lap steel'"))
+  .map((line) => /^(lap\w+): (\{ name: .*\}),$/.exec(line.trim()))
+  .filter(Boolean)
   .map(([, id, lit]) => ({ id, ...vm.runInNewContext(`(${lit})`) }));
 if (LAP_TUNINGS.length < 8) bad('lap', 'presets', `only ${LAP_TUNINGS.length} lap steel tunings found in app.js`);
 const midiOf = (n) => { const r = /^([A-G]#?)(\d)$/.exec(n); return SHARP.indexOf(r[1]) + 12 * (Number(r[2]) + 1); };
@@ -312,7 +315,7 @@ for (const t of LAP_TUNINGS) {
     }
   }
 }
-if ([...SHAPES_SEEN].sort().join() !== 'circle,diamond,square') bad('positions', 'shapes', 'expected circle, square and diamond only, got ' + [...SHAPES_SEEN]);
+if ([...SHAPES_SEEN].sort((a, b) => a.localeCompare(b)).join() !== 'circle,diamond,square') bad('positions', 'shapes', 'expected circle, square and diamond only, got ' + [...SHAPES_SEEN]);
 // The on-screen fret map draws the same shapes: every tuning and scale must
 // render with them, with no broken numbers and a glyph row under the ruler.
 for (const t of LAP_TUNINGS) {
@@ -448,7 +451,7 @@ const exMatch = tourSrc.match(/const EXAMPLE_CHO = `([\s\S]*?)`;/);
 if (!exMatch) bad('example', 'tour.js', 'EXAMPLE_CHO not found');
 else {
   const cho = exMatch[1];
-  const names = [...new Set([...cho.matchAll(/\[([^\]]+)\]/g)].map((m) => m[1]))];
+  const names = [...new Set([...cho.matchAll(/\[([^\[\]]+)\]/g)].map((m) => m[1]))];
   for (const need of ['{title:', '{artist:', '{key:', '{tempo:', '{start_of_strum', '{start_of_tab', '{Verse 1}', '{Chorus}', '{Bridge}']) {
     if (!cho.includes(need)) bad('example', need, 'missing from the example song');
   }
@@ -462,7 +465,7 @@ else {
     if (!mandoVoicing(n)) bad('example', n, 'no mandolin diagram');
     if (!lapVoicings(n, C6).length) bad('example', n, 'no lap steel grip in C6');
   }
-  const lyricLines = cho.split('\n').filter((l) => /\[[^\]]+\][a-z]/i.test(l));
+  const lyricLines = cho.split('\n').filter((l) => /\[[^\[\]]+\][a-z]/i.test(l));
   notes.push(`[example] ${names.length} chords (${names.join(' ')}), ${lyricLines.length} sung lines`);
 }
 
