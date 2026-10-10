@@ -288,7 +288,7 @@ function startTour() {
     const s = songs.find((x) => x.id === ex.id);
     let removed = false;
     if (!existed && s && s.updated === stamp) {
-      songs = songs.filter((x) => x.id !== ex.id);
+      songs.splice(songs.indexOf(s), 1);
       if (mode === 'local') saveSongs(songs);
       removed = true;
     }

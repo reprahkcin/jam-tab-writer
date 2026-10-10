@@ -70,7 +70,8 @@ def is_chord(tok):
 
 def render_pages(pdf, dpi=200):
     d = tempfile.mkdtemp()
-    subprocess.run(['pdftoppm', '-png', '-r', str(dpi), pdf, os.path.join(d, 'p')],
+    # An absolute path can't be mistaken for an option, whatever the file is called.
+    subprocess.run(['pdftoppm', '-png', '-r', str(dpi), os.path.abspath(pdf), os.path.join(d, 'p')],
                    check=True, stderr=subprocess.DEVNULL)
     return sorted(os.path.join(d, f) for f in os.listdir(d) if f.endswith('.png'))
 
@@ -187,10 +188,21 @@ def parse_meta(lines):
     meta = {}
     for ln in lines[:20]:
         t = ln.strip()
-        m = re.match(r'^(.*?)\s+Chords\s+by\s+(.+?)(?:\s+[a-z]{1,3})?$', t, re.I)
-        if m and 'title' not in meta:
-            meta['title'] = collapse(m.group(1))
-            meta['artist'] = collapse(re.sub(r'\s+[a-z]{1,3}$', '', m.group(2)))
+        # "<title> Chords by <artist>", with up to two short OCR stragglers
+        # after the artist. Split on words: one pattern for the whole line
+        # backtracks badly on a long one.
+        words = t.split()
+        low = [w.lower() for w in words]
+        at = next((i for i in range(1, len(words) - 2)
+                   if low[i] == 'chords' and low[i + 1] == 'by'), None)
+        if at is not None and 'title' not in meta:
+            artist = words[at + 2:]
+            if len(artist) > 1 and re.fullmatch(r'[a-z]{1,3}', artist[-1], re.I):
+                artist.pop()
+            if len(artist) > 1 and re.fullmatch(r'[a-z]{1,3}', artist[-1]):
+                artist.pop()
+            meta['title'] = collapse(' '.join(words[:at]))
+            meta['artist'] = collapse(' '.join(artist))
         mc = re.match(r'^Capo:?\s*(\d+)', t, re.I)
         if mc:
             meta['capo'] = int(mc.group(1))
