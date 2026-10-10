@@ -465,7 +465,8 @@ async function adoptFolderFromLocal(lib) {
     catch { continue; }
     const s = Object.assign({}, ls, { id: newId(), path: fname, libId: lib.id });
     fileHandles[s.id] = fh;
-    await writeSong(s);
+    try { await writeSong(s); }
+    catch { delete fileHandles[s.id]; continue; } // browser copy is still there
     songs.push(s);
   }
   await persistLibraries();
@@ -491,8 +492,10 @@ async function addLibrary(lib) {
 
 // Bring a freshly-built library into the app, whichever mode we're in.
 async function openLibrary(lib) {
-  if (mode === 'folder') await addLibrary(lib);
-  else await adoptFolderFromLocal(lib);
+  try {
+    if (mode === 'folder') await addLibrary(lib);
+    else await adoptFolderFromLocal(lib);
+  } catch { alert(`Could not read "${lib.name}".`); }
 }
 
 async function openFolder() {
@@ -542,9 +545,12 @@ async function reloadLibrary(libId) {
   if (!lib) return;
   const cur = currentSong();
   const keepPath = cur && cur.libId === libId ? cur.path : null;
+  // Read first: if the folder can't be read, what's on screen stays put.
+  let loaded;
+  try { loaded = await loadLibrarySongs(lib); }
+  catch { alert(`Could not re-read "${lib.name}" — the folder may have moved or its permission lapsed.`); return; }
   songs.filter((s) => s.libId === libId).forEach((s) => delete fileHandles[s.id]);
   songs = songs.filter((s) => s.libId !== libId);
-  const loaded = await loadLibrarySongs(lib);
   songs.push(...loaded);
   const again = keepPath ? loaded.find((s) => s.path === keepPath) : currentSong();
   if (again) selectSong(again.id);
@@ -3120,8 +3126,10 @@ async function importText(text, fallbackTitle) {
     s.libId = lib.id;
     fileHandles[s.id] = handle;
     songs.push(s);
-    await writeSong(s);
+    let wrote = true;
+    try { await writeSong(s); } catch { wrote = false; }
     selectSong(s.id);
+    if (!wrote) { el.status.textContent = 'Save failed'; renderBreadcrumb('Save failed'); }
     return;
   }
   songs.push(s);
@@ -4606,7 +4614,7 @@ function openPerform() {
   document.addEventListener('keydown', perfKeydown, true);
   pf.overlay.addEventListener('mousemove', perfActivity);
   perfActivity();
-  try { if (pf.overlay.requestFullscreen) pf.overlay.requestFullscreen().catch(() => {}); } catch { /* ignore */ }
+  if (pf.overlay.requestFullscreen) pf.overlay.requestFullscreen().catch(() => {});
 }
 
 function closePerform() {
@@ -4629,7 +4637,7 @@ function closePerform() {
   pf.overlay.classList.remove('immersive');
   pf.overlay.hidden = true;
   document.body.classList.remove('performing');
-  try { if (document.fullscreenElement) document.exitFullscreen(); } catch { /* ignore */ }
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   renderPreview();
 }
 
