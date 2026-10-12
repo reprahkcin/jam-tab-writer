@@ -47,6 +47,14 @@ const OPEN_CHORDS = {
   'G9':    [3, -1, 0, 2, 0, 1],
   'Eadd9': [0, 2, 2, 1, 0, 2],
   'Gadd9': [3, -1, 0, 2, 0, 3],
+  // 6ths and add11s have open forms everyone reaches for before a barre.
+  'C6':    [-1, 3, 2, 2, 1, 0],
+  'D6':    [-1, -1, 0, 2, 0, 2],
+  'Dm6':   [-1, -1, 0, 2, 0, 1],
+  'G6':    [3, 2, 0, 0, 0, 0],
+  'Cadd11':  [-1, 3, 3, 0, 1, 0],
+  'Gadd11':  [3, 2, 0, 0, 1, 3],
+  'G6add11': [3, 2, 0, 0, 1, 0],
 };
 
 // Movable barre forms. Patterns are the open shape; add the barre fret to
@@ -65,6 +73,9 @@ const MOVABLE = {
     'm6':    [0, 2, 2, 0, 2, 0],
     'aug':   [0, 3, 2, 1, 1, 0],
     'dim7':  [0, 1, 2, 0, 2, 0],
+    'add11': [0, 0, 2, 1, 0, 0],
+    'madd11': [0, 0, 2, 0, 0, 0],
+    '6add11': [0, 0, 2, 1, 2, 0],
     '5':     [0, 2, 2, -1, -1, -1],
   } },
   A: { ref: 9, q: {
@@ -87,6 +98,9 @@ const MOVABLE = {
     'maj9':  [-1, 0, 2, 4, 2, 4],
     'add9':  [-1, 0, 2, 4, 2, 0],
     'madd9': [-1, 0, 2, 4, 1, 0],
+    'add11': [-1, 0, 0, 2, 2, 0],
+    'madd11': [-1, 0, 0, 2, 1, 0],
+    '6add11': [-1, 0, 0, 2, 2, 2],
     '5':     [-1, 0, 2, 2, -1, -1],
   } },
   // D-shape forms (root on the 4th string) — handy mid-neck voicings.
@@ -219,15 +233,18 @@ function parseQuality(suffix) {
   if (/^(m7|min7|-7)/.test(s)) return 'm7';
   if (/^(m6|min6)/.test(s)) return 'm6';
   if (/^(madd9|m\(add9\))/.test(s)) return 'madd9';
+  if (/^m\(?add(11|4)/.test(s)) return 'madd11';
   if (/^(m|min|-)/.test(s)) return 'm';
   if (/^7sus/.test(s)) return '7sus4';
   if (/^9/.test(s)) return '9';
   if (/^(7|11|13)/.test(s)) return '7';            // 11/13: the b7 is the core
+  if (/^6\(?add(11|4)/.test(s)) return '6add11';
   if (/^6/.test(s)) return '6';
   if (/^5/.test(s)) return '5';
   if (/^sus2/.test(s)) return 'sus2';
   if (/^sus/.test(s)) return 'sus4';
   if (/^\(?add9/.test(s)) return 'add9';
+  if (/^\(?add(11|4)/.test(s)) return 'add11';
   return null;
 }
 
@@ -243,11 +260,13 @@ function movableShape(rootPc, quality) {
 
 // The plain (no-bass) shape for a parsed chord: named bank first, then barres.
 function plainShape(root, acc, suffix, pc) {
+  const quality = parseQuality(suffix);
+  // The bank is keyed by the canonical quality, so G6(add4) finds G6add11.
   const spellings = [root + acc + suffix, SHARP[pc] + suffix];
+  if (quality) spellings.push(SHARP[pc] + (quality === 'major' ? '' : quality));
   for (const key of spellings) {
     if (OPEN_CHORDS[key]) return OPEN_CHORDS[key];
   }
-  const quality = parseQuality(suffix);
   if (!quality) return null;
   return movableShape(pc, quality);
 }
@@ -333,6 +352,7 @@ const QUALITY_IV = {
   'dim': [0, 3, 6], 'dim7': [0, 3, 6, 9], 'm7b5': [0, 3, 6, 10], 'aug': [0, 4, 8],
   '9': [0, 2, 4, 7, 10], 'm9': [0, 2, 3, 7, 10], 'maj9': [0, 2, 4, 7, 11],
   'add9': [0, 2, 4, 7], 'madd9': [0, 2, 3, 7], '5': [0, 7],
+  'add11': [0, 4, 5, 7], 'madd11': [0, 3, 5, 7], '6add11': [0, 4, 5, 7, 9],
 };
 
 // Interval degree labels by semitone distance from the chord root.

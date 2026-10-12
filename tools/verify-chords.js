@@ -38,6 +38,7 @@ const TRUTH = {
   'm7b5': [0, 3, 6, 10], 'aug': [0, 4, 8], '9': [0, 2, 4, 7, 10],
   'm9': [0, 2, 3, 7, 10], 'maj9': [0, 2, 4, 7, 11], 'madd9': [0, 2, 3, 7],
   '5': [0, 7],
+  'add11': [0, 4, 5, 7], 'madd11': [0, 3, 5, 7], '6add11': [0, 4, 5, 7, 9],
 };
 // A chord of 4+ tones may conventionally omit its 5th (open C7, 9ths on uke).
 function okWithout5(rootPc, iv, act) {
@@ -128,7 +129,8 @@ for (let rootPc = 0; rootPc < 12; rootPc++) {
 
 // ---- 4. chordVoicings across the board -------------------------------------
 const SUFFIXES = ['', 'm', '7', 'm7', 'maj7', '6', 'm6', 'sus2', 'sus4', 'add9',
-  '7sus4', 'dim', 'dim7', 'm7b5', 'aug', '9', 'm9', 'maj9', 'madd9', '5'];
+  '7sus4', 'dim', 'dim7', 'm7b5', 'aug', '9', 'm9', 'maj9', 'madd9', '5',
+  'add11', 'madd11', '6add11'];
 for (let rootPc = 0; rootPc < 12; rootPc++) {
   for (const suf of SUFFIXES) {
     const name = SHARP[rootPc] + suf;
