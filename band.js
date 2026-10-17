@@ -226,7 +226,7 @@ function albumDetailsHtml() {
 function openAlbumBoard(tab) {
   const album = bandAlbum();
   if (mode !== 'cloud' || !album) return;
-  closeAlbumBoard();
+  void closeAlbumBoard();
   const list = songs.filter((s) => normGroup(s.group) === album).sort(songOrder);
   const written = list.filter((s) => songProgress(s).lyric > 0).length;
   const which = tab || lsGet(ALBUM_TAB_KEY) || 'songs';
@@ -255,22 +255,22 @@ function openAlbumBoard(tab) {
   wrap.querySelectorAll('.ab-tab').forEach((b) => b.addEventListener('click', () => show(b.dataset.tab)));
   show(which === 'details' ? 'details' : 'songs');
 
-  const open = (id) => { closeAlbumBoard(); selectSong(id); };
+  const open = (id) => { void closeAlbumBoard(); selectSong(id); };
   wrap.querySelectorAll('[data-id]').forEach((b) => b.addEventListener('click', () => open(b.dataset.id)));
   wrap.querySelectorAll('textarea[data-key]').forEach((box) => {
     box.addEventListener('input', () => {
       sizeBox(box);
       clearTimeout(detailTimers[box.dataset.key]);
-      detailTimers[box.dataset.key] = setTimeout(() => saveDetail(box.dataset.key, box.value), 800);
+      detailTimers[box.dataset.key] = setTimeout(() => { void saveDetail(box.dataset.key, box.value); }, 800);
     });
-    box.addEventListener('blur', () => { if (detailTimers[box.dataset.key]) saveDetail(box.dataset.key, box.value); });
+    box.addEventListener('blur', () => { if (detailTimers[box.dataset.key]) void saveDetail(box.dataset.key, box.value); });
   });
-  wrap.querySelector('#ab-close').addEventListener('click', () => { closeAlbumBoard(); });
+  wrap.querySelector('#ab-close').addEventListener('click', () => { void closeAlbumBoard(); });
   // Only a click that starts on the backdrop closes it: a text selection
   // dragged out of a box and let go outside the card mustn't.
   let downOnBackdrop = false;
   wrap.addEventListener('mousedown', (e) => { downOnBackdrop = e.target === wrap; });
-  wrap.addEventListener('click', (e) => { if (e.target === wrap && downOnBackdrop) closeAlbumBoard(); });
+  wrap.addEventListener('click', (e) => { if (e.target === wrap && downOnBackdrop) void closeAlbumBoard(); });
   wrap.querySelector('#ab-close').focus();
 }
 // Resolves once any details still waiting have been written.
@@ -282,10 +282,10 @@ function closeAlbumBoard() {
   return saved;
 }
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && document.getElementById('album-board')) closeAlbumBoard();
+  if (e.key === 'Escape' && document.getElementById('album-board')) void closeAlbumBoard();
 });
 // Closing the tab mid-sentence still saves it (into the offline copy, sent when it can be).
-window.addEventListener('pagehide', flushDetails);
+window.addEventListener('pagehide', () => { void flushDetails(); });
 
 // ---- The invite link -------------------------------------------------------
 // …/?join opens the shared library for someone who's never used the app: one
