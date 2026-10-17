@@ -6,5 +6,6 @@ export const firebaseConfig = {
   apiKey: 'AIzaSyBFgWZzuEQlLEn0WDx7ZR8Xc8SXsYkFKHg',
   authDomain: 'jam-tab-writer.firebaseapp.com',
   projectId: 'jam-tab-writer',
+  storageBucket: 'jam-tab-writer.firebasestorage.app',
   appId: '1:198671721696:web:69e2ddba5ab0724c649c85',
 };

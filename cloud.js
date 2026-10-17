@@ -5,6 +5,8 @@
 // Layout:
 //   shared/library/songs/{songId}   { data, title, updated, updatedBy }
 //   shared/library/meta/setlists    { data, updated, updatedBy }
+//   shared/library/takes/{takeId}   { songId, songTitle, ts, durMs, ext, mime, name, size, by }
+//   Storage: library/takes/{takeId}.{ext} — the take's audio
 // `data` is the song (or setlist array) as JSON text: songs carry nested arrays
 // (riffs, strums) that Firestore can't store as fields, and JSON keeps the
 // stored shape identical to what localStorage holds.
@@ -13,19 +15,22 @@
 // here. Firestore's offline cache keeps the library usable without signal;
 // edits sync when the connection returns.
 
-import { firebaseConfig } from './cloud-config.js?v=1';
+import { firebaseConfig } from './cloud-config.js?v=2';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
   getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut as fbSignOut,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  collection, doc, onSnapshot, writeBatch, setDoc, serverTimestamp,
+  collection, doc, onSnapshot, writeBatch, setDoc, deleteDoc, serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import {
+  getStorage, ref, uploadBytes, getDownloadURL, deleteObject,
+} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-storage.js';
 
 export const configured = !!(firebaseConfig.apiKey && firebaseConfig.projectId);
 
-let app, auth, db;
+let app, auth, db, storage;
 function init() {
   if (app) return;
   if (!configured) throw new Error('cloud-config.js has no Firebase config yet');
@@ -34,10 +39,13 @@ function init() {
   db = initializeFirestore(app, {
     localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
   });
+  storage = getStorage(app);
 }
 
 const songsCol = () => collection(db, 'shared', 'library', 'songs');
 const setlistDoc = () => doc(db, 'shared', 'library', 'meta', 'setlists');
+const takesCol = () => collection(db, 'shared', 'library', 'takes');
+const takeRef = (t) => ref(storage, `library/takes/${t.id}.${t.ext}`);
 
 // Resolves with the signed-in user (or null) once Firebase has restored the
 // session from its own storage.
@@ -180,4 +188,40 @@ export async function syncSetlists(list) {
   if (data === knownSetlists) return;
   knownSetlists = data;
   await setDoc(setlistDoc(), { data, updated: serverTimestamp(), updatedBy: userEmail() || '' });
+}
+
+// ---- Takes -----------------------------------------------------------------
+// Audio goes to Storage first and the Firestore record second, so a take only
+// appears in anyone's list once its audio is there to play.
+
+const TAKE_MIME = { wav: 'audio/wav', m4a: 'audio/mp4', webm: 'audio/webm' };
+
+export async function uploadTake(t, songId) {
+  init();
+  const contentType = t.mime || TAKE_MIME[t.ext] || 'audio/wav';
+  await uploadBytes(takeRef(t), t.blob, { contentType });
+  await setDoc(doc(takesCol(), t.id), {
+    songId, songTitle: t.songTitle || '', ts: t.ts, durMs: t.durMs || 0, ext: t.ext,
+    mime: contentType, name: t.name, size: t.blob.size, by: userEmail() || '',
+  });
+}
+
+// `onTakes(list)` gets every take's record, now and after each change.
+export function watchTakes(onTakes) {
+  init();
+  return onSnapshot(takesCol(), (snap) => {
+    onTakes(snap.docs.map((d) => Object.assign({ id: d.id }, d.data())));
+  }, () => {});
+}
+
+export function takeUrl(t) {
+  init();
+  return getDownloadURL(takeRef(t));
+}
+
+export async function deleteTake(t) {
+  init();
+  try { await deleteObject(takeRef(t)); }
+  catch (err) { if (!err || err.code !== 'storage/object-not-found') throw err; }
+  await deleteDoc(doc(takesCol(), t.id));
 }

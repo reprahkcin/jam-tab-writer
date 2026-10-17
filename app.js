@@ -333,7 +333,7 @@ function cloudUnlocked() { return mode === 'cloud' || !!lsGet(CLOUD_UNLOCK_KEY);
 
 function loadCloud() {
   if (!cloudLoading) {
-    cloudLoading = import('./cloud.js?v=118').then((m) => (cloud = m));
+    cloudLoading = import('./cloud.js?v=119').then((m) => (cloud = m));
     cloudLoading.catch(() => { cloudLoading = null; }); // offline: try again next time
   }
   return cloudLoading;
@@ -403,8 +403,79 @@ function startCloudSync() {
       setlists = list;
       if (!document.getElementById('setlist-modal').hidden) renderSetlistModal();
     });
-  });
+    cloud.watchTakes((list) => {
+      cloudTakes = new Map(list.map((x) => [x.id, x]));
+      cloudTakesLoaded = true;
+      refreshTakes();
+    });
+  }).then(() => { void uploadPendingTakes(); });
 }
+
+// ---- Shared takes ----------------------------------------------------------
+// A take recorded on a shared-library song is kept on this device first (so
+// recording never waits on the network) and then uploaded; the list shows
+// everyone's takes for the open song. Unfiled takes stay on this device.
+
+let cloudTakes = new Map();    // id -> the shared library's take records
+let cloudTakesLoaded = false;
+const takeUrlCache = new Map(); // id -> download URL
+const takesUploading = new Set();
+
+// The shared-library song a local take belongs to, or null.
+function cloudSongIdForTake(t) {
+  if (mode !== 'cloud' || !t.songKey || !t.songKey.startsWith('local:')) return null;
+  const s = resolveKey(t.songKey);
+  return s ? s.id : null;
+}
+
+async function uploadPendingTakes() {
+  if (mode !== 'cloud' || !cloud || !cloudReady) return;
+  let sent = false;
+  for (const t of await takesAll()) {
+    if (t.shared || takesUploading.has(t.id)) continue;
+    const songId = cloudSongIdForTake(t);
+    if (!songId) continue;
+    takesUploading.add(t.id);
+    refreshTakes();
+    try { await cloud.uploadTake(t, songId); t.shared = true; await takesPut(t); sent = true; }
+    catch { /* offline or refused — tried again on the next take or reconnect */ }
+    finally { takesUploading.delete(t.id); }
+  }
+  if (sent) refreshTakes();
+}
+window.addEventListener('online', () => { void uploadPendingTakes(); });
+
+function refreshTakes() {
+  const panel = document.getElementById('capture-panel');
+  if (panel && !panel.hidden) void renderTakes();
+}
+
+// This device's takes plus the shared library's, one record per take.
+function mergeCloudTakes(local) {
+  const out = [];
+  const have = new Set();
+  for (const t of local) {
+    // Shared once, gone from the library now: someone deleted it.
+    if (t.shared && cloudTakesLoaded && !cloudTakes.has(t.id)) { void takesDelete(t.id); continue; }
+    have.add(t.id);
+    t.pending = !t.shared && !!cloudSongIdForTake(t);
+    out.push(t);
+  }
+  for (const m of cloudTakes.values()) {
+    if (have.has(m.id)) continue;
+    out.push({ id: m.id, songKey: 'local:' + m.songId, songTitle: m.songTitle, ts: m.ts, durMs: m.durMs,
+      ext: m.ext, mime: m.mime, name: m.name, size: m.size, by: m.by, remote: true });
+  }
+  return out;
+}
+
+async function cachedTakeUrl(t) {
+  if (!takeUrlCache.has(t.id)) {
+    try { takeUrlCache.set(t.id, await cloud.takeUrl(t)); } catch { return ''; }
+  }
+  return takeUrlCache.get(t.id);
+}
+
 
 async function cloudRefused(err) {
   if (!err || err.code !== 'permission-denied') {
@@ -6127,6 +6198,7 @@ async function captureStop() {
     blob,
   };
   await takesPut(take);
+  void uploadPendingTakes();
   const wrote = await capWriteToDisk(take);
   capSetStatus(wrote
     ? `Saved ${take.name} — filed in the takes folder beside the chart.`
@@ -6214,26 +6286,38 @@ async function renderTakes() {
   if (!box) return;
   takeUrls.forEach((u) => URL.revokeObjectURL(u));
   takeUrls = [];
-  const all = (await takesAll()).sort((a, b) => b.ts - a.ts);
+  let all = await takesAll();
+  if (mode === 'cloud') all = mergeCloudTakes(all);
+  all.sort((a, b) => b.ts - a.ts);
   const cur = currentSong();
   const curKey = cur ? songKey(cur) : null;
   const mine = all.filter((t) => t.songKey && t.songKey === curKey);
+  // Takes recorded elsewhere play straight from the shared library.
+  await Promise.all(mine.filter((t) => t.remote).map(async (t) => { t.url = await cachedTakeUrl(t); }));
+  const shown = new Map(all.map((t) => [t.id, t]));
   const unfiled = all.filter((t) => !t.songKey);
   const countEl = capEl('cap-takes-count');
   if (countEl) countEl.textContent = mine.length ? `${mine.length} for this song` : '';
 
+  const me = mode === 'cloud' && cloud ? cloud.userEmail() : null;
   const row = (t) => {
-    const url = URL.createObjectURL(t.blob);
-    takeUrls.push(url);
+    let url = t.url || '';
+    if (t.blob) { url = URL.createObjectURL(t.blob); takeUrls.push(url); }
     const when = new Date(t.ts);
     const clock = String(when.getHours()).padStart(2, '0') + ':' + String(when.getMinutes()).padStart(2, '0');
+    const size = t.blob ? t.blob.size : (t.size || 0);
+    let extra = '';
+    if (t.pending) extra = takesUploading.has(t.id) ? ' · uploading…' : ' · not uploaded yet';
+    else if (t.by && t.by !== me) extra = ' · ' + t.by.split('@')[0];
+    // A link to another origin can't force a download, so a shared take opens in a tab.
+    const dl = t.blob ? `download="${escapeHtml(t.name)}"` : 'target="_blank" rel="noopener"';
     return `<div class="cap-take" data-id="${t.id}">` +
       `<audio controls preload="none" src="${url}"></audio>` +
       `<div class="cap-take-meta"><span class="cap-take-name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span>` +
-      `<span class="cap-take-sub">${capFmtTime(t.durMs)} · ${clock} · ${(t.blob.size / 1048576).toFixed(1)} MB</span></div>` +
+      `<span class="cap-take-sub">${capFmtTime(t.durMs)} · ${clock} · ${(size / 1048576).toFixed(1)} MB${escapeHtml(extra)}</span></div>` +
       `<div class="cap-take-tools">` +
       (t.songKey ? '' : `<button class="cap-file" data-id="${t.id}" title="File this take under the current song"${cur ? '' : ' disabled'}>File</button>`) +
-      `<a class="cap-dl" href="${url}" download="${escapeHtml(t.name)}" title="Download">&#8595;</a>` +
+      `<a class="cap-dl" href="${url}" ${dl} title="Download">&#8595;</a>` +
       `<button class="cap-del" data-id="${t.id}" title="Delete this take">&#10005;</button></div></div>`;
   };
 
@@ -6261,6 +6345,13 @@ async function renderTakes() {
   if (tog && cur) tog.addEventListener('click', () => { capUnfiledOpen = !capUnfiledOpen; void renderTakes(); });
 
   box.querySelectorAll('.cap-del').forEach((b) => b.addEventListener('click', async () => {
+    const t = shown.get(b.dataset.id);
+    if (t && mode === 'cloud' && (t.shared || t.remote)) {
+      if (!confirm(`Delete "${t.name}" from the shared library? It goes for everyone.`)) return;
+      try { await cloud.deleteTake(t); }
+      catch { alert('Couldn\u2019t delete it from the shared library — check your connection.'); return; }
+      cloudTakes.delete(t.id);
+    }
     await takesDelete(b.dataset.id);
     void renderTakes();
   }));
@@ -6274,6 +6365,7 @@ async function renderTakes() {
     t.songTitle = s.title || 'Untitled';
     await takesPut(t);
     await capWriteToDisk(t);
+    void uploadPendingTakes();
     void renderTakes();
   }));
 }
