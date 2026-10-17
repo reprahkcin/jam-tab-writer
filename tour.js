@@ -114,7 +114,10 @@ function openIntro() {
   document.getElementById('intro-tour').focus();
 }
 function closeIntro() { document.getElementById('intro-modal').hidden = true; }
-function maybeShowIntro() { if (prefs.showIntro !== false) openIntro(); }
+function maybeShowIntro() {
+  if (typeof bandOpening === 'function' && bandOpening()) return; // the band's way in (band.js)
+  if (prefs.showIntro !== false) openIntro();
+}
 function setShowIntro(on) {
   prefs.showIntro = on;
   savePrefs();

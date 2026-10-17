@@ -201,6 +201,30 @@ are. They let in only the email addresses on the list.
 - **Two people on one song**: an edit from someone else replaces the open copy
   unless you've changed it more recently, in which case your next save wins.
 
+### The band: invite link, tour and album board
+
+The shared library is set up for a band writing an album together. Its details
+live in the library at `shared/library/meta/band`:
+`{ album: 'Greatest Hits Album', people: { 'email': 'Name', … } }`.
+
+- **Invite link**: https://reprahkcin.github.io/jam-tab-writer/?join opens a
+  one-screen invitation with a **Sign in with Google** button, then the band
+  tour. (`?cloud` still just reveals the option in the source picker.)
+- **Band tour**: on someone's first visit to the library, in place of the
+  general welcome screen. It greets them by name, shows the album folder, opens
+  the album song whose notes mention them (and quotes that line), then covers
+  writing, recording a take, the board and Perform. Once per person per
+  browser; **Help → Take the band tour** runs it again.
+- **Album first**: the album's folder leads the sidebar, and a first visit opens
+  its first song with the other folders folded away.
+- **Album board**: the **Board** button on the album folder lists each song's
+  progress, read off the chart itself (Notes, Lyrics with a line count, Chords,
+  Parts, Takes, Tempo/meter), who last changed it and when, and the most recent
+  changes across the library. Click a song to open it.
+- **Changed since you looked**: a dot marks songs (and their folders) that
+  someone else saved after you last opened them. A first visit starts that
+  clock, so the whole back catalog isn't news.
+
 ### Setting it up (once)
 
 1. Create a project at https://console.firebase.google.com. Songs fit the free
@@ -824,6 +848,7 @@ Everything prints with the sheet.
 - `app.js` — editor, rendering, transpose/capo, storage, import/export
 - `chords.js` — chord shape library, diagram SVGs, harmonica suggestions
 - `cloud.js` — the shared library (Firebase), loaded only when it's opened
+- `band.js` — the band's invite link, tour, album board and changed-since-you-looked dots
 - `cloud-config.js` — the Firebase project's web config
 - `firestore.rules`, `storage.rules`, `firebase.json` — who may use the shared library; deployed with firebase-tools
 - `tour.js` — the example song, first-visit seeding, and the guided tour's steps

@@ -323,17 +323,21 @@ let cloud = null;         // the cloud.js module, once loaded
 let cloudLoading = null;  // its import() promise
 let cloudReady = false;   // the library has arrived; before that, nothing is written
 
-if (/[?&]cloud(=|&|$)/.test(location.search)) {
+// ?join is the band's invite link: the same, plus a sign-in screen and the
+// band tour (band.js).
+if (/[?&](cloud|join)(=|&|$)/.test(location.search)) {
   lsSet(CLOUD_UNLOCK_KEY, '1');
   const q = new URLSearchParams(location.search);
+  if (q.has('join')) lsSet(BAND_JOIN_KEY, '1');
   q.delete('cloud');
+  q.delete('join');
   history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
 }
 function cloudUnlocked() { return mode === 'cloud' || !!lsGet(CLOUD_UNLOCK_KEY); }
 
 function loadCloud() {
   if (!cloudLoading) {
-    cloudLoading = import('./cloud.js?v=121').then((m) => (cloud = m));
+    cloudLoading = import('./cloud.js?v=125').then((m) => (cloud = m));
     cloudLoading.catch(() => { cloudLoading = null; }); // offline: try again next time
   }
   return cloudLoading;
@@ -387,9 +391,20 @@ function startCloudSync() {
         const early = songs.filter((s) => !list.some((x) => x.id === s.id));
         songs = list.concat(early);
         cloudReady = true;
+        seenSince(); // a first visit starts the "changed since you looked" clock now
         if (early.length) cloudSave();
         updateModeUI();
-        const last = lsGet(CLOUD_LAST_KEY);
+        // A first visit opens on the album, the other folders folded away.
+        const album = bandAlbum();
+        if (album && !lsGet(GROUP_COLLAPSED_KEY)) {
+          for (const p of allGroupPaths()) if (!p.includes('/') && p !== album) groupCollapsed.add(p);
+          lsSet(GROUP_COLLAPSED_KEY, JSON.stringify([...groupCollapsed]));
+        }
+        let last = lsGet(CLOUD_LAST_KEY);
+        if (album && !last) {
+          const first = songs.filter((s) => normGroup(s.group) === album).sort(songOrder)[0];
+          if (first) last = first.id;
+        }
         if (currentSong()) renderList();
         else if (songs.some((s) => s.id === last)) selectSong(last);
         else if (songs.length) selectSong([...songs].sort((a, b) => b.updated - a.updated)[0].id);
@@ -403,6 +418,7 @@ function startCloudSync() {
       setlists = list;
       if (!document.getElementById('setlist-modal').hidden) renderSetlistModal();
     });
+    cloud.watchMeta('band', (v) => { setBandInfo(v); updateModeUI(); });
     cloud.watchMeta('groups', (list) => {
       cloudGroups = list.map(normGroup).filter(Boolean);
       renderList();
@@ -487,6 +503,7 @@ async function cloudRefused(err) {
     return;
   }
   alert(`${cloud.userEmail() || 'This account'} isn’t on the shared library’s list, so it can’t open it.`);
+  lsSet(BAND_JOIN_KEY, null); // the invite was for another account: stop offering it
   await leaveCloud(true);
 }
 
@@ -509,6 +526,7 @@ async function bootCloud() {
   const user = await cloud.whenUser();
   updateModeUI();
   if (!user) { el.status.textContent = 'Signed out — pick Sign in… above the song list'; return; }
+  try { setBandInfo(await cloud.fetchMeta('band')); } catch { /* not a member, or offline: no band extras */ }
   await startCloudSync();
 }
 
@@ -661,23 +679,30 @@ function toggleGroup(path) {
 // Every row takes dropped songs.
 function groupRow(name, path, depth, count) {
   const top = depth === 0;
+  const isAlbum = path === bandAlbum();
+  const fresh = freshGroups.has(path);
   const isCollapsed = groupCollapsed.has(path);
   const row = document.createElement('li');
   row.className = (top ? 'lib-header' : 'subfolder-row') + (isCollapsed ? ' collapsed' : '') +
     (path === activeGroup && path !== UNGROUPED ? ' active-lib' : '');
   row.style.setProperty('--lib-color', path === UNGROUPED ? BROWSER_COLOR : groupColor(path));
   if (!top) row.style.paddingLeft = (6 + depth * 14) + 'px';
+  row.dataset.group = path;
   const real = path !== UNGROUPED;
   row.innerHTML =
     `<span class="lib-caret" title="${isCollapsed ? 'Expand' : 'Collapse'}">${isCollapsed ? '▸' : '▾'}</span>` +
     (top ? '<span class="lib-dot"></span>' : '') +
     `<span class="${top ? 'lib-name' : 'sf-name'}" title="${real ? 'Make this where + New and Import put songs' : 'Songs in no folder'}">${escapeHtml(name)}</span>` +
+    (fresh ? '<span class="new-dot" title="Something in here changed since you last looked"></span>' : '') +
     `<span class="lib-count">${count}</span>` +
     (real ? '<button class="lib-btn sf-add" title="New folder inside">+</button>' +
       '<button class="lib-btn g-rename" title="Rename this folder">✎</button>' +
-      (count ? '' : '<button class="lib-btn lib-close g-delete" title="Delete this empty folder">×</button>') : '');
+      (count ? '' : '<button class="lib-btn lib-close g-delete" title="Delete this empty folder">×</button>') : '') +
+    // Last in the row, so the hover buttons appearing don't move it.
+    (isAlbum ? '<button class="g-board" title="Album board: where each song stands">Board</button>' : '');
   row.querySelector('.lib-caret').addEventListener('click', (e) => { e.stopPropagation(); toggleGroup(path); });
   row.querySelector(top ? '.lib-name' : '.sf-name').addEventListener('click', () => setActiveGroup(real ? path : ''));
+  if (isAlbum) row.querySelector('.g-board').addEventListener('click', (e) => { e.stopPropagation(); openAlbumBoard(); });
   if (real) {
     row.querySelector('.sf-add').addEventListener('click', (e) => { e.stopPropagation(); newGroup(path); });
     row.querySelector('.g-rename').addEventListener('click', (e) => { e.stopPropagation(); renameGroup(path); });
@@ -706,7 +731,9 @@ function countUnderGroup(node) {
   return n;
 }
 function renderGroupNode(node, path, depth) {
-  for (const name of [...node.folders.keys()].sort((a, b) => a.localeCompare(b))) {
+  const album = path ? '' : bandAlbum().split('/')[0]; // the album's folder leads the list
+  const names = [...node.folders.keys()].sort((a, b) => (b === album) - (a === album) || a.localeCompare(b));
+  for (const name of names) {
     const child = node.folders.get(name);
     const childPath = path ? path + '/' + name : name;
     el.list.appendChild(groupRow(name, childPath, depth, countUnderGroup(child)));
@@ -715,7 +742,16 @@ function renderGroupNode(node, path, depth) {
   if (path) for (const s of node.songs.sort(songOrder)) el.list.appendChild(songItem(s, true, depth));
 }
 
+// Folders holding something changed since you last looked (and their parents),
+// worked out once per render rather than once per folder row.
+let freshGroups = new Set();
 function renderCloudTree() {
+  freshGroups = new Set();
+  for (const s of songs) {
+    if (s.id === currentId || !isNewToMe(s)) continue;
+    const segs = normGroup(s.group).split('/').filter(Boolean);
+    for (let i = 1; i <= segs.length; i++) freshGroups.add(segs.slice(0, i).join('/'));
+  }
   const root = buildGroupTree();
   // A library with no folders yet stays the plain recent-first list.
   if (!root.folders.size) {
@@ -782,6 +818,10 @@ function renameGroup(path) {
   }
   cloudGroups = cloudGroups.map(swap);
   activeGroup = swap(activeGroup);
+  if (bandAlbum() && swap(bandAlbum()) !== bandAlbum()) {
+    setBandInfo(Object.assign({}, bandInfo, { album: swap(bandAlbum()) }));
+    cloud.syncMeta('band', bandInfo).catch(cloudFailed);
+  }
   for (const k of [...groupCollapsed]) if (swap(k) !== k) { groupCollapsed.delete(k); groupCollapsed.add(swap(k)); }
   saveSongs(songs);
   saveGroups();
@@ -1359,6 +1399,7 @@ function selectSong(id) {
   if (mode === 'local') localStorage.setItem(LAST_KEY, id);
   else if (mode === 'cloud') {
     lsSet(CLOUD_LAST_KEY, id);
+    markSeen(id);
     activeGroup = normGroup(s.group); // + New lands beside what you're looking at
     renderTargetBar();
   }
@@ -3002,8 +3043,10 @@ function songItem(s, deletable, depth) {
     const lib = libraries.find((l) => l.id === s.libId);
     li.title = (lib ? lib.name + '/' : '') + (s.path || '');
   }
+  const fresh = s.id !== currentId && isNewToMe(s);
+  if (fresh) li.title = `Changed by ${personName(s._by)} since you last looked`;
   li.innerHTML =
-    `<span class="st"><b>${escapeHtml(s.title || 'Untitled')}</b>` +
+    `<span class="st"><b>${escapeHtml(s.title || 'Untitled')}${fresh ? '<span class="new-dot"></span>' : ''}</b>` +
     `<small>${escapeHtml(sub)}</small></span>` +
     (mode === 'cloud' ? '<button class="mv-song" title="Move to a folder">&#8618;</button>' : '') +
     `<button class="add-set" title="Add to setlist"><svg class="ico"><use href="#i-setlist"/></svg></button>` +
@@ -4425,6 +4468,7 @@ async function materializeDraft(s) {
 function updateModeUI() {
   const folder = mode === 'folder';
   document.getElementById('save-btn').hidden = !folder;
+  document.getElementById('help-band-tour').hidden = !(mode === 'cloud' && bandAlbum());
   renderSourcePicker();
   renderTargetBar();
   renderList();
