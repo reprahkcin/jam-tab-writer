@@ -81,8 +81,10 @@ const known = new Map();
 const knownMeta = {}; // meta doc name -> its last-known `data` text
 
 function songJson(s) {
-  // Folder-mode and draft bookkeeping never belongs in the shared copy.
+  // Folder-mode and draft bookkeeping never belongs in the shared copy, nor
+  // do fields the app keeps for itself (`_by`, who last saved it).
   const { draft, libId, path, subpath, ...rest } = s;
+  for (const k of Object.keys(rest)) if (k.startsWith('_')) delete rest[k];
   return JSON.stringify(rest);
 }
 
@@ -91,16 +93,33 @@ function songJson(s) {
 // made. `onError(err)` gets permission failures (not on the allow-list).
 export function watchSongs({ onInit, onChange, onError }) {
   init();
-  let first = true;
-  return onSnapshot(songsCol(), (snap) => {
+  let first = true, pending = null, timer = null;
+  const start = (snap) => {
+    first = false;
+    clearTimeout(timer);
+    const list = [];
+    snap.forEach((d) => {
+      const data = d.get('data');
+      try {
+        const s = JSON.parse(data);
+        s._by = d.get('updatedBy') || ''; // who saved it last, for "changed since you looked"
+        list.push(s);
+        known.set(d.id, data);
+      } catch { /* skip a corrupt doc */ }
+    });
+    onInit(list);
+  };
+  // The first answer usually comes from this browser's offline copy, which can
+  // be days old. Online, wait for the server's (a few seconds at most) so the
+  // app opens on what's really there; offline, the copy is all there is.
+  return onSnapshot(songsCol(), { includeMetadataChanges: true }, (snap) => {
     if (first) {
-      first = false;
-      const list = [];
-      snap.forEach((d) => {
-        const data = d.get('data');
-        try { list.push(JSON.parse(data)); known.set(d.id, data); } catch { /* skip a corrupt doc */ }
-      });
-      onInit(list);
+      if (snap.metadata.fromCache && navigator.onLine) {
+        pending = snap;
+        if (!timer) timer = setTimeout(() => { if (first) start(pending); }, 4000);
+        return;
+      }
+      start(snap);
       return;
     }
     if (snap.metadata.hasPendingWrites) return; // our own write, already applied
@@ -113,11 +132,12 @@ export function watchSongs({ onInit, onChange, onError }) {
         continue;
       }
       const data = ch.doc.get('data');
-      if (known.get(id) === data) continue;
+      if (known.get(id) === data) continue; // unchanged, or only its sync state moved
       let song;
       try { song = JSON.parse(data); } catch { continue; }
       known.set(id, data);
-      onChange({ type: 'set', song, by: ch.doc.get('updatedBy') || '' });
+      song._by = ch.doc.get('updatedBy') || '';
+      onChange({ type: 'set', song, by: song._by });
     }
   }, onError);
 }
@@ -138,6 +158,7 @@ export async function syncSongs(songs) {
     if (known.get(s.id) === data) continue;
     before.set(s.id, known.get(s.id));
     known.set(s.id, data);
+    s._by = by;
     batch.set(doc(songsCol(), s.id), { data, title: s.title || '', updated: s.updated || Date.now(), updatedBy: by });
     n++;
   }
