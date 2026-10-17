@@ -333,7 +333,7 @@ function cloudUnlocked() { return mode === 'cloud' || !!lsGet(CLOUD_UNLOCK_KEY);
 
 function loadCloud() {
   if (!cloudLoading) {
-    cloudLoading = import('./cloud.js?v=120').then((m) => (cloud = m));
+    cloudLoading = import('./cloud.js?v=121').then((m) => (cloud = m));
     cloudLoading.catch(() => { cloudLoading = null; }); // offline: try again next time
   }
   return cloudLoading;
@@ -593,13 +593,15 @@ const UNGROUPED = '\0ungrouped';
 function normGroup(p) {
   return (p || '').split('/').map((x) => x.trim()).filter(Boolean).join('/');
 }
-// Each top-level folder keeps one accent colour, whatever else is added.
+// Top-level folders take the palette in alphabetical order, so up to six
+// folders never share a colour (a hash of the name put three in one orange).
 function groupColor(path) {
   const top = (path || '').split('/')[0];
   if (!top) return BROWSER_COLOR;
-  let h = 0;
-  for (const c of top) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return EXTERNAL_PALETTE[h % EXTERNAL_PALETTE.length];
+  const tops = [...new Set(cloudGroups.concat(songs.map((s) => normGroup(s.group)))
+    .map((p) => p.split('/')[0]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const i = tops.indexOf(top);
+  return EXTERNAL_PALETTE[(i < 0 ? tops.length : i) % EXTERNAL_PALETTE.length];
 }
 function saveGroups() {
   if (cloud && cloudReady) cloud.syncMeta('groups', cloudGroups).catch(cloudFailed);
