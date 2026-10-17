@@ -70,7 +70,7 @@ Controls live with the thing they act on, so the top row is short:
 | --- | --- |
 | Header | **Metronome**, **Tuner**, **Record** (the button lights while its panel is open; Record turns red while a take is rolling), then **Learn**, **Perform** (filled — the one you hit mid-song) and **?** — Help: the tour, the example song and the keyboard shortcuts |
 | Songs sidebar | **New** and **Import** in its head — the two ways to add a song — and under them one **source picker** saying where the songs live: *Saved in this browser*, or your **Collection** and open folders. Pick an option to set up a Collection or open a folder; in folder mode **Reopen** appears when saved folders are waiting on a permission click. **Setlists** sits beside the search box, above the list it draws from |
-| Song strip | Row 1: title, artist, the save breadcrumb (folder mode) and the **View** switch. Row 2: three cards — **Key** (shapes · transpose · capo, what it sounds in, and **Apply to text**), **Tempo** (with **Count in**), **Tuning** |
+| Song strip | Row 1: title, artist, the save breadcrumb (folder mode) and the **View** switch. Row 2: three cards — **Key** (shapes · transpose · capo, what it sounds in, and **Apply to text**), **Tempo** (with the song's **time signature** and **Count in**), **Tuning** |
 | Editor head | **Dictate**, **Page break**, then the chart-wide cleanup — **Reprocess**, **Clear chords** — quiet at the far end |
 | Chart pane head | Two tabs — **Chart** and **Reference** — then **Numbers**, then the ways a chart leaves the room: **Share**, **Export**, **Print ▾**. In the Preview view, where both columns show, the tabs give way to a **Reference** tick box that puts the reference column away |
 
@@ -317,7 +317,7 @@ into the active folder).
     chord row.
   - **Tidies whitespace** — trailing spaces, and runs of blank lines down to one.
   - **Lifts directives and tab blocks out of the text** — `{title:}`,
-    `{artist:}`, `{capo:}`, `{key:}`, `{tempo:}`, `{tuning:}` move into the song's
+    `{artist:}`, `{capo:}`, `{key:}`, `{tempo:}`, `{time:}`, `{tuning:}` move into the song's
     own fields, and `{start_of_tab}…{end_of_tab}` blocks become riff grids. Only
     what the text actually declares is touched: a chart whose text never mentions
     `{transpose:}` keeps the transpose you set by hand.
@@ -387,6 +387,25 @@ button lights up while the panel is open):
 - **Metronome** — set the tempo (BPM stepper + slider, or **Tap** the beat),
   pick the beats per measure (2/3/4/6, with an accented downbeat), and **Start**.
   A row of dots pulses on the beat. Uses the Web Audio clock for steady timing.
+  Opening a song sets the drum grid to one bar of that song's time signature,
+  with the click on each beat (on each group of three in 6/8, 9/8 and 12/8).
+
+## Time signatures
+
+Each song has a **time signature** in its Tempo card — 4/4 unless you pick
+another (2/4, 3/4, 5/4, 6/8, 7/8, 9/8, 12/8). It sets:
+
+- **Count in** — one bar of the meter: three clicks for 3/4, six eighths for
+  6/8 (accenting 1 and 4).
+- **The metronome** — one bar in the drum grid and the click on the beat.
+- **New strum patterns** — start one bar long (3 beats for 3/4, "1 & 2 & 3 &"
+  for 6/8).
+- **The chart** — anything but 4/4 shows above the chart and on the printout
+  ("In 3/4"), next to an alternate tuning if there is one.
+
+Tempo is always in quarter notes, like the metronome, so a 6/8 count in clicks
+its eighths twice as fast as the BPM. The meter saves in the `.cho` file as
+`{time: 3/4}` (the ChordPro directive), so it travels with the chart.
 - **Tuner** — pick a tuning, click **Start**, allow microphone access, then play
   one string. Readings are measured against the strings of the chosen tuning
   rather than the nearest chromatic note, so half a semitone flat on the low E
