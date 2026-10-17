@@ -3037,3 +3037,36 @@ body.learning { overflow: hidden; }
 .ab-recent span { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .ab-empty { color: var(--muted); font-size: 13px; padding: 8px; }
 @media (max-width: 760px) { .ab-when { display: none; } }
+/* Album panel tabs and the Details boxes. */
+.ab-tabs { display: flex; gap: 4px; margin: 0 0 10px; border-bottom: 1px solid var(--line); }
+.ab-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font: 600 13px system-ui, sans-serif;
+  padding: 6px 12px;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+.ab-tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.ab-pane { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; overflow-y: auto; }
+.ab-pane[hidden] { display: none; }
+.ab-details { display: flex; flex-direction: column; gap: 14px; }
+.ab-field { display: flex; flex-direction: column; gap: 4px; }
+.ab-flabel { font: 600 12px system-ui, sans-serif; color: var(--text); text-transform: uppercase; letter-spacing: 0.4px; }
+.ab-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 72px;
+  resize: vertical;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font: 13px/1.5 system-ui, sans-serif;
+}
+.ab-field textarea:focus { outline: none; border-color: var(--accent); }
+.ab-who { font-size: 11px; color: var(--muted); min-height: 1em; }
+.ab-foot { font-size: 11px; color: var(--muted); }

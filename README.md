@@ -217,7 +217,12 @@ live in the library at `shared/library/meta/band`:
   browser; **Help → Take the band tour** runs it again.
 - **Album first**: the album's folder leads the sidebar, and a first visit opens
   its first song with the other folders folded away.
-- **Album board**: the **Board** button on the album folder lists each song's
+- **Album details**: the album panel's **Details** tab holds three boxes the
+  whole band edits: **Direction** (what the album is), **Constraints** (the
+  rules it holds to) and **Notes**. Each saves as you type and shows who last
+  changed it; each is its own document (`shared/library/meta/album-direction`,
+  `-constraints`, `-notes`), so two people in different boxes never clash.
+- **Album board**: the **Album** button on the album folder lists each song's
   progress, read off the chart itself (Notes, Lyrics with a line count, Chords,
   Parts, Takes, Tempo/meter), who last changed it and when, and the most recent
   changes across the library. Click a song to open it.
