@@ -45,7 +45,12 @@ function agoText(ts) {
 
 // ---- Changed since you last looked ------------------------------------------
 
-function readSeen() { try { return JSON.parse(lsGet(SEEN_KEY) || '{}') || {}; } catch { return {}; } }
+// Read once and kept in memory: the song list asks for every row on every render.
+let seenMap = null;
+function readSeen() {
+  if (!seenMap) { try { seenMap = JSON.parse(lsGet(SEEN_KEY) || '{}') || {}; } catch { seenMap = {}; } }
+  return seenMap;
+}
 function seenSince() {
   let t = Number(lsGet(SEEN_SINCE_KEY));
   if (!t) { t = Date.now(); lsSet(SEEN_SINCE_KEY, String(t)); }
@@ -57,13 +62,15 @@ function markSeen(id) {
   seen[id] = Date.now();
   lsSet(SEEN_KEY, JSON.stringify(seen));
 }
-// Someone else saved this song after you last opened it.
+// Someone else saved this song after you last opened it. Compared on the
+// server's clock (`_at`) where there is one, so a bandmate's phone running
+// slow doesn't hide their edit.
 function isNewToMe(s) {
   if (mode !== 'cloud' || !s || !s._by) return false;
   const me = bandMe();
   if (!me || s._by.toLowerCase() === me) return false;
   const seen = readSeen()[s.id] || seenSince();
-  return (s.updated || 0) > seen;
+  return (s._at || s.updated || 0) > seen;
 }
 
 // ---- Where an album song stands --------------------------------------------

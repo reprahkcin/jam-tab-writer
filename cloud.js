@@ -80,6 +80,12 @@ export function userEmail() {
 const known = new Map();
 const knownMeta = {}; // meta doc name -> its last-known `data` text
 
+// When the server stored a song, in ms (null for older docs, or a write it hasn't confirmed).
+function serverMillis(d) {
+  const at = d.get('at', { serverTimestamps: 'estimate' });
+  return at && at.toMillis ? at.toMillis() : null;
+}
+
 function songJson(s) {
   // Folder-mode and draft bookkeeping never belongs in the shared copy, nor
   // do fields the app keeps for itself (`_by`, who last saved it).
@@ -103,6 +109,7 @@ export function watchSongs({ onInit, onChange, onError }) {
       try {
         const s = JSON.parse(data);
         s._by = d.get('updatedBy') || ''; // who saved it last, for "changed since you looked"
+        s._at = serverMillis(d);
         list.push(s);
         known.set(d.id, data);
       } catch { /* skip a corrupt doc */ }
@@ -137,6 +144,7 @@ export function watchSongs({ onInit, onChange, onError }) {
       try { song = JSON.parse(data); } catch { continue; }
       known.set(id, data);
       song._by = ch.doc.get('updatedBy') || '';
+      song._at = serverMillis(ch.doc);
       onChange({ type: 'set', song, by: song._by });
     }
   }, onError);
@@ -158,8 +166,7 @@ export async function syncSongs(songs) {
     if (known.get(s.id) === data) continue;
     before.set(s.id, known.get(s.id));
     known.set(s.id, data);
-    s._by = by;
-    batch.set(doc(songsCol(), s.id), { data, title: s.title || '', updated: s.updated || Date.now(), updatedBy: by });
+    batch.set(doc(songsCol(), s.id), { data, title: s.title || '', updated: s.updated || Date.now(), updatedBy: by, at: serverTimestamp() });
     n++;
   }
   for (const id of [...known.keys()]) {
@@ -177,6 +184,8 @@ export async function syncSongs(songs) {
     for (const [id, v] of before) { if (v === undefined) known.delete(id); else known.set(id, v); }
     throw err;
   }
+  // Only once the server has it: a refused write leaves the last editor as it was.
+  for (const s of songs) if (before.has(s.id)) s._by = by;
 }
 
 // Copy songs in from elsewhere (this browser, open folders) on joining.

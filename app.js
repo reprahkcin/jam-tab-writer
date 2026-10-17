@@ -337,7 +337,7 @@ function cloudUnlocked() { return mode === 'cloud' || !!lsGet(CLOUD_UNLOCK_KEY);
 
 function loadCloud() {
   if (!cloudLoading) {
-    cloudLoading = import('./cloud.js?v=124').then((m) => (cloud = m));
+    cloudLoading = import('./cloud.js?v=125').then((m) => (cloud = m));
     cloudLoading.catch(() => { cloudLoading = null; }); // offline: try again next time
   }
   return cloudLoading;
@@ -418,7 +418,7 @@ function startCloudSync() {
       setlists = list;
       if (!document.getElementById('setlist-modal').hidden) renderSetlistModal();
     });
-    cloud.watchMeta('band', (v) => { setBandInfo(v); renderList(); });
+    cloud.watchMeta('band', (v) => { setBandInfo(v); updateModeUI(); });
     cloud.watchMeta('groups', (list) => {
       cloudGroups = list.map(normGroup).filter(Boolean);
       renderList();
@@ -503,6 +503,7 @@ async function cloudRefused(err) {
     return;
   }
   alert(`${cloud.userEmail() || 'This account'} isn’t on the shared library’s list, so it can’t open it.`);
+  lsSet(BAND_JOIN_KEY, null); // the invite was for another account: stop offering it
   await leaveCloud(true);
 }
 
@@ -679,10 +680,7 @@ function toggleGroup(path) {
 function groupRow(name, path, depth, count) {
   const top = depth === 0;
   const isAlbum = path === bandAlbum();
-  const fresh = path !== UNGROUPED && songs.some((s) => {
-    const g = normGroup(s.group);
-    return (g === path || g.startsWith(path + '/')) && s.id !== currentId && isNewToMe(s);
-  });
+  const fresh = freshGroups.has(path);
   const isCollapsed = groupCollapsed.has(path);
   const row = document.createElement('li');
   row.className = (top ? 'lib-header' : 'subfolder-row') + (isCollapsed ? ' collapsed' : '') +
@@ -744,7 +742,16 @@ function renderGroupNode(node, path, depth) {
   if (path) for (const s of node.songs.sort(songOrder)) el.list.appendChild(songItem(s, true, depth));
 }
 
+// Folders holding something changed since you last looked (and their parents),
+// worked out once per render rather than once per folder row.
+let freshGroups = new Set();
 function renderCloudTree() {
+  freshGroups = new Set();
+  for (const s of songs) {
+    if (s.id === currentId || !isNewToMe(s)) continue;
+    const segs = normGroup(s.group).split('/').filter(Boolean);
+    for (let i = 1; i <= segs.length; i++) freshGroups.add(segs.slice(0, i).join('/'));
+  }
   const root = buildGroupTree();
   // A library with no folders yet stays the plain recent-first list.
   if (!root.folders.size) {
