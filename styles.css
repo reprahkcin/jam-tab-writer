@@ -3070,3 +3070,12 @@ body.learning { overflow: hidden; }
 .ab-field textarea:focus { outline: none; border-color: var(--accent); }
 .ab-who { font-size: 11px; color: var(--muted); min-height: 1em; }
 .ab-foot { font-size: 11px; color: var(--muted); }
+.ab-theirs {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

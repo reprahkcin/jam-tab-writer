@@ -210,7 +210,9 @@ export function watchMeta(name, onValue) {
     const data = snap.exists() ? snap.get('data') : '[]';
     if (data === knownMeta[name]) return;
     knownMeta[name] = data;
-    try { onValue(JSON.parse(data)); } catch { /* keep what we have */ }
+    // Second argument: when the server stored it, in ms, for "edited 2 h ago".
+    const at = snap.exists() ? snap.get('updated', { serverTimestamps: 'estimate' }) : null;
+    try { onValue(JSON.parse(data), { at: at && at.toMillis ? at.toMillis() : null }); } catch { /* keep what we have */ }
   }, () => {});
 }
 

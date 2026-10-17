@@ -120,16 +120,33 @@ const ALBUM_FIELDS = [
 const ALBUM_TAB_KEY = 'gtw.album.tab';
 const albumDetails = {}; // key -> { text, by, at }
 
-function setAlbumDetail(key, v) {
+function setAlbumDetail(key, v, meta) {
   albumDetails[key] = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  if (meta && meta.at) albumDetails[key]._at = meta.at; // the server's clock, not the editor's
   const box = document.querySelector(`#album-board textarea[data-key="${key}"]`);
-  // Someone else's edit lands in an open panel unless you're typing in that box.
-  if (box && document.activeElement !== box) {
-    box.value = albumDetails[key].text || '';
-    sizeBox(box);
-  }
   const who = document.querySelector(`#album-board [data-who="${key}"]`);
-  if (who) who.textContent = detailWho(key);
+  if (!box) return;
+  const theirs = albumDetails[key].text || '';
+  if (document.activeElement !== box) {
+    box.value = theirs;
+    sizeBox(box);
+    if (who) who.textContent = detailWho(key);
+    return;
+  }
+  // You're typing in the box someone else just changed: say so, and offer
+  // their version, rather than letting your next save quietly replace it.
+  if (who && theirs !== box.value) {
+    who.innerHTML = `${escapeHtml(personName(albumDetails[key].by))} just changed this. What you type will replace it. ` +
+      '<button type="button" class="ab-theirs">Show theirs</button>';
+    who.querySelector('.ab-theirs').addEventListener('mousedown', (e) => e.preventDefault()); // keep the box focused
+    who.querySelector('.ab-theirs').addEventListener('click', () => {
+      clearTimeout(detailTimers[key]);
+      delete detailTimers[key];
+      box.value = theirs;
+      sizeBox(box);
+      who.textContent = detailWho(key);
+    });
+  }
 }
 // Started from startCloudSync alongside the other library watchers.
 function watchAlbumDetails() {
@@ -137,7 +154,7 @@ function watchAlbumDetails() {
 }
 function detailWho(key) {
   const d = albumDetails[key] || {};
-  return d.by ? `Last edited by ${personName(d.by)}, ${agoText(d.at)}` : '';
+  return d.by ? `Last edited by ${personName(d.by)}, ${agoText(d._at || d.at)}` : '';
 }
 function sizeBox(box) {
   box.style.height = 'auto';
@@ -145,21 +162,29 @@ function sizeBox(box) {
 }
 
 const detailTimers = {};
+// Returns the write, so leaving the library can wait for it.
 function saveDetail(key, text) {
   clearTimeout(detailTimers[key]);
   delete detailTimers[key];
-  const cur = albumDetails[key] || {};
-  if ((cur.text || '') === text) return;
-  albumDetails[key] = { text, by: bandMe(), at: Date.now() };
-  cloud.syncMeta('album-' + key, albumDetails[key]).catch(cloudFailed);
+  const prev = albumDetails[key] || {};
+  if ((prev.text || '') === text) return Promise.resolve();
+  const mine = { text, by: bandMe(), at: Date.now() };
+  albumDetails[key] = mine;
   const who = document.querySelector(`#album-board [data-who="${key}"]`);
   if (who) who.textContent = detailWho(key);
+  return cloud.syncMeta('album-' + key, mine).catch((err) => {
+    // Refused: forget it was saved, so the next blur or close tries again.
+    if (albumDetails[key] === mine) albumDetails[key] = prev;
+    cloudFailed(err);
+  });
 }
 // Write anything still waiting on its timer (closing the panel, leaving a box).
 function flushDetails() {
+  const writes = [];
   document.querySelectorAll('#album-board textarea[data-key]').forEach((box) => {
-    if (detailTimers[box.dataset.key]) saveDetail(box.dataset.key, box.value);
+    if (detailTimers[box.dataset.key]) writes.push(saveDetail(box.dataset.key, box.value));
   });
+  return Promise.all(writes);
 }
 
 function albumSongsHtml(album, list) {
@@ -240,15 +265,21 @@ function openAlbumBoard(tab) {
     });
     box.addEventListener('blur', () => { if (detailTimers[box.dataset.key]) saveDetail(box.dataset.key, box.value); });
   });
-  wrap.querySelector('#ab-close').addEventListener('click', closeAlbumBoard);
-  wrap.addEventListener('click', (e) => { if (e.target === wrap) closeAlbumBoard(); });
+  wrap.querySelector('#ab-close').addEventListener('click', () => { closeAlbumBoard(); });
+  // Only a click that starts on the backdrop closes it: a text selection
+  // dragged out of a box and let go outside the card mustn't.
+  let downOnBackdrop = false;
+  wrap.addEventListener('mousedown', (e) => { downOnBackdrop = e.target === wrap; });
+  wrap.addEventListener('click', (e) => { if (e.target === wrap && downOnBackdrop) closeAlbumBoard(); });
   wrap.querySelector('#ab-close').focus();
 }
+// Resolves once any details still waiting have been written.
 function closeAlbumBoard() {
   const b = document.getElementById('album-board');
-  if (!b) return;
-  flushDetails();
+  if (!b) return Promise.resolve();
+  const saved = flushDetails();
   b.remove();
+  return saved;
 }
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('album-board')) closeAlbumBoard();

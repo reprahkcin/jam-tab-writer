@@ -337,7 +337,7 @@ function cloudUnlocked() { return mode === 'cloud' || !!lsGet(CLOUD_UNLOCK_KEY);
 
 function loadCloud() {
   if (!cloudLoading) {
-    cloudLoading = import('./cloud.js?v=125').then((m) => (cloud = m));
+    cloudLoading = import('./cloud.js?v=126').then((m) => (cloud = m));
     cloudLoading.catch(() => { cloudLoading = null; }); // offline: try again next time
   }
   return cloudLoading;
@@ -591,7 +591,8 @@ async function openCloud() {
 }
 
 async function leaveCloud(signOut) {
-  closeAlbumBoard(); // writes any album details still waiting to save
+  // Album details still waiting to save go first (bounded, as offline they'd wait for the network).
+  await Promise.race([closeAlbumBoard(), new Promise((r) => setTimeout(r, 1500))]);
   await flushPersist();
   if (signOut && cloud) await cloud.signOut().catch(() => {});
   lsSet(CLOUD_ON_KEY, null);
