@@ -1342,7 +1342,7 @@ function currentSong() {
 }
 
 function blankSong() {
-  return { id: newId(), title: '', artist: '', body: '', transpose: 0, capo: 0, key: null, scaleRoot: null, focusChord: null, palette: [], riffs: [], strums: [], tempo: null, tuning: null, updated: Date.now() };
+  return { id: newId(), title: '', artist: '', body: '', transpose: 0, capo: 0, key: null, scaleRoot: null, focusChord: null, palette: [], riffs: [], strums: [], tempo: null, time: null, tuning: null, updated: Date.now() };
 }
 
 function selectSong(id) {
@@ -1375,6 +1375,8 @@ function selectSong(id) {
   el.capoAmount.textContent = s.capo || 0;
   el.tempoInput.value = s.tempo || '';
   el.songTuning.value = s.tuning || 'standard';
+  renderTimeSelect(s);
+  applyTimeToMetro(s);
   renderPreview();
   renderPalette();
   renderList();
@@ -1465,6 +1467,7 @@ function renderSongSummary(s) {
   const pc = soundingKeyPc(s);
   if (pc !== null && (s.capo || s.transpose)) bits.push(`sounds in <b class="accent">${HARP_NAMES[pc]}</b>`);
   bits.push(s.tempo ? `<b>${s.tempo}</b> bpm` : 'no tempo');
+  if (timeInfo(s.time).label !== '4/4') bits.push(`<b>${timeInfo(s.time).label}</b>`);
   // Standard tuning is the assumption; only an alternate one earns a mention.
   const tuning = s.tuning && s.tuning !== 'standard' ? TUNER_PRESETS[s.tuning] : null;
   if (tuning) bits.push(escapeHtml(tuning.name));
@@ -2228,10 +2231,16 @@ function initTuningSelect() {
     .filter(([id]) => isSongTuning(id))
     .map(([id, t]) => `<option value="${id}">${escapeHtml(id === 'standard' ? 'Standard' : t.name)}</option>`).join('');
 }
+// One line above the chart for what's unusual about playing it: an alternate
+// tuning, a meter other than 4/4. Standard and 4/4 are assumed, so they don't
+// earn a mention (on screen or on paper).
 function renderTuningBanner(s) {
   const id = s.tuning;
-  if (!id || id === 'standard' || !isSongTuning(id)) { el.tuningBanner.innerHTML = ''; return; }
-  el.tuningBanner.innerHTML = `<b>Tune to ${escapeHtml(TUNER_PRESETS[id].name)}</b> for this song`;
+  const parts = [];
+  if (id && id !== 'standard' && isSongTuning(id)) parts.push(`<b>Tune to ${escapeHtml(TUNER_PRESETS[id].name)}</b> for this song`);
+  const ti = timeInfo(s.time);
+  if (ti.label !== '4/4') parts.push(`In <b>${ti.label}</b>${ti.compound ? `, felt in ${ti.counts / 3} groups of three` : ''}`);
+  el.tuningBanner.innerHTML = parts.join(' &middot; ');
 }
 
 function renderCapoBanner(s) {
@@ -3344,6 +3353,60 @@ function bumpTempo(delta) {
   setTempo((s.tempo || DEFAULT_TEMPO) + delta);
 }
 
+// ---- Per-song time signature ----------------------------------------------
+// Stored as "3/4" etc.; null means 4/4. Tempo stays in quarter notes whatever
+// the meter, matching the metronome. Compound meters (6/8, 9/8, 12/8) are
+// felt in groups of three eighths, so their click falls on each group.
+const TIME_CHOICES = ['2/4', '3/4', '4/4', '5/4', '6/8', '7/8', '9/8', '12/8'];
+function normTime(v) {
+  const m = /^\s*(\d{1,2})\s*\/\s*(2|4|8|16)\s*$/.exec(v || '');
+  if (!m || +m[1] < 1) return null;
+  const sig = `${+m[1]}/${m[2]}`;
+  return sig === '4/4' ? null : sig;
+}
+function timeInfo(sig) {
+  const m = /^(\d+)\/(\d+)$/.exec(sig || '') || [null, '4', '4'];
+  const n = +m[1], d = +m[2];
+  const step = 16 / d;                          // 16th-note steps per counted note
+  const compound = d === 8 && n % 3 === 0 && n > 3;
+  return {
+    label: `${n}/${d}`, counts: n, unit: d, compound,
+    steps: Math.min(32, n * step),               // one bar in the drum grid
+    clickEvery: compound ? 3 * step : step,      // where the metronome clicks
+    strumBeats: Math.max(1, Math.round((n * 4) / d)), // quarter-note beats in a bar
+  };
+}
+function renderTimeSelect(s) {
+  const sel = document.getElementById('song-time');
+  if (!sel) return;
+  const cur = timeInfo(s && s.time).label;
+  const opts = TIME_CHOICES.includes(cur) ? TIME_CHOICES : TIME_CHOICES.concat(cur);
+  sel.innerHTML = opts.map((v) => `<option value="${v}">${v}</option>`).join('');
+  sel.value = cur;
+  const btn = document.getElementById('count-in-btn');
+  if (btn) btn.title = `Count in one bar of ${cur} at this tempo`;
+}
+function setTime(v) {
+  const s = currentSong();
+  if (!s) return;
+  s.time = normTime(v);
+  s.updated = Date.now();
+  schedulePersist();
+  renderTimeSelect(s);
+  applyTimeToMetro(s);
+  renderTuningBanner(s);
+  renderSongSummary(s);
+}
+// The metronome follows the open song's meter: one bar in the grid, clicks on
+// the beat (or on each group of three in 6/8).
+function applyTimeToMetro(s) {
+  if (typeof metro === 'undefined' || !metro.pattern) return;
+  const ti = timeInfo(s && s.time);
+  metro.clickEvery = ti.clickEvery;
+  if (metro.steps !== ti.steps) setSteps(ti.steps);
+  else { renderDrumGrid(); saveMetro(); }
+}
+
 // A short beep at scheduled AudioContext time t.
 function beepAt(ctx, t, accent) {
   const osc = ctx.createOscillator(), g = ctx.createGain();
@@ -3360,19 +3423,23 @@ function countIn() {
   const s = currentSong();
   if (!s) return;
   const bpm = s.tempo || DEFAULT_TEMPO;
-  const beat = 60 / bpm;
+  // One bar of the song's meter. Tempo is always quarter notes, so a count in
+  // eighths (6/8, 7/8) clicks twice as fast as one in quarters.
+  const ti = timeInfo(s.time);
+  const beat = (60 / bpm) * (4 / ti.unit);
+  const counts = ti.counts;
   const ctx = countCtx || (countCtx = new (window.AudioContext || window.webkitAudioContext)());
   if (ctx.state === 'suspended') ctx.resume();
   const t0 = ctx.currentTime + 0.12;
   let overlay = document.getElementById('count-overlay');
   if (!overlay) { overlay = document.createElement('div'); overlay.id = 'count-overlay'; overlay.className = 'count-overlay'; document.body.appendChild(overlay); }
   overlay.hidden = false; overlay.textContent = '';
-  for (let i = 0; i < 4; i++) {
-    beepAt(ctx, t0 + i * beat, i === 0);
+  for (let i = 0; i < counts; i++) {
+    beepAt(ctx, t0 + i * beat, i === 0 || (ti.compound && i % 3 === 0));
     const ms = Math.max(0, (t0 + i * beat - ctx.currentTime) * 1000);
     setTimeout(() => { overlay.textContent = String(i + 1); }, ms);
   }
-  setTimeout(() => { overlay.hidden = true; }, Math.max(0, (t0 + 4 * beat - ctx.currentTime) * 1000));
+  setTimeout(() => { overlay.hidden = true; }, Math.max(0, (t0 + counts * beat - ctx.currentTime) * 1000));
 }
 
 // ---- Import / Export -------------------------------------------------------
@@ -3403,11 +3470,13 @@ const STRUM_DEFAULT_BEATS = 4;
 
 function newStrum(label) {
   const div = 2;
+  const s = currentSong();
+  const beats = s && s.time ? timeInfo(s.time).strumBeats : STRUM_DEFAULT_BEATS; // one bar of the song's meter
   return {
     id: newId(),
     label: label || 'Strum',
     div,
-    slots: new Array(STRUM_DEFAULT_BEATS * div).fill('-'),
+    slots: new Array(beats * div).fill('-'),
   };
 }
 
@@ -3622,6 +3691,7 @@ function songToCho(s) {
   if (s.transpose) out += `{transpose: ${s.transpose}}\n`;
   if (s.capo) out += `{capo: ${s.capo}}\n`;
   if (s.tempo) out += `{tempo: ${s.tempo}}\n`;
+  if (s.time) out += `{time: ${s.time}}\n`;
   if (s.tuning && s.tuning !== 'standard') out += `{tuning: ${s.tuning}}\n`;
   if (s.palette && s.palette.length) out += `{palette: ${s.palette.join(' ')}}\n`;
   if (out) out += '\n';
@@ -3666,7 +3736,7 @@ function parseCho(text, fallbackTitle) {
     if (sot) { sawDirective = true; tabLabel = sot[2].trim() || 'Riff'; tabLines = []; continue; }
     const sos = directiveParts(line, /^\{(start_of_strum)/i, false);
     if (sos) { sawDirective = true; strumLabel = sos[2].trim() || 'Strum'; strumLines = []; continue; }
-    const t = directiveParts(line, /^\{(title|artist|transpose|capo|key|tempo|tuning|palette)/i, true);
+    const t = directiveParts(line, /^\{(title|artist|transpose|capo|key|tempo|time|tuning|palette)/i, true);
     if (t) {
       sawDirective = true;
       const key = t[1].toLowerCase();
@@ -3675,6 +3745,7 @@ function parseCho(text, fallbackTitle) {
       else if (key === 'transpose') s.transpose = Number.parseInt(t[2], 10) || 0;
       else if (key === 'capo') s.capo = Math.max(0, Math.min(11, Number.parseInt(t[2], 10) || 0));
       else if (key === 'key') s.key = noteToPc(t[2]);
+      else if (key === 'time') s.time = normTime(t[2]);
       else if (key === 'tempo') s.tempo = Math.max(20, Math.min(400, Number.parseInt(t[2], 10))) || null;
       else if (key === 'tuning') { const v = t[2].trim(); s.tuning = isSongTuning(v) ? v : null; }
       else if (key === 'palette') s.palette = t[2].trim().split(/\s+/).map(normalizeChordInput).filter(isChord);
@@ -3836,6 +3907,7 @@ el.songTuning.addEventListener('change', () => {
   schedulePersist();
   renderTuningBanner(s);
 });
+document.getElementById('song-time').addEventListener('change', (e) => setTime(e.target.value));
 el.tempoInput.addEventListener('change', () => {
   const v = Number.parseInt(el.tempoInput.value, 10);
   setTempo(Number.isFinite(v) && v > 0 ? v : null);
@@ -4428,7 +4500,7 @@ function editorNote(msg) {
 // field with a default whether or not the text said anything, so a reprocess has
 // to know what was really there — otherwise re-running would quietly zero the
 // transpose of a chart whose text never mentioned it.
-const DIRECTIVE_NAME = /^\{(title|artist|transpose|capo|key|tempo|tuning)/i;
+const DIRECTIVE_NAME = /^\{(title|artist|transpose|capo|key|tempo|time|tuning)/i;
 function declaredDirectives(text) {
   const found = new Set();
   for (const line of text.split('\n')) {
@@ -5657,7 +5729,7 @@ const DRUMS = [
   { id: 'crash', label: 'Crash' },
 ];
 const metro = {
-  ctx: null, on: false, bpm: 100, steps: 16, step: 0, next: 0, timer: null, taps: [],
+  ctx: null, on: false, bpm: 100, steps: 16, clickEvery: 4, step: 0, next: 0, timer: null, taps: [],
   click: true, noiseBuf: null, pattern: null,
 };
 
@@ -5766,7 +5838,7 @@ function metroSchedule() {
   while (metro.next < ctx.currentTime + 0.12) {
     const step = metro.step, when = metro.next;
     DRUMS.forEach((d, r) => { if (metro.pattern[r][step]) DRUM_FN[d.id](when); });
-    if (metro.click && step % 4 === 0) metroClick(when, step === 0);
+    if (metro.click && step % metro.clickEvery === 0) metroClick(when, step === 0);
     setTimeout(() => metroHighlight(step), Math.max(0, (when - ctx.currentTime) * 1000));
     metro.step = (step + 1) % metro.steps;
     metro.next += stepDur;
@@ -5779,7 +5851,7 @@ function renderDrumGrid() {
   grid.innerHTML = DRUMS.map((d, r) => {
     let cells = '';
     for (let s = 0; s < metro.steps; s++) {
-      cells += `<button class="dm-cell${metro.pattern[r][s] ? ' on' : ''}${s % 4 === 0 ? ' beat' : ''}" data-r="${r}" data-s="${s}"></button>`;
+      cells += `<button class="dm-cell${metro.pattern[r][s] ? ' on' : ''}${s % metro.clickEvery === 0 ? ' beat' : ''}" data-r="${r}" data-s="${s}"></button>`;
     }
     return `<div class="dm-lane"><span class="dm-lane-label">${d.label}</span><div class="dm-cells">${cells}</div></div>`;
   }).join('');
