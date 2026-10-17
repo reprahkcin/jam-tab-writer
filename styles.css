@@ -3022,16 +3022,22 @@ body.learning { overflow: hidden; }
 .ab-num { flex: none; width: 20px; color: var(--muted); font-size: 12px; text-align: right; }
 .ab-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .ab-title { font-weight: 600; font-size: 14px; }
-.ab-chips { display: flex; flex-wrap: wrap; gap: 4px; }
-.ab-chip {
+.ab-checks { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.ab-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
-  padding: 1px 7px;
+  padding: 2px 8px 2px 4px;
   border-radius: 10px;
   border: 1px solid var(--line);
   color: var(--muted);
-  opacity: 0.6;
+  cursor: pointer;
+  user-select: none;
 }
-.ab-chip.on { opacity: 1; color: var(--text); border-color: var(--accent); }
+.ab-check input { margin: 0; accent-color: var(--accent); cursor: pointer; }
+.ab-check.on { color: var(--text); border-color: var(--accent); }
+.ab-row.complete { box-shadow: inset 3px 0 0 var(--accent); }
 .ab-when { flex: none; font-size: 11px; color: var(--muted); text-align: right; line-height: 1.4; }
 .ab-recent { justify-content: space-between; font-size: 13px; padding: 6px 10px; }
 .ab-recent span { color: var(--muted); font-size: 12px; white-space: nowrap; }
@@ -3079,3 +3085,41 @@ body.learning { overflow: hidden; }
   text-decoration: underline;
   cursor: pointer;
 }
+.ab-row { cursor: default; }
+.ab-row:hover { border-color: transparent; }
+.ab-title {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text);
+  font: 600 14px system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+.ab-title:hover, .ab-title:focus-visible { color: var(--accent); text-decoration: underline; }
+.ab-items { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.ab-item { display: flex; gap: 6px; align-items: center; }
+.ab-item input {
+  flex: 1;
+  min-width: 0;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 4px 8px;
+  font: 13px system-ui, sans-serif;
+}
+.ab-item input:focus { outline: none; border-color: var(--accent); }
+.ab-item-del, .ab-item-add {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  cursor: pointer;
+  font: 12px system-ui, sans-serif;
+  padding: 3px 8px;
+}
+.ab-item-del:hover { color: #ff8080; border-color: #ff8080; }
+.ab-item-add { align-self: flex-start; margin-top: 6px; }
+.ab-item-add:hover { color: var(--accent); border-color: var(--accent); }

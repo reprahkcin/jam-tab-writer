@@ -73,37 +73,44 @@ function isNewToMe(s) {
   return (s._at || s.updated || 0) > seen;
 }
 
-// ---- Where an album song stands --------------------------------------------
-// Read off the chart itself, so nobody has to keep a status up to date. The
-// {Notes} section (the outline) doesn't count as writing.
-function songProgress(s) {
-  let inNotes = false, notes = false, lyric = 0, chorded = 0;
-  for (const raw of (s.body || '').split('\n')) {
-    const line = raw.trim();
-    // A {Section} label: note whether it opens the Notes.
-    if (line.startsWith('{') && line.endsWith('}') && !line.includes(':')) {
-      inNotes = ['notes', 'note'].includes(line.slice(1, -1).trim().toLowerCase());
-      notes = notes || inNotes;
-      continue;
-    }
-    if (inNotes || !line) continue;
-    const words = stripChords(line).trim(); // the lyric, with real chords taken out
-    if (words !== line) chorded++;
-    // A lone [Bridge] is a section label, not a lyric.
-    if (words.startsWith('[') && words.endsWith(']') && words.indexOf('[', 1) === -1) continue;
-    if (words) lyric++;
-  }
-  const takes = typeof cloudTakes !== 'undefined' ? [...cloudTakes.values()].filter((t) => t.songId === s.id).length : 0;
-  return {
-    notes, lyric, chorded, takes,
-    parts: (s.strums || []).length + (s.riffs || []).length,
-    tempo: s.tempo || null,
-    time: s.time || null,
-  };
+// ---- The album checklist ---------------------------------------------------
+// Where each album song stands, ticked by hand by anyone in the band. The items
+// are the album's own list (shared/library/meta/album-checklist), edited in the
+// Details tab; the ticks live one document per song (cloud.js setCheck), so
+// ticks never collide with each other or with someone editing the lyrics.
+
+const DEFAULT_CHECKLIST = [
+  { id: 'lyrics-drafted', label: 'Lyrics drafted' },
+  { id: 'lyrics-final', label: 'Lyrics final' },
+  { id: 'chords-structure', label: 'Chords & structure' },
+  { id: 'demo', label: 'Demo recorded' },
+  { id: 'solos-features', label: 'Solos and features recorded' },
+];
+let checklistItems = DEFAULT_CHECKLIST;
+let albumChecks = {}; // songId -> { itemId: { by, at } }
+
+// Started from startCloudSync alongside the other library watchers.
+function watchChecklist() {
+  // Stored as { items: [...] }: a missing doc means "never set" (the defaults),
+  // while an emptied list stays empty.
+  cloud.watchMeta('album-checklist', (v) => {
+    checklistItems = v && Array.isArray(v.items) ? v.items : DEFAULT_CHECKLIST;
+    refreshAlbumPanel();
+  });
+  cloud.watchChecks((all) => { albumChecks = all; refreshAlbumPanel(); });
+}
+function saveChecklist() {
+  cloud.syncMeta('album-checklist', { items: checklistItems }).catch(cloudFailed);
+  refreshAlbumPanel();
+}
+function songTicks(id) { return albumChecks[id] || {}; }
+function songDone(s) {
+  const ticks = songTicks(s.id);
+  return checklistItems.filter((it) => ticks[it.id]).length;
 }
 
 // ---- The album panel --------------------------------------------------------
-// Two tabs on the album folder's Board button: Songs (where each one stands)
+// Two tabs on the album folder's Album button: Songs (each one's checklist)
 // and Details (the album's direction, its constraints, and general notes,
 // written by the whole band). Each details box is its own document in the
 // library (shared/library/meta/album-<key>), so two people editing different
@@ -188,24 +195,26 @@ function flushDetails() {
 }
 
 function albumSongsHtml(album, list) {
-  const chip = (on, label) => `<span class="ab-chip${on ? ' on' : ''}">${escapeHtml(label)}</span>`;
   const rows = list.map((s, i) => {
-    const p = songProgress(s);
+    const ticks = songTicks(s.id);
+    const done = songDone(s);
     const by = s._by ? personName(s._by) : '';
-    return `<button class="ab-row" data-id="${s.id}">` +
+    const boxes = checklistItems.map((it) => {
+      const tk = ticks[it.id];
+      const tip = tk ? `Ticked by ${personName(tk.by)}, ${agoText(tk.at)}` : 'Not done yet';
+      return `<label class="ab-check${tk ? ' on' : ''}" title="${escapeHtml(tip)}">` +
+        `<input type="checkbox" data-song="${s.id}" data-item="${escapeHtml(it.id)}"${tk ? ' checked' : ''} />` +
+        `${escapeHtml(it.label)}</label>`;
+    }).join('');
+    const total = checklistItems.length;
+    return `<div class="ab-row${total && done === total ? ' complete' : ''}">` +
       `<span class="ab-num">${i + 1}</span>` +
-      `<span class="ab-main"><span class="ab-title">${escapeHtml(s.title || 'Untitled')}` +
-      `${isNewToMe(s) ? '<span class="new-dot" title="Changed since you last looked"></span>' : ''}</span>` +
-      `<span class="ab-chips">` +
-      chip(p.notes, 'Notes') +
-      chip(p.lyric > 0, p.lyric ? `Lyrics · ${p.lyric}` : 'Lyrics') +
-      chip(p.chorded > 0, 'Chords') +
-      chip(p.parts > 0, 'Parts') +
-      chip(p.takes > 0, p.takes ? `Takes · ${p.takes}` : 'Takes') +
-      chip(!!(p.tempo || p.time), [p.tempo ? p.tempo + ' bpm' : '', p.time || ''].filter(Boolean).join(' · ') || 'Tempo') +
-      `</span></span>` +
-      `<span class="ab-when">${by ? escapeHtml(by) + '<br>' : ''}${escapeHtml(agoText(s.updated))}</span>` +
-      `</button>`;
+      `<span class="ab-main">` +
+      `<button class="ab-title" data-id="${s.id}" title="Open this song">${escapeHtml(s.title || 'Untitled')}` +
+      `${isNewToMe(s) ? '<span class="new-dot" title="Changed since you last looked"></span>' : ''}</button>` +
+      `<span class="ab-checks">${boxes}</span></span>` +
+      `<span class="ab-when"><b>${done}/${total}</b><br>${by ? escapeHtml(by) + '<br>' : ''}${escapeHtml(agoText(s.updated))}</span>` +
+      `</div>`;
   }).join('');
   const recent = [...songs].filter((s) => s._by).sort((a, b) => (b.updated || 0) - (a.updated || 0)).slice(0, 8);
   const recentHtml = recent.map((s) =>
@@ -215,11 +224,92 @@ function albumSongsHtml(album, list) {
     (recentHtml ? `<div class="help-sub-head">Recent changes in the library</div><div class="ab-recents">${recentHtml}</div>` : '');
 }
 
+// The checklist's items, editable: rename in place, remove, add.
+function checklistEditorHtml() {
+  return '<div class="ab-field"><span class="ab-flabel">Checklist</span>' +
+    '<span class="ab-who">The boxes every album song gets on the Songs tab.</span>' +
+    '<div class="ab-items">' + checklistItems.map((it) =>
+      `<div class="ab-item"><input type="text" data-item-label="${escapeHtml(it.id)}" value="${escapeHtml(it.label)}" aria-label="Checklist item" />` +
+      `<button type="button" class="ab-item-del" data-item-del="${escapeHtml(it.id)}" title="Remove this item">×</button></div>`).join('') +
+    '</div><button type="button" class="ab-item-add">+ Add item</button></div>';
+}
+
+// Song ticks and the list itself arrive live; redraw what's showing without
+// touching a box someone is typing in.
+function refreshAlbumPanel() {
+  const wrap = document.getElementById('album-board');
+  if (!wrap) return;
+  const album = bandAlbum();
+  const list = songs.filter((s) => normGroup(s.group) === album).sort(songOrder);
+  const pane = wrap.querySelector('[data-pane="songs"]');
+  if (pane) {
+    const top = pane.scrollTop;
+    pane.innerHTML = albumSongsHtml(album, list);
+    pane.scrollTop = top;
+    bindSongsPane(wrap);
+  }
+  const sub = wrap.querySelector('.share-sub');
+  if (sub) sub.textContent = albumSummary(list);
+  const ed = wrap.querySelector('.ab-checklist');
+  if (ed && !ed.contains(document.activeElement)) {
+    ed.innerHTML = checklistEditorHtml();
+    bindChecklistEditor(wrap);
+  }
+}
+function albumSummary(list) {
+  const total = checklistItems.length;
+  const complete = total ? list.filter((s) => songDone(s) === total).length : 0;
+  return `${list.length} songs · ${complete} with every box ticked`;
+}
+
+function bindSongsPane(wrap) {
+  const open = (id) => { void closeAlbumBoard(); selectSong(id); };
+  wrap.querySelectorAll('[data-pane="songs"] [data-id]').forEach((b) => b.addEventListener('click', () => open(b.dataset.id)));
+  wrap.querySelectorAll('[data-pane="songs"] input[data-song]').forEach((box) => box.addEventListener('change', () => {
+    const on = box.checked;
+    box.closest('.ab-check').classList.toggle('on', on);
+    cloud.setCheck(box.dataset.song, box.dataset.item, on).catch((err) => {
+      box.checked = !on; // refused: put it back
+      box.closest('.ab-check').classList.toggle('on', !on);
+      cloudFailed(err);
+    });
+  }));
+}
+
+function bindChecklistEditor(wrap) {
+  const ed = wrap.querySelector('.ab-checklist');
+  if (!ed) return;
+  ed.querySelectorAll('input[data-item-label]').forEach((inp) => inp.addEventListener('change', () => {
+    const label = inp.value.trim();
+    const it = checklistItems.find((x) => x.id === inp.dataset.itemLabel);
+    if (!it) return;
+    if (!label) { inp.value = it.label; return; }
+    if (label === it.label) return;
+    checklistItems = checklistItems.map((x) => (x.id === it.id ? { id: x.id, label } : x));
+    saveChecklist();
+  }));
+  ed.querySelectorAll('[data-item-del]').forEach((b) => b.addEventListener('click', () => {
+    const it = checklistItems.find((x) => x.id === b.dataset.itemDel);
+    if (!it) return;
+    const ticked = Object.values(albumChecks).filter((ticks) => ticks[it.id]).length;
+    if (ticked && !confirm(`Remove "${it.label}"? It's ticked on ${ticked} song${ticked === 1 ? '' : 's'}; those ticks go too.`)) return;
+    checklistItems = checklistItems.filter((x) => x.id !== it.id);
+    saveChecklist();
+  }));
+  ed.querySelector('.ab-item-add').addEventListener('click', () => {
+    const label = prompt('New checklist item:', '');
+    if (!label || !label.trim()) return;
+    checklistItems = checklistItems.concat({ id: 'c' + Date.now().toString(36), label: label.trim() });
+    saveChecklist();
+  });
+}
+
 function albumDetailsHtml() {
   return '<div class="ab-details">' + ALBUM_FIELDS.map((f) =>
     `<label class="ab-field"><span class="ab-flabel">${f.label}</span>` +
     `<textarea data-key="${f.key}" rows="3" placeholder="${escapeHtml(f.hint)}">${escapeHtml((albumDetails[f.key] || {}).text || '')}</textarea>` +
     `<span class="ab-who" data-who="${f.key}">${escapeHtml(detailWho(f.key))}</span></label>`).join('') +
+    `<div class="ab-checklist">${checklistEditorHtml()}</div>` +
     '<div class="ab-foot">Saves for the whole band as you type.</div></div>';
 }
 
@@ -228,7 +318,6 @@ function openAlbumBoard(tab) {
   if (mode !== 'cloud' || !album) return;
   void closeAlbumBoard();
   const list = songs.filter((s) => normGroup(s.group) === album).sort(songOrder);
-  const written = list.filter((s) => songProgress(s).lyric > 0).length;
   const which = tab || lsGet(ALBUM_TAB_KEY) || 'songs';
 
   const wrap = document.createElement('div');
@@ -237,7 +326,7 @@ function openAlbumBoard(tab) {
   wrap.innerHTML =
     `<div class="share-card ab-card" role="dialog" aria-modal="true" aria-label="${escapeHtml(album)}">` +
     `<div class="share-head">${escapeHtml(album)}</div>` +
-    `<div class="share-sub">${list.length} songs · lyrics started on ${written}</div>` +
+    `<div class="share-sub">${escapeHtml(albumSummary(list))}</div>` +
     `<div class="ab-tabs" role="tablist">` +
     `<button class="ab-tab" role="tab" data-tab="songs">Songs</button>` +
     `<button class="ab-tab" role="tab" data-tab="details">Details</button></div>` +
@@ -255,8 +344,8 @@ function openAlbumBoard(tab) {
   wrap.querySelectorAll('.ab-tab').forEach((b) => b.addEventListener('click', () => show(b.dataset.tab)));
   show(which === 'details' ? 'details' : 'songs');
 
-  const open = (id) => { void closeAlbumBoard(); selectSong(id); };
-  wrap.querySelectorAll('[data-id]').forEach((b) => b.addEventListener('click', () => open(b.dataset.id)));
+  bindSongsPane(wrap);
+  bindChecklistEditor(wrap);
   wrap.querySelectorAll('textarea[data-key]').forEach((box) => {
     box.addEventListener('input', () => {
       sizeBox(box);
@@ -357,7 +446,7 @@ function bandTourSteps() {
       { el: '#capture-btn', where: 'header', title: 'Or just play it',
         text: 'Rather not type? Open a song, hit <b>Record</b> and hum or play the idea. Takes are shared, so everyone can hear it.' },
       { el: `${albumRow} .g-board`, where: 'songs', title: 'Where things stand',
-        text: 'The <b>Album</b> button shows each song’s progress (notes, lyrics, chords, takes) and what’s changed lately. ' +
+        text: 'The <b>Album</b> button shows a checklist for each song (lyrics drafted, final, chords, demo…). Tick a box when something’s done; anyone can. ' +
           'Its <b>Details</b> tab holds the album’s direction, constraints and notes. Read them, and add to them. ' +
           'In the list, a <span class="new-dot"></span> marks a song someone else changed since you last looked.' },
       { el: '#perform-btn', where: 'header', only: 'desktop', title: 'The back catalog',

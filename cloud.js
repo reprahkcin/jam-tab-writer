@@ -7,6 +7,7 @@
 //   shared/library/meta/setlists    { data, updated, updatedBy }
 //   shared/library/meta/groups      { data, … } — every folder path, so empty folders persist
 //   shared/library/takes/{takeId}   { songId, songTitle, ts, durMs, ext, mime, name, size, by }
+//   shared/library/checks/{songId}  { items: { itemId: { by, at } } } — the album checklist's ticks
 //   Storage: library/takes/{takeId}.{ext} — the take's audio
 // `data` is the song (or setlist array) as JSON text: songs carry nested arrays
 // (riffs, strums) that Firestore can't store as fields, and JSON keeps the
@@ -23,7 +24,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  collection, doc, onSnapshot, writeBatch, setDoc, deleteDoc, serverTimestamp, getDocs, getDoc,
+  collection, doc, onSnapshot, writeBatch, setDoc, deleteDoc, serverTimestamp, getDocs, getDoc, deleteField,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import {
   getStorage, ref, uploadBytes, getDownloadURL, deleteObject,
@@ -46,6 +47,7 @@ function init() {
 const songsCol = () => collection(db, 'shared', 'library', 'songs');
 const metaDoc = (name) => doc(db, 'shared', 'library', 'meta', name);
 const takesCol = () => collection(db, 'shared', 'library', 'takes');
+const checksCol = () => collection(db, 'shared', 'library', 'checks');
 const takeRef = (t) => ref(storage, `library/takes/${t.id}.${t.ext}`);
 
 // Resolves with the signed-in user (or null) once Firebase has restored the
@@ -278,4 +280,34 @@ export async function deleteTake(t) {
   try { await deleteObject(takeRef(t)); }
   catch (err) { if (!err || err.code !== 'storage/object-not-found') throw err; }
   await deleteDoc(doc(takesCol(), t.id));
+}
+
+// ---- Album checklist -------------------------------------------------------
+// One document per song holding its ticks as a map, written with merge so each
+// tick is its own field: two people ticking different boxes on the same song,
+// or ticking while someone edits the lyrics, never overwrite each other.
+
+// `onChecks({ songId: { itemId: { by, at } } })` with every song's ticks,
+// now and after each change (including your own, straight away).
+export function watchChecks(onChecks) {
+  init();
+  return onSnapshot(checksCol(), (snap) => {
+    const all = {};
+    snap.forEach((d) => {
+      const items = d.get('items', { serverTimestamps: 'estimate' }) || {};
+      const out = {};
+      for (const [id, v] of Object.entries(items)) {
+        if (!v) continue;
+        out[id] = { by: v.by || '', at: v.at && v.at.toMillis ? v.at.toMillis() : null };
+      }
+      all[d.id] = out;
+    });
+    onChecks(all);
+  }, () => {});
+}
+
+export async function setCheck(songId, itemId, on) {
+  init();
+  const value = on ? { by: userEmail() || '', at: serverTimestamp() } : deleteField();
+  await setDoc(doc(checksCol(), songId), { items: { [itemId]: value } }, { merge: true });
 }
