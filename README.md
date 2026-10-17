@@ -222,10 +222,16 @@ live in the library at `shared/library/meta/band`:
   rules it holds to) and **Notes**. Each saves as you type and shows who last
   changed it; each is its own document (`shared/library/meta/album-direction`,
   `-constraints`, `-notes`), so two people in different boxes never clash.
-- **Album board**: the **Album** button on the album folder lists each song's
-  progress, read off the chart itself (Notes, Lyrics with a line count, Chords,
-  Parts, Takes, Tempo/meter), who last changed it and when, and the most recent
-  changes across the library. Click a song to open it.
+- **Album board**: the **Album** button on the album folder lists the album's
+  songs, each with a **checklist** anyone in the band ticks by hand (by
+  default: Lyrics drafted, Lyrics final, Chords & structure, Demo recorded,
+  Solos and features recorded), its count of boxes ticked, who changed the song
+  last and when, and the most recent changes across the library. Hover a box
+  to see who ticked it. The items are the album's own list, renamed, added or
+  removed under **Checklist** in the Details tab
+  (`shared/library/meta/album-checklist`). Ticks are stored one document per
+  song (`shared/library/checks/{songId}`), one field per box, so ticks never
+  collide with each other or with lyric edits. Click a song's title to open it.
 - **Changed since you looked**: a dot marks songs (and their folders) that
   someone else saved after you last opened them. A first visit starts that
   clock, so the whole back catalog isn't news.

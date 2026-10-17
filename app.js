@@ -337,7 +337,7 @@ function cloudUnlocked() { return mode === 'cloud' || !!lsGet(CLOUD_UNLOCK_KEY);
 
 function loadCloud() {
   if (!cloudLoading) {
-    cloudLoading = import('./cloud.js?v=126').then((m) => (cloud = m));
+    cloudLoading = import('./cloud.js?v=127').then((m) => (cloud = m));
     cloudLoading.catch(() => { cloudLoading = null; }); // offline: try again next time
   }
   return cloudLoading;
@@ -420,6 +420,7 @@ function startCloudSync() {
     });
     cloud.watchMeta('band', (v) => { setBandInfo(v); updateModeUI(); });
     watchAlbumDetails();
+    watchChecklist();
     cloud.watchMeta('groups', (list) => {
       cloudGroups = list.map(normGroup).filter(Boolean);
       renderList();
