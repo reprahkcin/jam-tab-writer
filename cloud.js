@@ -5,6 +5,7 @@
 // Layout:
 //   shared/library/songs/{songId}   { data, title, updated, updatedBy }
 //   shared/library/meta/setlists    { data, updated, updatedBy }
+//   shared/library/meta/groups      { data, … } — every folder path, so empty folders persist
 //   shared/library/takes/{takeId}   { songId, songTitle, ts, durMs, ext, mime, name, size, by }
 //   Storage: library/takes/{takeId}.{ext} — the take's audio
 // `data` is the song (or setlist array) as JSON text: songs carry nested arrays
@@ -22,7 +23,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  collection, doc, onSnapshot, writeBatch, setDoc, deleteDoc, serverTimestamp,
+  collection, doc, onSnapshot, writeBatch, setDoc, deleteDoc, serverTimestamp, getDocs, getDoc,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 import {
   getStorage, ref, uploadBytes, getDownloadURL, deleteObject,
@@ -43,7 +44,7 @@ function init() {
 }
 
 const songsCol = () => collection(db, 'shared', 'library', 'songs');
-const setlistDoc = () => doc(db, 'shared', 'library', 'meta', 'setlists');
+const metaDoc = (name) => doc(db, 'shared', 'library', 'meta', name);
 const takesCol = () => collection(db, 'shared', 'library', 'takes');
 const takeRef = (t) => ref(storage, `library/takes/${t.id}.${t.ext}`);
 
@@ -77,7 +78,7 @@ export function userEmail() {
 // stored in `data`. sync() writes only what differs; the listener ignores
 // snapshots that match, so our own writes never bounce back as "remote" edits.
 const known = new Map();
-let knownSetlists = null;
+const knownMeta = {}; // meta doc name -> its last-known `data` text
 
 function songJson(s) {
   // Folder-mode and draft bookkeeping never belongs in the shared copy.
@@ -171,23 +172,44 @@ export async function copyIn(songs) {
   }
 }
 
-export function watchSetlists(onSetlists) {
+// The library's small shared lists (setlists, folders), one JSON doc each.
+export function watchMeta(name, onValue) {
   init();
-  return onSnapshot(setlistDoc(), (snap) => {
+  return onSnapshot(metaDoc(name), (snap) => {
     if (snap.metadata.hasPendingWrites) return;
     const data = snap.exists() ? snap.get('data') : '[]';
-    if (data === knownSetlists) return;
-    knownSetlists = data;
-    try { onSetlists(JSON.parse(data)); } catch { /* keep what we have */ }
+    if (data === knownMeta[name]) return;
+    knownMeta[name] = data;
+    try { onValue(JSON.parse(data)); } catch { /* keep what we have */ }
   }, () => {});
 }
 
-export async function syncSetlists(list) {
+export async function syncMeta(name, value) {
   init();
-  const data = JSON.stringify(list);
-  if (data === knownSetlists) return;
-  knownSetlists = data;
-  await setDoc(setlistDoc(), { data, updated: serverTimestamp(), updatedBy: userEmail() || '' });
+  const data = JSON.stringify(value);
+  if (data === knownMeta[name]) return;
+  const before = knownMeta[name];
+  knownMeta[name] = data;
+  try { await setDoc(metaDoc(name), { data, updated: serverTimestamp(), updatedBy: userEmail() || '' }); }
+  catch (err) { knownMeta[name] = before; throw err; }
+}
+
+export const watchSetlists = (onSetlists) => watchMeta('setlists', onSetlists);
+export const syncSetlists = (list) => syncMeta('setlists', list);
+
+// One-off reads, for copying in from outside the library (nothing is watched yet).
+export async function fetchSongs() {
+  init();
+  const snap = await getDocs(songsCol());
+  const list = [];
+  snap.forEach((d) => { try { list.push(JSON.parse(d.get('data'))); } catch { /* skip */ } });
+  return list;
+}
+
+export async function fetchMeta(name) {
+  init();
+  const snap = await getDoc(metaDoc(name));
+  try { return snap.exists() ? JSON.parse(snap.get('data')) : []; } catch { return []; }
 }
 
 // ---- Takes -----------------------------------------------------------------

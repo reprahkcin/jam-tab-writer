@@ -2320,6 +2320,37 @@ body.performing { overflow: hidden; }
 .song-item:hover .add-set, .song-item .add-set:focus-visible { opacity: 1; }
 .song-item .add-set:hover { color: var(--accent); }
 .song-item .add-set .ico { width: 13px; height: 13px; }
+/* Shared library: "Move to a folder" sits beside the setlist button. */
+.song-item .mv-song {
+  opacity: 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  padding: 2px 4px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.song-item:hover .mv-song, .song-item .mv-song:focus-visible { opacity: 1; }
+.song-item .mv-song:hover { color: var(--accent); }
+@media (hover: none) { .song-item .mv-song { opacity: 1; } }
+/* With a mouse, Move and Delete take no room until the row is hovered, so the
+   narrow sidebar keeps the title readable. */
+@media (hover: hover) {
+  .song-item .mv-song, .song-item .del { display: none; }
+  .song-item:hover .mv-song, .song-item:hover .del,
+  .song-item .mv-song:focus-visible, .song-item .del:focus-visible { display: inline-block; }
+  .lib-header .lib-btn, .subfolder-row .lib-btn { display: none; }
+  .lib-header:hover .lib-btn, .subfolder-row:hover .lib-btn,
+  .lib-header .lib-btn:focus-visible, .subfolder-row .lib-btn:focus-visible { display: inline-block; }
+}
+/* A folder row a dragged song is hovering over. */
+.lib-header.drop-target, .subfolder-row.drop-target {
+  background: var(--panel-2);
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px var(--lib-color, var(--accent));
+}
+.g-rename:hover { color: var(--lib-color, var(--accent)); }
 @media (hover: none) { .song-item .add-set { opacity: 1; } } /* no hover to reveal it on touch */
 
 .setlist-pop {
