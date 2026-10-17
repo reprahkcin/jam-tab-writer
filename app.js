@@ -337,7 +337,7 @@ function cloudUnlocked() { return mode === 'cloud' || !!lsGet(CLOUD_UNLOCK_KEY);
 
 function loadCloud() {
   if (!cloudLoading) {
-    cloudLoading = import('./cloud.js?v=125').then((m) => (cloud = m));
+    cloudLoading = import('./cloud.js?v=126').then((m) => (cloud = m));
     cloudLoading.catch(() => { cloudLoading = null; }); // offline: try again next time
   }
   return cloudLoading;
@@ -419,6 +419,7 @@ function startCloudSync() {
       if (!document.getElementById('setlist-modal').hidden) renderSetlistModal();
     });
     cloud.watchMeta('band', (v) => { setBandInfo(v); updateModeUI(); });
+    watchAlbumDetails();
     cloud.watchMeta('groups', (list) => {
       cloudGroups = list.map(normGroup).filter(Boolean);
       renderList();
@@ -590,6 +591,8 @@ async function openCloud() {
 }
 
 async function leaveCloud(signOut) {
+  // Album details still waiting to save go first (bounded, as offline they'd wait for the network).
+  await Promise.race([closeAlbumBoard(), new Promise((r) => setTimeout(r, 1500))]);
   await flushPersist();
   if (signOut && cloud) await cloud.signOut().catch(() => {});
   lsSet(CLOUD_ON_KEY, null);
@@ -699,7 +702,7 @@ function groupRow(name, path, depth, count) {
       '<button class="lib-btn g-rename" title="Rename this folder">✎</button>' +
       (count ? '' : '<button class="lib-btn lib-close g-delete" title="Delete this empty folder">×</button>') : '') +
     // Last in the row, so the hover buttons appearing don't move it.
-    (isAlbum ? '<button class="g-board" title="Album board: where each song stands">Board</button>' : '');
+    (isAlbum ? '<button class="g-board" title="The album: where each song stands, and its direction, constraints and notes">Album</button>' : '');
   row.querySelector('.lib-caret').addEventListener('click', (e) => { e.stopPropagation(); toggleGroup(path); });
   row.querySelector(top ? '.lib-name' : '.sf-name').addEventListener('click', () => setActiveGroup(real ? path : ''));
   if (isAlbum) row.querySelector('.g-board').addEventListener('click', (e) => { e.stopPropagation(); openAlbumBoard(); });

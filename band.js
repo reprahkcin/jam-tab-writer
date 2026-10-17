@@ -102,13 +102,92 @@ function songProgress(s) {
   };
 }
 
-// ---- The album board -------------------------------------------------------
+// ---- The album panel --------------------------------------------------------
+// Two tabs on the album folder's Board button: Songs (where each one stands)
+// and Details (the album's direction, its constraints, and general notes,
+// written by the whole band). Each details box is its own document in the
+// library (shared/library/meta/album-<key>), so two people editing different
+// boxes never overwrite each other.
 
-function openAlbumBoard() {
-  const album = bandAlbum();
-  if (mode !== 'cloud' || !album) return;
-  closeAlbumBoard();
-  const list = songs.filter((s) => normGroup(s.group) === album).sort(songOrder);
+const ALBUM_FIELDS = [
+  { key: 'direction', label: 'Direction',
+    hint: 'What the album is: the story, the sound, the feel we’re going for.' },
+  { key: 'constraints', label: 'Constraints',
+    hint: 'The rules we’re holding to: length, instrumentation, keys, what’s off the table.' },
+  { key: 'notes', label: 'Notes',
+    hint: 'Anything else: title ideas, open questions, who’s on what.' },
+];
+const ALBUM_TAB_KEY = 'gtw.album.tab';
+const albumDetails = {}; // key -> { text, by, at }
+
+function setAlbumDetail(key, v, meta) {
+  albumDetails[key] = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  if (meta && meta.at) albumDetails[key]._at = meta.at; // the server's clock, not the editor's
+  const box = document.querySelector(`#album-board textarea[data-key="${key}"]`);
+  const who = document.querySelector(`#album-board [data-who="${key}"]`);
+  if (!box) return;
+  const theirs = albumDetails[key].text || '';
+  if (document.activeElement !== box) {
+    box.value = theirs;
+    sizeBox(box);
+    if (who) who.textContent = detailWho(key);
+    return;
+  }
+  // You're typing in the box someone else just changed: say so, and offer
+  // their version, rather than letting your next save quietly replace it.
+  if (who && theirs !== box.value) {
+    who.innerHTML = `${escapeHtml(personName(albumDetails[key].by))} just changed this. What you type will replace it. ` +
+      '<button type="button" class="ab-theirs">Show theirs</button>';
+    who.querySelector('.ab-theirs').addEventListener('mousedown', (e) => e.preventDefault()); // keep the box focused
+    who.querySelector('.ab-theirs').addEventListener('click', () => {
+      clearTimeout(detailTimers[key]);
+      delete detailTimers[key];
+      box.value = theirs;
+      sizeBox(box);
+      who.textContent = detailWho(key);
+    });
+  }
+}
+// Started from startCloudSync alongside the other library watchers.
+function watchAlbumDetails() {
+  for (const f of ALBUM_FIELDS) cloud.watchMeta('album-' + f.key, (v) => setAlbumDetail(f.key, v));
+}
+function detailWho(key) {
+  const d = albumDetails[key] || {};
+  return d.by ? `Last edited by ${personName(d.by)}, ${agoText(d._at || d.at)}` : '';
+}
+function sizeBox(box) {
+  box.style.height = 'auto';
+  box.style.height = Math.min(Math.max(box.scrollHeight + 2, 72), 420) + 'px';
+}
+
+const detailTimers = {};
+// Returns the write, so leaving the library can wait for it.
+function saveDetail(key, text) {
+  clearTimeout(detailTimers[key]);
+  delete detailTimers[key];
+  const prev = albumDetails[key] || {};
+  if ((prev.text || '') === text) return Promise.resolve();
+  const mine = { text, by: bandMe(), at: Date.now() };
+  albumDetails[key] = mine;
+  const who = document.querySelector(`#album-board [data-who="${key}"]`);
+  if (who) who.textContent = detailWho(key);
+  return cloud.syncMeta('album-' + key, mine).catch((err) => {
+    // Refused: forget it was saved, so the next blur or close tries again.
+    if (albumDetails[key] === mine) albumDetails[key] = prev;
+    cloudFailed(err);
+  });
+}
+// Write anything still waiting on its timer (closing the panel, leaving a box).
+function flushDetails() {
+  const writes = [];
+  document.querySelectorAll('#album-board textarea[data-key]').forEach((box) => {
+    if (detailTimers[box.dataset.key]) writes.push(saveDetail(box.dataset.key, box.value));
+  });
+  return Promise.all(writes);
+}
+
+function albumSongsHtml(album, list) {
   const chip = (on, label) => `<span class="ab-chip${on ? ' on' : ''}">${escapeHtml(label)}</span>`;
   const rows = list.map((s, i) => {
     const p = songProgress(s);
@@ -128,36 +207,85 @@ function openAlbumBoard() {
       `<span class="ab-when">${by ? escapeHtml(by) + '<br>' : ''}${escapeHtml(agoText(s.updated))}</span>` +
       `</button>`;
   }).join('');
-  const written = list.filter((s) => songProgress(s).lyric > 0).length;
   const recent = [...songs].filter((s) => s._by).sort((a, b) => (b.updated || 0) - (a.updated || 0)).slice(0, 8);
   const recentHtml = recent.map((s) =>
     `<button class="ab-recent" data-id="${s.id}"><b>${escapeHtml(s.title || 'Untitled')}</b>` +
     `<span>${escapeHtml(personName(s._by))} · ${escapeHtml(agoText(s.updated))}</span></button>`).join('');
+  return `<div class="ab-list">${rows || '<div class="ab-empty">No songs in this folder yet.</div>'}</div>` +
+    (recentHtml ? `<div class="help-sub-head">Recent changes in the library</div><div class="ab-recents">${recentHtml}</div>` : '');
+}
+
+function albumDetailsHtml() {
+  return '<div class="ab-details">' + ALBUM_FIELDS.map((f) =>
+    `<label class="ab-field"><span class="ab-flabel">${f.label}</span>` +
+    `<textarea data-key="${f.key}" rows="3" placeholder="${escapeHtml(f.hint)}">${escapeHtml((albumDetails[f.key] || {}).text || '')}</textarea>` +
+    `<span class="ab-who" data-who="${f.key}">${escapeHtml(detailWho(f.key))}</span></label>`).join('') +
+    '<div class="ab-foot">Saves for the whole band as you type.</div></div>';
+}
+
+function openAlbumBoard(tab) {
+  const album = bandAlbum();
+  if (mode !== 'cloud' || !album) return;
+  void closeAlbumBoard();
+  const list = songs.filter((s) => normGroup(s.group) === album).sort(songOrder);
+  const written = list.filter((s) => songProgress(s).lyric > 0).length;
+  const which = tab || lsGet(ALBUM_TAB_KEY) || 'songs';
 
   const wrap = document.createElement('div');
   wrap.id = 'album-board';
   wrap.className = 'share-modal';
   wrap.innerHTML =
-    `<div class="share-card ab-card" role="dialog" aria-modal="true" aria-label="Album board">` +
+    `<div class="share-card ab-card" role="dialog" aria-modal="true" aria-label="${escapeHtml(album)}">` +
     `<div class="share-head">${escapeHtml(album)}</div>` +
-    `<div class="share-sub">${list.length} songs · lyrics started on ${written} · click a song to open it</div>` +
-    `<div class="ab-list">${rows || '<div class="ab-empty">No songs in this folder yet.</div>'}</div>` +
-    (recentHtml ? `<div class="help-sub-head">Recent changes in the library</div><div class="ab-recents">${recentHtml}</div>` : '') +
+    `<div class="share-sub">${list.length} songs · lyrics started on ${written}</div>` +
+    `<div class="ab-tabs" role="tablist">` +
+    `<button class="ab-tab" role="tab" data-tab="songs">Songs</button>` +
+    `<button class="ab-tab" role="tab" data-tab="details">Details</button></div>` +
+    `<div class="ab-pane" data-pane="songs">${albumSongsHtml(album, list)}</div>` +
+    `<div class="ab-pane" data-pane="details">${albumDetailsHtml()}</div>` +
     `<div class="share-actions"><button id="ab-close">Close</button></div></div>`;
   document.body.appendChild(wrap);
-  const open = (id) => { closeAlbumBoard(); selectSong(id); };
+
+  const show = (name) => {
+    wrap.querySelectorAll('.ab-tab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+    wrap.querySelectorAll('.ab-pane').forEach((p) => { p.hidden = p.dataset.pane !== name; });
+    lsSet(ALBUM_TAB_KEY, name);
+    if (name === 'details') wrap.querySelectorAll('textarea[data-key]').forEach(sizeBox);
+  };
+  wrap.querySelectorAll('.ab-tab').forEach((b) => b.addEventListener('click', () => show(b.dataset.tab)));
+  show(which === 'details' ? 'details' : 'songs');
+
+  const open = (id) => { void closeAlbumBoard(); selectSong(id); };
   wrap.querySelectorAll('[data-id]').forEach((b) => b.addEventListener('click', () => open(b.dataset.id)));
-  wrap.querySelector('#ab-close').addEventListener('click', closeAlbumBoard);
-  wrap.addEventListener('click', (e) => { if (e.target === wrap) closeAlbumBoard(); });
+  wrap.querySelectorAll('textarea[data-key]').forEach((box) => {
+    box.addEventListener('input', () => {
+      sizeBox(box);
+      clearTimeout(detailTimers[box.dataset.key]);
+      detailTimers[box.dataset.key] = setTimeout(() => { void saveDetail(box.dataset.key, box.value); }, 800);
+    });
+    box.addEventListener('blur', () => { if (detailTimers[box.dataset.key]) void saveDetail(box.dataset.key, box.value); });
+  });
+  wrap.querySelector('#ab-close').addEventListener('click', () => { void closeAlbumBoard(); });
+  // Only a click that starts on the backdrop closes it: a text selection
+  // dragged out of a box and let go outside the card mustn't.
+  let downOnBackdrop = false;
+  wrap.addEventListener('mousedown', (e) => { downOnBackdrop = e.target === wrap; });
+  wrap.addEventListener('click', (e) => { if (e.target === wrap && downOnBackdrop) void closeAlbumBoard(); });
   wrap.querySelector('#ab-close').focus();
 }
+// Resolves once any details still waiting have been written.
 function closeAlbumBoard() {
   const b = document.getElementById('album-board');
-  if (b) b.remove();
+  if (!b) return Promise.resolve();
+  const saved = flushDetails();
+  b.remove();
+  return saved;
 }
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && document.getElementById('album-board')) closeAlbumBoard();
+  if (e.key === 'Escape' && document.getElementById('album-board')) void closeAlbumBoard();
 });
+// Closing the tab mid-sentence still saves it (into the offline copy, sent when it can be).
+window.addEventListener('pagehide', () => { void flushDetails(); });
 
 // ---- The invite link -------------------------------------------------------
 // …/?join opens the shared library for someone who's never used the app: one
@@ -229,7 +357,8 @@ function bandTourSteps() {
       { el: '#capture-btn', where: 'header', title: 'Or just play it',
         text: 'Rather not type? Open a song, hit <b>Record</b> and hum or play the idea. Takes are shared, so everyone can hear it.' },
       { el: `${albumRow} .g-board`, where: 'songs', title: 'Where things stand',
-        text: 'The board shows each album song’s progress (notes, lyrics, chords, takes) and what’s changed lately. ' +
+        text: 'The <b>Album</b> button shows each song’s progress (notes, lyrics, chords, takes) and what’s changed lately. ' +
+          'Its <b>Details</b> tab holds the album’s direction, constraints and notes. Read them, and add to them. ' +
           'In the list, a <span class="new-dot"></span> marks a song someone else changed since you last looked.' },
       { el: '#perform-btn', where: 'header', only: 'desktop', title: 'The back catalog',
         text: 'Every older song is here too. Open one and hit <b>Perform</b> for a full-screen chart that scrolls by itself.' },
