@@ -77,20 +77,25 @@ function isNewToMe(s) {
 // Read off the chart itself, so nobody has to keep a status up to date. The
 // {Notes} section (the outline) doesn't count as writing.
 function songProgress(s) {
-  let inNotes = false, lyric = 0, chorded = 0;
+  let inNotes = false, notes = false, lyric = 0, chorded = 0;
   for (const raw of (s.body || '').split('\n')) {
     const line = raw.trim();
-    const sec = /^\{([^}:]+)\}$/.exec(line);
-    if (sec) { inNotes = /^notes?$/i.test(sec[1].trim()); continue; }
+    // A {Section} label: note whether it opens the Notes.
+    if (line.startsWith('{') && line.endsWith('}') && !line.includes(':')) {
+      inNotes = ['notes', 'note'].includes(line.slice(1, -1).trim().toLowerCase());
+      notes = notes || inNotes;
+      continue;
+    }
     if (inNotes || !line) continue;
-    if (/^\[[A-Za-z][\w -]*\]$/.test(line) && !isChord(line.slice(1, -1))) continue; // a [Bridge] label
-    if (/\[[^\]]+\]/.test(line)) chorded++;
-    if (line.replace(/\[[^\]]*\]/g, '').trim()) lyric++;
+    const words = stripChords(line).trim(); // the lyric, with real chords taken out
+    if (words !== line) chorded++;
+    // A lone [Bridge] is a section label, not a lyric.
+    if (words.startsWith('[') && words.endsWith(']') && words.indexOf('[', 1) === -1) continue;
+    if (words) lyric++;
   }
   const takes = typeof cloudTakes !== 'undefined' ? [...cloudTakes.values()].filter((t) => t.songId === s.id).length : 0;
   return {
-    notes: /^\s*\{notes?\}\s*$/im.test(s.body || ''),
-    lyric, chorded, takes,
+    notes, lyric, chorded, takes,
     parts: (s.strums || []).length + (s.riffs || []).length,
     tempo: s.tempo || null,
     time: s.time || null,
@@ -245,8 +250,8 @@ function startBandTour() {
   const album = bandAlbum();
   groupCollapsed.delete(album);
   const { start, steps: all } = bandTourSteps();
-  if (start) { activeGroup = album; selectSong(start.id); }
-  renderList();
+  setActiveGroup(album); // new songs from here land in the album
+  if (start) selectSong(start.id);
   const phone = tourPhone();
   const plan = all
     .filter((st) => !st.only || st.only === (phone ? 'phone' : 'desktop'))

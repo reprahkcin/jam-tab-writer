@@ -819,7 +819,7 @@ function renameGroup(path) {
   cloudGroups = cloudGroups.map(swap);
   activeGroup = swap(activeGroup);
   if (bandAlbum() && swap(bandAlbum()) !== bandAlbum()) {
-    bandInfo = Object.assign({}, bandInfo, { album: swap(bandAlbum()) });
+    setBandInfo(Object.assign({}, bandInfo, { album: swap(bandAlbum()) }));
     cloud.syncMeta('band', bandInfo).catch(cloudFailed);
   }
   for (const k of [...groupCollapsed]) if (swap(k) !== k) { groupCollapsed.delete(k); groupCollapsed.add(swap(k)); }
