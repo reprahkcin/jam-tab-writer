@@ -246,6 +246,7 @@ function loadSongs() {
 }
 
 function saveSongs(songs) {
+  if (mode === 'cloud') { cloudSave(); return; }
   localStorage.setItem(STORE_KEY, JSON.stringify(songs));
 }
 
@@ -262,7 +263,17 @@ function newId() {
 // "library". Handles are remembered in IndexedDB so folders reconnect (with one
 // permission click) next session.
 
-let mode = 'local';           // 'local' | 'folder'
+// A third mode, 'cloud', is a shared library in Firestore for a small invited
+// group (cloud.js, loaded only when it's used). It behaves like 'local' — one
+// flat list, autosave — but saveSongs writes to the server. A browser stays in
+// cloud mode across reloads until you pick "Back to this browser's songs".
+const CLOUD_ON_KEY = 'gtw.cloud.on';          // this browser opens the shared library
+const CLOUD_UNLOCK_KEY = 'gtw.cloud.unlocked'; // offer it in the source picker (set by ?cloud)
+const CLOUD_LAST_KEY = 'gtw.cloud.lastId';
+function lsGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
+function lsSet(key, val) { try { if (val === null) localStorage.removeItem(key); else localStorage.setItem(key, val); } catch { /* private mode */ } }
+
+let mode = lsGet(CLOUD_ON_KEY) ? 'cloud' : 'local'; // 'local' | 'folder' | 'cloud'
 let libraries = [];           // [{ id, name, handle, kind, color, subdirs }] — open folders
 let activeLibId = null;       // folder that + New / Import target
 let activeSubpath = '';       // subfolder within that folder that new charts target
@@ -276,6 +287,7 @@ const collapsed = new Set();  // collapsed nodes: libId, or libId+'\0'+subpath
 const COLLECTION_DIR = 'GuitarTabWriterCollection';
 const COLLECTION_COLOR = '#5db073';
 const BROWSER_COLOR = '#909090';
+const CLOUD_COLOR = '#e0706a';
 const EXTERNAL_PALETTE = ['#5b9dd9', '#e0a458', '#a986d6', '#4bb5a8', '#d97aa6', '#c98b4b'];
 function nextExternalColor() {
   const n = libraries.filter((l) => l.kind === 'external').length;
@@ -294,11 +306,186 @@ function makeLib(handle, kind) {
 }
 // The colour + label for whatever system is active right now (for breadcrumb).
 function systemInfo() {
+  if (mode === 'cloud') return { color: CLOUD_COLOR, label: 'Shared library', kind: 'cloud' };
   if (mode !== 'folder') return { color: BROWSER_COLOR, label: 'Browser', kind: 'browser' };
   const lib = activeLib();
   return lib
     ? { color: lib.color, label: lib.name, kind: lib.kind }
     : { color: BROWSER_COLOR, label: 'Browser', kind: 'browser' };
+}
+
+// ---- Shared library (cloud mode) -------------------------------------------
+// Hidden from the public app: the source picker offers it only in a browser
+// that has visited with ?cloud once (or is already in it). Who can actually
+// read and write is enforced by firestore.rules, not by hiding the option.
+
+let cloud = null;         // the cloud.js module, once loaded
+let cloudLoading = null;  // its import() promise
+let cloudReady = false;   // the library has arrived; before that, nothing is written
+
+if (/[?&]cloud(=|&|$)/.test(location.search)) {
+  lsSet(CLOUD_UNLOCK_KEY, '1');
+  const q = new URLSearchParams(location.search);
+  q.delete('cloud');
+  history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
+}
+function cloudUnlocked() { return mode === 'cloud' || !!lsGet(CLOUD_UNLOCK_KEY); }
+
+function loadCloud() {
+  if (!cloudLoading) {
+    cloudLoading = import('./cloud.js?v=118').then((m) => (cloud = m));
+    cloudLoading.catch(() => { cloudLoading = null; }); // offline: try again next time
+  }
+  return cloudLoading;
+}
+
+function cloudSave() {
+  if (!cloud || !cloudReady) return;
+  cloud.syncSongs(songs).catch(cloudFailed);
+}
+
+function cloudFailed(err) {
+  const denied = err && err.code === 'permission-denied';
+  el.status.textContent = denied ? 'Not saved — this account isn’t on the shared library’s list'
+    : 'Sync failed — will retry on the next edit';
+  renderBreadcrumb('Sync failed');
+}
+
+// Someone else changed the library. Their edit replaces ours unless the song
+// is open here with a newer local edit (which our next save will write).
+function applyRemote(ch) {
+  if (ch.type === 'removed') {
+    songs = songs.filter((s) => s.id !== ch.id);
+    if (currentId === ch.id) {
+      if (songs.length) selectSong([...songs].sort((a, b) => b.updated - a.updated)[0].id);
+      else showEmptyState();
+      el.status.textContent = 'That song was deleted from the shared library';
+    } else renderList();
+    return;
+  }
+  const s = ch.song;
+  const i = songs.findIndex((x) => x.id === s.id);
+  if (i < 0) { songs.push(s); renderList(); return; }
+  if (s.id !== currentId) { songs[i] = s; renderList(); return; }
+  if ((songs[i].updated || 0) > (s.updated || 0)) return;
+  // Re-show the open song without throwing the cursor to the top.
+  const ed = el.editor;
+  const focused = document.activeElement === ed;
+  const [a, b, top] = [ed.selectionStart, ed.selectionEnd, ed.scrollTop];
+  songs[i] = s;
+  selectSong(s.id);
+  if (focused) { ed.focus(); ed.setSelectionRange(Math.min(a, ed.value.length), Math.min(b, ed.value.length)); }
+  ed.scrollTop = top;
+  el.status.textContent = 'Updated' + (ch.by ? ' by ' + ch.by : '');
+}
+
+function startCloudSync() {
+  return new Promise((resolve) => {
+    cloud.watchSongs({
+      onInit(list) {
+        // Anything typed before the list arrived is kept and sent up.
+        const early = songs.filter((s) => !list.some((x) => x.id === s.id));
+        songs = list.concat(early);
+        cloudReady = true;
+        if (early.length) cloudSave();
+        updateModeUI();
+        const last = lsGet(CLOUD_LAST_KEY);
+        if (currentSong()) renderList();
+        else if (songs.some((s) => s.id === last)) selectSong(last);
+        else if (songs.length) selectSong([...songs].sort((a, b) => b.updated - a.updated)[0].id);
+        else showEmptyState();
+        resolve();
+      },
+      onChange: applyRemote,
+      onError(err) { void cloudRefused(err); resolve(); },
+    });
+    cloud.watchSetlists((list) => {
+      setlists = list;
+      if (!document.getElementById('setlist-modal').hidden) renderSetlistModal();
+    });
+  });
+}
+
+async function cloudRefused(err) {
+  if (!err || err.code !== 'permission-denied') {
+    el.status.textContent = 'Couldn’t reach the shared library';
+    return;
+  }
+  alert(`${cloud.userEmail() || 'This account'} isn’t on the shared library’s list, so it can’t open it.`);
+  await leaveCloud(true);
+}
+
+// Opened with the flag set: load Firebase, restore the sign-in, fetch the songs.
+async function bootCloud() {
+  const fallBack = (msg) => {
+    // Work on this browser's songs for now; the flag stays, so the next load
+    // tries the shared library again.
+    mode = 'local';
+    songs = loadSongs();
+    setlists = loadSetlists();
+    updateModeUI();
+    if (songs.length) selectSong([...songs].sort((a, b) => b.updated - a.updated)[0].id);
+    else showEmptyState();
+    el.status.textContent = msg;
+  };
+  try { await loadCloud(); }
+  catch { fallBack('Couldn’t reach the shared library — showing this browser’s songs'); return; }
+  if (!cloud.configured) { lsSet(CLOUD_ON_KEY, null); fallBack('The shared library isn’t set up yet'); return; }
+  const user = await cloud.whenUser();
+  updateModeUI();
+  if (!user) { el.status.textContent = 'Signed out — pick Sign in… above the song list'; return; }
+  await startCloudSync();
+}
+
+// Write any edit still waiting on the autosave timer before the page reloads.
+async function flushPersist() {
+  clearTimeout(persistTimer);
+  const s = currentSong();
+  if (mode === 'folder') { if (s && fileHandles[s.id]) await writeSong(s).catch(() => {}); return; }
+  if (mode === 'local') { saveSongs(songs); return; }
+  if (cloud && cloudReady) {
+    // Offline the write waits for the network; the local cache keeps it, so
+    // don't hold the reload hostage to it.
+    await Promise.race([cloud.syncSongs(songs).catch(() => {}), new Promise((r) => setTimeout(r, 1500))]);
+  }
+}
+
+async function openCloud() {
+  try { await loadCloud(); }
+  catch { alert('Couldn’t load the shared library — check your connection.'); return; }
+  if (!cloud.configured) { alert('The shared library isn’t set up yet: cloud-config.js has no Firebase config.'); return; }
+  let user = await cloud.whenUser();
+  if (!user) {
+    try { user = await cloud.signIn(); }
+    catch (err) {
+      if (err && err.code === 'auth/popup-blocked') alert('The sign-in window was blocked — pick the option again.');
+      return;
+    }
+  }
+  if (mode === 'cloud') { updateModeUI(); await startCloudSync(); return; } // signed back in
+  const mine = songs.filter((s) => !s.example && !s.draft);
+  const where = mode === 'folder' ? 'from your open folders' : 'saved in this browser';
+  if (mine.length && confirm(
+    `Copy the ${mine.length} song${mine.length === 1 ? '' : 's'} ${where} into the shared library?\n\n` +
+    `Everyone on its list will see them. Cancel opens the shared library without copying.`)) {
+    el.status.textContent = 'Copying into the shared library…';
+    try { await cloud.copyIn(mine); }
+    catch (err) {
+      if (err && err.code === 'permission-denied') await cloudRefused(err);
+      else alert('Copying failed — check your connection and try again.');
+      return;
+    }
+  }
+  await flushPersist();
+  lsSet(CLOUD_ON_KEY, '1');
+  location.reload();
+}
+
+async function leaveCloud(signOut) {
+  await flushPersist();
+  if (signOut && cloud) await cloud.signOut().catch(() => {});
+  lsSet(CLOUD_ON_KEY, null);
+  location.reload();
 }
 
 const IDB = { name: 'gtw', store: 'kv' };
@@ -644,7 +831,7 @@ function renderBreadcrumb(stateText) {
   }
   if (stateText === undefined)
     stateText = s.draft ? 'Draft — not yet saved to folder'
-      : (mode === 'folder' ? '' : 'Autosaves to this browser');
+      : ({ folder: '', cloud: 'Autosaves to the shared library' }[mode] ?? 'Autosaves to this browser');
   let cls = '';
   if (/^Saved/.test(stateText)) cls = 'ok';
   else if (/fail|Draft/i.test(stateText)) cls = 'warn';
@@ -688,7 +875,7 @@ const el = {
   toggleNumbers: document.getElementById('toggle-numbers'),
 };
 
-let songs = loadSongs();
+let songs = mode === 'cloud' ? [] : loadSongs(); // cloud songs arrive in bootCloud
 let currentId = null;
 
 // Default jam: two guitars, uke, piano, harmonica on; lap steel, mandolin + bass off.
@@ -770,6 +957,7 @@ function selectSong(id) {
   }
   currentId = id;
   if (mode === 'local') localStorage.setItem(LAST_KEY, id);
+  else if (mode === 'cloud') lsSet(CLOUD_LAST_KEY, id);
   else {
     // Selecting a chart points the new-file target at its folder + subfolder, so
     // + New / Import / PDF-drop land next to what you're looking at.
@@ -3167,9 +3355,9 @@ function importDraft(text, fallbackTitle) {
 // ---- Wire up ---------------------------------------------------------------
 
 // If the user starts typing with nothing selected, create a song to hold it.
-// Local mode only — folder mode needs an explicit + New so the file gets named.
+// Not in folder mode, which needs an explicit + New so the file gets named.
 function ensureSongForTyping() {
-  if (currentSong() || mode !== 'local') return;
+  if (currentSong() || mode === 'folder') return;
   const s = blankSong();
   songs.push(s);
   currentId = s.id;
@@ -3656,7 +3844,14 @@ function renderSourcePicker() {
   const dot = document.getElementById('source-dot');
   if (!sel || !dot) return;
   const opts = [];
-  if (mode === 'folder') {
+  if (mode === 'cloud') {
+    const who = cloud && cloud.userEmail();
+    opts.push(['state', who ? 'Shared library · ' + who : 'Shared library — signed out']);
+    if (!who) opts.push(['signin', 'Sign in…']);
+    opts.push(['browser', 'Back to this browser\u2019s songs']);
+    if (who) opts.push(['signout', 'Sign out']);
+    sel.title = 'Songs are in the shared library, synced for everyone on its list';
+  } else if (mode === 'folder') {
     const col = libraries.filter((l) => l.kind === 'collection');
     const ext = libraries.filter((l) => l.kind !== 'collection');
     const parts = [];
@@ -3666,11 +3861,13 @@ function renderSourcePicker() {
     opts.push(['state', 'Saved in ' + (parts.join(' + ') || 'folders')]);
     if (!col.length) opts.push(['collection', 'Set up a Collection…']);
     opts.push(['folder', 'Add a folder…']);
+    if (cloudUnlocked()) opts.push(['cloud', 'Open the shared library…']);
     sel.title = 'Songs are .cho files in the folders listed below';
   } else {
     opts.push(['state', 'Saved in this browser']);
     opts.push(['collection', 'Set up a Collection folder…']);
     opts.push(['folder', 'Open a folder of .cho files…']);
+    if (cloudUnlocked()) opts.push(['cloud', 'Open the shared library…']);
     sel.title = 'Songs are saved in this browser — pick a Collection or a folder to keep them as files on disk';
   }
   sel.innerHTML = opts.map(([v, label]) => `<option value="${v}">${escapeHtml(label)}</option>`).join('');
@@ -3682,6 +3879,14 @@ document.getElementById('source-select').addEventListener('change', (e) => {
   renderSourcePicker();
   if (pick === 'collection') void setupCollection();
   else if (pick === 'folder') void openFolder();
+  else if (pick === 'cloud' || pick === 'signin') void openCloud();
+  else if (pick === 'browser') void leaveCloud(false);
+  else if (pick === 'signout') void leaveCloud(true);
+});
+// Fetch Firebase as the picker opens, so a sign-in popup that follows the
+// pick still counts as part of the click (browsers block late popups).
+document.getElementById('source-select').addEventListener('pointerdown', () => {
+  if (cloudUnlocked()) loadCloud().catch(() => {});
 });
 // Filled at boot as well as on every mode change: in plain browser mode
 // nothing else would ever call updateModeUI.
@@ -4238,8 +4443,15 @@ const SETLIST_KEY = 'gtw.setlists';
 let setlists = loadSetlists();
 let editingSetId = null; // which setlist the modal is showing
 
-function loadSetlists() { try { return JSON.parse(localStorage.getItem(SETLIST_KEY) || '[]'); } catch { return []; } }
-function saveSetlists() { localStorage.setItem(SETLIST_KEY, JSON.stringify(setlists)); }
+// In cloud mode the setlists are the shared library's (they arrive in bootCloud).
+function loadSetlists() {
+  if (mode === 'cloud') return [];
+  try { return JSON.parse(localStorage.getItem(SETLIST_KEY) || '[]'); } catch { return []; }
+}
+function saveSetlists() {
+  if (mode === 'cloud') { if (cloud) cloud.syncSetlists(setlists).catch(cloudFailed); return; }
+  localStorage.setItem(SETLIST_KEY, JSON.stringify(setlists));
+}
 function songKey(s) { return s.libId ? 'lib:' + s.libId + '|' + (s.path || '') : 'local:' + s.id; }
 function resolveKey(key) {
   if (key.startsWith('lib:')) {
@@ -6482,7 +6694,7 @@ function boot() {
   // and everyone the welcome screen unless they've turned it off (both in
   // tour.js); otherwise open the last song.
   if (songs.length) {
-    const last = localStorage.getItem(LAST_KEY);
+    const last = lsGet(LAST_KEY);
     const startId = songs.some((s) => s.id === last)
       ? last
       : [...songs].sort((a, b) => b.updated - a.updated)[0].id;
@@ -6494,7 +6706,12 @@ function boot() {
   // Reconnect any remembered folders (some may need a permission click) and
   // import a shared song if the URL carries one; only then, with both settled,
   // offer a first-time visitor the example song.
-  void Promise.allSettled([bootFolders(), importSharedSong()]).then(() => maybeSeedExample()).finally(() => maybeShowIntro());
+  // In cloud mode a shared link is imported once the library has loaded, so it
+  // lands in the list the server sends rather than being replaced by it.
+  const sources = mode === 'cloud'
+    ? bootCloud().then(importSharedSong)
+    : Promise.allSettled([bootFolders(), importSharedSong()]);
+  void sources.then(() => maybeSeedExample()).finally(() => maybeShowIntro());
 }
 
 // Nothing selected: blank the workspace and invite the user to create a song.

@@ -160,6 +160,49 @@ in Documents by default.) It reconnects each session like any other folder.
   song's **title** and **artist** are set separately inside the editor and can
   differ from the file name.
 
+## Shared library — a private cloud library for a small group
+
+Besides browser and folder storage there is a third place songs can live: one
+**shared library** in Firebase (Firestore) that a short list of invited people
+sign in to with Google. Everyone on the list sees and edits the same songs and
+setlists, synced live between devices, and it keeps working offline (edits sync
+when the connection returns). Recordings stay on each device.
+
+It's kept out of sight for everyone else. Firebase is only downloaded once
+someone opens the shared library, and the source picker only offers **Open the
+shared library…** in a browser that has visited the site once with `?cloud` on
+the end of the address (https://reprahkcin.github.io/jam-tab-writer/?cloud).
+The option being hidden isn't what keeps the songs private: the Firestore rules
+are. They let in only the email addresses on the list.
+
+- **Opening it** signs you in with Google and offers to copy the songs you have
+  open now (this browser's, or your open folders') into the library. The
+  browser then stays on the shared library across reloads.
+- **Leaving** — the source picker's **Back to this browser's songs** (or
+  **Sign out**) — returns to whatever this browser had before. Nothing local is
+  touched while you're in the shared library.
+- **Two people on one song**: an edit from someone else replaces the open copy
+  unless you've changed it more recently, in which case your next save wins.
+
+### Setting it up (once)
+
+1. Create a project at https://console.firebase.google.com (the free Spark plan
+   is plenty).
+2. **Authentication → Sign-in method**: enable **Google**. Under **Settings →
+   Authorized domains** add `reprahkcin.github.io` (localhost is there already).
+3. **Firestore Database → Create database** (production mode).
+4. **Project settings → Your apps → Web app**: register one and paste its
+   `apiKey`, `authDomain`, `projectId` and `appId` into `cloud-config.js`
+   (bump `?v=` on its import in `cloud.js` when it changes).
+5. Deploy the rules: `npx firebase-tools login`, then
+   `npx firebase-tools deploy --only firestore:rules --project <project-id>`.
+6. In **Firestore → Data**, create the document `config/members` with one
+   field, `emails` (an array of lowercase strings), listing who may sign in.
+   Add or remove people there at any time.
+
+Data layout: `shared/library/songs/{id}` (each song as JSON in `data`, plus
+`title`, `updated`, `updatedBy`) and `shared/library/meta/setlists`.
+
 ## Convert a PDF chart
 
 Drag a chords-over-lyrics PDF anywhere onto the window (or pick it via
@@ -736,6 +779,9 @@ Everything prints with the sheet.
 - `styles.css` — styling (including print styles)
 - `app.js` — editor, rendering, transpose/capo, storage, import/export
 - `chords.js` — chord shape library, diagram SVGs, harmonica suggestions
+- `cloud.js` — the shared library (Firebase), loaded only when it's opened
+- `cloud-config.js` — the Firebase project's web config
+- `firestore.rules`, `firebase.json` — who may use the shared library; deployed with firebase-tools
 - `tour.js` — the example song, first-visit seeding, and the guided tour's steps
 - `vendor/driver/` — driver.js 1.8.0 (MIT, with its licence), which draws the tour
 - `tools/verify-chords.js` — `node tools/verify-chords.js` audits every chord

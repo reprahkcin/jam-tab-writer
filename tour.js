@@ -83,7 +83,7 @@ function openExampleSong() {
   importDraft(EXAMPLE_CHO, 'Brackets and Bars');
   const s = currentSong();
   s.example = true;
-  if (mode === 'local') saveSongs(songs);
+  if (mode !== 'folder') saveSongs(songs);
   renderList();
   return s;
 }
@@ -289,7 +289,7 @@ function startTour() {
     let removed = false;
     if (!existed && s && s.updated === stamp) {
       songs.splice(songs.indexOf(s), 1);
-      if (mode === 'local') saveSongs(songs);
+      if (mode !== 'folder') saveSongs(songs);
       removed = true;
     }
     prefs.layout = before.layout;
