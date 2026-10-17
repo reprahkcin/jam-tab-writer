@@ -333,7 +333,7 @@ function cloudUnlocked() { return mode === 'cloud' || !!lsGet(CLOUD_UNLOCK_KEY);
 
 function loadCloud() {
   if (!cloudLoading) {
-    cloudLoading = import('./cloud.js?v=119').then((m) => (cloud = m));
+    cloudLoading = import('./cloud.js?v=120').then((m) => (cloud = m));
     cloudLoading.catch(() => { cloudLoading = null; }); // offline: try again next time
   }
   return cloudLoading;
@@ -402,6 +402,10 @@ function startCloudSync() {
     cloud.watchSetlists((list) => {
       setlists = list;
       if (!document.getElementById('setlist-modal').hidden) renderSetlistModal();
+    });
+    cloud.watchMeta('groups', (list) => {
+      cloudGroups = list.map(normGroup).filter(Boolean);
+      renderList();
     });
     cloud.watchTakes((list) => {
       cloudTakes = new Map(list.map((x) => [x.id, x]));
@@ -535,16 +539,31 @@ async function openCloud() {
   }
   if (mode === 'cloud') { updateModeUI(); await startCloudSync(); return; } // signed back in
   const mine = songs.filter((s) => !s.example && !s.draft);
-  const where = mode === 'folder' ? 'from your open folders' : 'saved in this browser';
-  if (mine.length && confirm(
-    `Copy the ${mine.length} song${mine.length === 1 ? '' : 's'} ${where} into the shared library?\n\n` +
-    `Everyone on its list will see them. Cancel opens the shared library without copying.`)) {
-    el.status.textContent = 'Copying into the shared library…';
-    try { await cloud.copyIn(mine); }
+  if (mine.length) {
+    // Look first, so songs already there aren't added twice.
+    let plan, groups;
+    try { [plan, groups] = await Promise.all([cloud.fetchSongs().then((ex) => planCopy(mine, ex)), cloud.fetchMeta('groups')]); }
     catch (err) {
       if (err && err.code === 'permission-denied') await cloudRefused(err);
-      else alert('Copying failed — check your connection and try again.');
+      else alert('Couldn\u2019t reach the shared library — check your connection and try again.');
       return;
+    }
+    const where = mode === 'folder' ? 'from your open folders' : 'saved in this browser';
+    const parts = [];
+    if (plan.added) parts.push(`copy ${plan.added} new song${plan.added === 1 ? '' : 's'} ${where}`);
+    if (plan.sorted) parts.push(`sort ${plan.sorted} song${plan.sorted === 1 ? '' : 's'} already there into ${plan.sorted === 1 ? 'its folder' : 'their folders'}`);
+    if (parts.length && confirm(
+      `Into the shared library: ${parts.join(', and ')}?` +
+      (plan.already ? `\n\n${plan.already} already there and filed are left as they are.` : '') +
+      `\n\nEveryone on its list will see them. Cancel opens the shared library without changing it.`)) {
+      el.status.textContent = 'Copying into the shared library…';
+      const merged = [...new Set(groups.map(normGroup).concat([...plan.groups]))].filter(Boolean);
+      try { await cloud.copyIn(plan.writes); await cloud.syncMeta('groups', merged); }
+      catch (err) {
+        if (err && err.code === 'permission-denied') await cloudRefused(err);
+        else alert('Copying failed — check your connection and try again.');
+        return;
+      }
     }
   }
   await flushPersist();
@@ -557,6 +576,314 @@ async function leaveCloud(signOut) {
   if (signOut && cloud) await cloud.signOut().catch(() => {});
   lsSet(CLOUD_ON_KEY, null);
   location.reload();
+}
+
+// ---- Shared-library folders ------------------------------------------------
+// Songs in the shared library carry a folder path (`group`, e.g. "Band/Album")
+// and a sort key (`order`, the filename they came from, so albums keep track
+// order). The sidebar draws them as a tree like folder mode. The list of
+// folder paths is stored too, so a folder survives being emptied.
+
+let cloudGroups = [];   // every folder path the library knows about
+let activeGroup = '';   // where + New / Import land ('' = Ungrouped)
+const GROUP_COLLAPSED_KEY = 'gtw.cloud.collapsed';
+const groupCollapsed = new Set((() => { try { return JSON.parse(lsGet(GROUP_COLLAPSED_KEY) || '[]'); } catch { return []; } })());
+const UNGROUPED = '\0ungrouped';
+
+function normGroup(p) {
+  return (p || '').split('/').map((x) => x.trim()).filter(Boolean).join('/');
+}
+// Each top-level folder keeps one accent colour, whatever else is added.
+function groupColor(path) {
+  const top = (path || '').split('/')[0];
+  if (!top) return BROWSER_COLOR;
+  let h = 0;
+  for (const c of top) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return EXTERNAL_PALETTE[h % EXTERNAL_PALETTE.length];
+}
+function saveGroups() {
+  if (cloud && cloudReady) cloud.syncMeta('groups', cloudGroups).catch(cloudFailed);
+}
+function rememberGroup(path) {
+  path = normGroup(path);
+  if (path && !cloudGroups.includes(path)) cloudGroups.push(path);
+}
+function songOrder(a, b) {
+  return (a.order || a.title || '').localeCompare(b.order || b.title || '', undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function buildGroupTree() {
+  const root = { folders: new Map(), songs: [] };
+  const descend = (path) => {
+    let node = root;
+    for (const seg of path.split('/').filter(Boolean)) {
+      if (!node.folders.has(seg)) node.folders.set(seg, { folders: new Map(), songs: [] });
+      node = node.folders.get(seg);
+    }
+    return node;
+  };
+  for (const g of cloudGroups) descend(g);
+  for (const s of songs) descend(normGroup(s.group)).songs.push(s);
+  return root;
+}
+function allGroupPaths() {
+  const out = [];
+  const walk = (node, path) => {
+    for (const name of [...node.folders.keys()].sort((a, b) => a.localeCompare(b))) {
+      const p = path ? path + '/' + name : name;
+      out.push(p);
+      walk(node.folders.get(name), p);
+    }
+  };
+  walk(buildGroupTree(), '');
+  return out;
+}
+
+function setActiveGroup(path) {
+  activeGroup = normGroup(path);
+  let acc = '';
+  for (const seg of activeGroup.split('/').filter(Boolean)) {
+    acc = acc ? acc + '/' + seg : seg;
+    groupCollapsed.delete(acc);
+  }
+  renderTargetBar();
+  renderList();
+}
+function toggleGroup(path) {
+  if (groupCollapsed.has(path)) groupCollapsed.delete(path); else groupCollapsed.add(path);
+  lsSet(GROUP_COLLAPSED_KEY, JSON.stringify([...groupCollapsed]));
+  renderList();
+}
+
+// A folder row: top-level folders read as headers, nested ones as subfolders.
+// Every row takes dropped songs.
+function groupRow(name, path, depth, count) {
+  const top = depth === 0;
+  const isCollapsed = groupCollapsed.has(path);
+  const row = document.createElement('li');
+  row.className = (top ? 'lib-header' : 'subfolder-row') + (isCollapsed ? ' collapsed' : '') +
+    (path === activeGroup && path !== UNGROUPED ? ' active-lib' : '');
+  row.style.setProperty('--lib-color', path === UNGROUPED ? BROWSER_COLOR : groupColor(path));
+  if (!top) row.style.paddingLeft = (6 + depth * 14) + 'px';
+  const real = path !== UNGROUPED;
+  row.innerHTML =
+    `<span class="lib-caret" title="${isCollapsed ? 'Expand' : 'Collapse'}">${isCollapsed ? '▸' : '▾'}</span>` +
+    (top ? '<span class="lib-dot"></span>' : '') +
+    `<span class="${top ? 'lib-name' : 'sf-name'}" title="${real ? 'Make this where + New and Import put songs' : 'Songs in no folder'}">${escapeHtml(name)}</span>` +
+    `<span class="lib-count">${count}</span>` +
+    (real ? '<button class="lib-btn sf-add" title="New folder inside">+</button>' +
+      '<button class="lib-btn g-rename" title="Rename this folder">✎</button>' +
+      (count ? '' : '<button class="lib-btn lib-close g-delete" title="Delete this empty folder">×</button>') : '');
+  row.querySelector('.lib-caret').addEventListener('click', (e) => { e.stopPropagation(); toggleGroup(path); });
+  row.querySelector(top ? '.lib-name' : '.sf-name').addEventListener('click', () => setActiveGroup(real ? path : ''));
+  if (real) {
+    row.querySelector('.sf-add').addEventListener('click', (e) => { e.stopPropagation(); newGroup(path); });
+    row.querySelector('.g-rename').addEventListener('click', (e) => { e.stopPropagation(); renameGroup(path); });
+    const del = row.querySelector('.g-delete');
+    if (del) del.addEventListener('click', (e) => { e.stopPropagation(); deleteGroup(path); });
+  }
+  // Drag a song onto a folder to move it there.
+  row.addEventListener('dragover', (e) => {
+    if (!e.dataTransfer.types.includes('text/x-gtw-song')) return;
+    e.preventDefault();
+    row.classList.add('drop-target');
+  });
+  row.addEventListener('dragleave', () => row.classList.remove('drop-target'));
+  row.addEventListener('drop', (e) => {
+    e.preventDefault();
+    row.classList.remove('drop-target');
+    const id = e.dataTransfer.getData('text/x-gtw-song');
+    if (id) moveSong(id, real ? path : '');
+  });
+  return row;
+}
+
+function countUnderGroup(node) {
+  let n = node.songs.length;
+  for (const child of node.folders.values()) n += countUnderGroup(child);
+  return n;
+}
+function renderGroupNode(node, path, depth) {
+  for (const name of [...node.folders.keys()].sort((a, b) => a.localeCompare(b))) {
+    const child = node.folders.get(name);
+    const childPath = path ? path + '/' + name : name;
+    el.list.appendChild(groupRow(name, childPath, depth, countUnderGroup(child)));
+    if (!groupCollapsed.has(childPath)) renderGroupNode(child, childPath, depth + 1);
+  }
+  if (path) for (const s of node.songs.sort(songOrder)) el.list.appendChild(songItem(s, true, depth));
+}
+
+function renderCloudTree() {
+  const root = buildGroupTree();
+  // A library with no folders yet stays the plain recent-first list.
+  if (!root.folders.size) {
+    for (const s of [...songs].sort((a, b) => b.updated - a.updated)) el.list.appendChild(songItem(s, true));
+    return;
+  }
+  renderGroupNode(root, '', 0);
+  if (root.songs.length) {
+    el.list.appendChild(groupRow('Ungrouped', UNGROUPED, 0, root.songs.length));
+    if (!groupCollapsed.has(UNGROUPED)) for (const s of root.songs.sort(songOrder)) el.list.appendChild(songItem(s, true, 1));
+  }
+}
+
+// The "+ New →" bar under the source picker, naming where new songs land.
+function renderTargetBar() {
+  const bar = document.getElementById('folder-bar');
+  if (!bar) return;
+  if (mode === 'folder') {
+    bar.hidden = false;
+    const active = activeLib();
+    const dot = active ? `<span class="fb-dot" style="background:${active.color}"></span>` : '';
+    const target = active ? active.name + (activeSubpath ? ' / ' + activeSubpath : '') : '—';
+    bar.innerHTML = `<span class="fb-name" title="+ New, Import and PDF drops create files here — click a folder to change">` +
+      `${dot}+ New → ${escapeHtml(target)}</span>`;
+  } else if (mode === 'cloud' && cloudReady) {
+    bar.hidden = false;
+    const target = activeGroup ? activeGroup.split('/').join(' / ') : 'Ungrouped';
+    bar.innerHTML = `<span class="fb-name" title="+ New and Import put songs here — click a folder to change">` +
+      `<span class="fb-dot" style="background:${groupColor(activeGroup)}"></span>+ New → ${escapeHtml(target)}</span>` +
+      `<button class="lib-btn fb-new-group" title="New top-level folder" style="opacity:1">+ Folder</button>`;
+    bar.querySelector('.fb-new-group').addEventListener('click', () => newGroup(''));
+  } else {
+    bar.hidden = true;
+    bar.innerHTML = '';
+  }
+}
+
+function newGroup(parent) {
+  const where = parent ? ` inside "${parent.split('/').pop()}"` : '';
+  const name = prompt(`New folder name${where}:`, '');
+  if (name === null) return null;
+  const clean = name.trim().replace(/\//g, '-');
+  if (!clean) return null;
+  const path = parent ? parent + '/' + clean : clean;
+  rememberGroup(path);
+  saveGroups();
+  setActiveGroup(path);
+  return path;
+}
+
+function renameGroup(path) {
+  const segs = path.split('/');
+  const old = segs.pop();
+  const name = prompt('Rename folder:', old);
+  if (name === null) return;
+  const clean = name.trim().replace(/\//g, '-');
+  if (!clean || clean === old) return;
+  const np = segs.concat(clean).join('/');
+  if (allGroupPaths().includes(np)) { alert(`There's already a folder called "${clean}" there.`); return; }
+  const swap = (p) => (p === path ? np : p.startsWith(path + '/') ? np + p.slice(path.length) : p);
+  for (const s of songs) {
+    const g = normGroup(s.group);
+    if (swap(g) !== g) s.group = swap(g);
+  }
+  cloudGroups = cloudGroups.map(swap);
+  activeGroup = swap(activeGroup);
+  for (const k of [...groupCollapsed]) if (swap(k) !== k) { groupCollapsed.delete(k); groupCollapsed.add(swap(k)); }
+  saveSongs(songs);
+  saveGroups();
+  renderTargetBar();
+  renderList();
+}
+
+function deleteGroup(path) {
+  if (songs.some((s) => { const g = normGroup(s.group); return g === path || g.startsWith(path + '/'); })) return;
+  cloudGroups = cloudGroups.filter((p) => p !== path && !p.startsWith(path + '/'));
+  if (activeGroup === path || activeGroup.startsWith(path + '/')) activeGroup = '';
+  saveGroups();
+  renderTargetBar();
+  renderList();
+}
+
+function moveSong(id, path) {
+  const s = songs.find((x) => x.id === id);
+  path = normGroup(path);
+  if (!s || normGroup(s.group) === path) return;
+  rememberGroup(s.group); // the folder it leaves stays, even if now empty
+  rememberGroup(path);
+  s.group = path;
+  s.updated = Date.now();
+  saveSongs(songs);
+  saveGroups();
+  renderList();
+  if (s.id === currentId) { activeGroup = path; renderTargetBar(); }
+}
+
+// "Move to…" on a song row: the touch-friendly way to file a song.
+let movePop = null;
+function closeMovePicker() {
+  if (!movePop) return;
+  movePop.remove();
+  movePop = null;
+  document.removeEventListener('mousedown', onMovePopDismiss, true);
+  document.removeEventListener('keydown', onMovePopKey, true);
+}
+function onMovePopDismiss(e) { if (movePop && !movePop.contains(e.target) && !movePop.anchor.contains(e.target)) closeMovePicker(); }
+function onMovePopKey(e) { if (e.key === 'Escape') { e.stopPropagation(); closeMovePicker(); } }
+function openMovePicker(song, anchor) {
+  if (movePop && movePop.anchor === anchor) { closeMovePicker(); return; }
+  closeMovePicker();
+  const cur = normGroup(song.group);
+  const pop = document.createElement('div');
+  pop.className = 'setlist-pop';
+  pop.anchor = anchor;
+  const item = (path, label, depth) =>
+    `<div class="setlist-pop-item" data-path="${escapeHtml(path)}" style="padding-left:${10 + depth * 12}px">` +
+    `${path === cur ? '<span class="sp-check">✓</span>' : ''}${escapeHtml(label)}</div>`;
+  pop.innerHTML = item('', 'Ungrouped', 0) +
+    allGroupPaths().map((p) => item(p, p.split('/').pop(), p.split('/').length - 1)).join('') +
+    '<div class="setlist-pop-item setlist-pop-new">+ New folder…</div>';
+  document.body.appendChild(pop);
+  const r = anchor.getBoundingClientRect();
+  pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - pop.offsetWidth - 8)) + 'px';
+  pop.style.top = (r.bottom + 4 + pop.offsetHeight > window.innerHeight - 8
+    ? Math.max(8, r.top - pop.offsetHeight - 4) : r.bottom + 4) + 'px';
+  movePop = pop;
+  pop.querySelectorAll('.setlist-pop-item[data-path]').forEach((it) => it.addEventListener('click', () => {
+    closeMovePicker();
+    moveSong(song.id, it.dataset.path);
+  }));
+  pop.querySelector('.setlist-pop-new').addEventListener('click', () => {
+    closeMovePicker();
+    const path = newGroup('');
+    if (path) moveSong(song.id, path);
+  });
+  document.addEventListener('mousedown', onMovePopDismiss, true);
+  document.addEventListener('keydown', onMovePopKey, true);
+}
+
+// Copying in from folders: each song's folder becomes its group (the folder's
+// name, then any subfolders) and its filename its sort key. A song already in
+// the library (same title and lyrics) isn't added again; if it has no folder
+// yet it's given this one, so copying again sorts an earlier copy.
+function folderGroupOf(s) {
+  if (!s.libId) return '';
+  const lib = libraries.find((l) => l.id === s.libId);
+  const segs = (s.path || '').split('/');
+  segs.pop();
+  return normGroup([lib ? lib.name : ''].concat(segs).join('/'));
+}
+function planCopy(incoming, existing) {
+  const key = (s) => (s.title || '').trim().toLowerCase() + '\0' + (s.body || '').trim();
+  const pool = new Map();
+  for (const e of existing) {
+    if (!pool.has(key(e))) pool.set(key(e), []);
+    pool.get(key(e)).push(e);
+  }
+  const plan = { writes: [], added: 0, sorted: 0, already: 0, groups: new Set() };
+  for (const s of incoming) {
+    const group = folderGroupOf(s);
+    const order = s.libId ? ((s.path || '').split('/').pop() || '').replace(/\.cho$/i, '') : '';
+    if (group) plan.groups.add(group);
+    const match = (pool.get(key(s)) || []).shift();
+    if (!match) { plan.writes.push(Object.assign({}, s, { group, order })); plan.added++; continue; }
+    if (group && !normGroup(match.group)) {
+      plan.writes.push(Object.assign({}, match, { group, order: match.order || order }));
+      plan.sorted++;
+    } else plan.already++;
+  }
+  return plan;
 }
 
 const IDB = { name: 'gtw', store: 'kv' };
@@ -1028,7 +1355,11 @@ function selectSong(id) {
   }
   currentId = id;
   if (mode === 'local') localStorage.setItem(LAST_KEY, id);
-  else if (mode === 'cloud') lsSet(CLOUD_LAST_KEY, id);
+  else if (mode === 'cloud') {
+    lsSet(CLOUD_LAST_KEY, id);
+    activeGroup = normGroup(s.group); // + New lands beside what you're looking at
+    renderTargetBar();
+  }
   else {
     // Selecting a chart points the new-file target at its folder + subfolder, so
     // + New / Import / PDF-drop land next to what you're looking at.
@@ -2663,9 +2994,15 @@ function songItem(s, deletable, depth) {
   li.innerHTML =
     `<span class="st"><b>${escapeHtml(s.title || 'Untitled')}</b>` +
     `<small>${escapeHtml(sub)}</small></span>` +
+    (mode === 'cloud' ? '<button class="mv-song" title="Move to a folder">&#8618;</button>' : '') +
     `<button class="add-set" title="Add to setlist"><svg class="ico"><use href="#i-setlist"/></svg></button>` +
     (deletable ? `<button class="del" title="Delete">&times;</button>` : '');
   li.querySelector('.st').addEventListener('click', () => selectSong(s.id));
+  if (mode === 'cloud') {
+    li.querySelector('.mv-song').addEventListener('click', (e) => { e.stopPropagation(); openMovePicker(s, e.currentTarget); });
+    li.draggable = true;
+    li.addEventListener('dragstart', (e) => { e.dataTransfer.setData('text/x-gtw-song', s.id); e.dataTransfer.effectAllowed = 'move'; });
+  }
   li.querySelector('.add-set').addEventListener('click', (e) => { e.stopPropagation(); openSetlistPicker(s, e.currentTarget); });
   const delBtn = li.querySelector('.del');
   if (delBtn) delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteSong(s.id); });
@@ -2738,7 +3075,8 @@ let songFilter = '';
 function songMatches(s, q) {
   return (s.title || '').toLowerCase().includes(q) ||
     (s.artist || '').toLowerCase().includes(q) ||
-    (s.path || '').toLowerCase().includes(q);
+    (s.path || '').toLowerCase().includes(q) ||
+    (mode === 'cloud' && (s.group || '').toLowerCase().includes(q));
 }
 
 // When a search is active, show a flat list of matches across every folder — a
@@ -2754,6 +3092,7 @@ function renderFiltered(q) {
     li.className = 'song-item' + (s.id === currentId ? ' active' : '');
     let sub = s.artist || '';
     if (mode === 'folder') { const lib = libraries.find((l) => l.id === s.libId); sub = (lib ? lib.name + '/' : '') + (s.path || ''); }
+    else if (mode === 'cloud') sub = [normGroup(s.group).split('/').join(' / '), s.artist].filter(Boolean).join(' · ');
     li.innerHTML = `<span class="st"><b>${escapeHtml(s.title || 'Untitled')}</b><small>${escapeHtml(sub)}</small></span>` +
       `<button class="add-set" title="Add to setlist"><svg class="ico"><use href="#i-setlist"/></svg></button>`;
     li.querySelector('.st').addEventListener('click', () => selectSong(s.id));
@@ -2766,6 +3105,8 @@ function renderList() {
   if (songFilter) { renderFiltered(songFilter); return; }
   el.count.textContent = songs.length ? songs.length + '' : '';
   el.list.innerHTML = '';
+
+  if (mode === 'cloud') { renderCloudTree(); return; }
 
   // Local mode: one flat list, most-recently-edited first.
   if (mode !== 'folder') {
@@ -2883,6 +3224,7 @@ async function createSong() {
     return;
   }
   const s = blankSong();
+  if (mode === 'cloud') s.group = activeGroup;
   songs.push(s);
   saveSongs(songs);
   selectSong(s.id);
@@ -3396,6 +3738,7 @@ async function importText(text, fallbackTitle) {
     if (!wrote) { el.status.textContent = 'Save failed'; renderBreadcrumb('Save failed'); }
     return;
   }
+  if (mode === 'cloud') s.group = activeGroup;
   songs.push(s);
   saveSongs(songs);
   selectSong(s.id);
@@ -3409,6 +3752,7 @@ function importDraft(text, fallbackTitle) {
   const s = parseCho(text, fallbackTitle);
   if (mode !== 'folder') {
     // Local mode has no "disk" — localStorage IS the store, so it's saved now.
+    if (mode === 'cloud') s.group = activeGroup;
     songs.push(s);
     saveSongs(songs);
     selectSong(s.id);
@@ -3430,6 +3774,7 @@ function importDraft(text, fallbackTitle) {
 function ensureSongForTyping() {
   if (currentSong() || mode === 'folder') return;
   const s = blankSong();
+  if (mode === 'cloud') s.group = activeGroup;
   songs.push(s);
   currentId = s.id;
   renderList();
@@ -4007,18 +4352,7 @@ function updateModeUI() {
   const folder = mode === 'folder';
   document.getElementById('save-btn').hidden = !folder;
   renderSourcePicker();
-  const bar = document.getElementById('folder-bar');
-  if (folder) {
-    bar.hidden = false;
-    const active = activeLib();
-    const dot = active ? `<span class="fb-dot" style="background:${active.color}"></span>` : '';
-    const target = active ? active.name + (activeSubpath ? ' / ' + activeSubpath : '') : '—';
-    bar.innerHTML = `<span class="fb-name" title="+ New, Import and PDF drops create files here — click a folder to change">` +
-      `${dot}+ New → ${escapeHtml(target)}</span>`;
-  } else {
-    bar.hidden = true;
-    bar.innerHTML = '';
-  }
+  renderTargetBar();
   renderList();
   renderBreadcrumb();
 }

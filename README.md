@@ -185,6 +185,19 @@ are. They let in only the email addresses on the list.
 - **Leaving** — the source picker's **Back to this browser's songs** (or
   **Sign out**) — returns to whatever this browser had before. Nothing local is
   touched while you're in the shared library.
+- **Folders.** Songs in the shared library sit in folders, drawn as a tree
+  like folder mode: songs copied in from your folders keep their place (the
+  folder's name, then any subfolders) and their filename's order, so albums
+  stay in track order. Click a folder's name to make it where **+ New** and
+  **Import** put songs; **+ Folder** (by the "+ New →" line) starts a top-level
+  folder and a folder's **+** one inside it; **✎** renames a folder and
+  everything in it; **×** deletes an empty one. Move a song by dragging it onto
+  a folder, or with its **↪** button (the way on a phone). Songs in no folder
+  are listed under **Ungrouped**. Everyone sees the same folders.
+- **Copying in again** checks what's already there: a song with the same title
+  and lyrics isn't added twice, and if it has no folder yet it's given the one
+  it came from — so opening the shared library again from your folders sorts
+  an earlier copy without duplicating anything.
 - **Two people on one song**: an edit from someone else replaces the open copy
   unless you've changed it more recently, in which case your next save wins.
 
@@ -210,7 +223,8 @@ are. They let in only the email addresses on the list.
    Add or remove people there at any time.
 
 Data layout: `shared/library/songs/{id}` (each song as JSON in `data`, plus
-`title`, `updated`, `updatedBy`), `shared/library/meta/setlists`, and
+`title`, `updated`, `updatedBy`), `shared/library/meta/setlists`, `shared/library/meta/groups` (every folder
+path, so empty folders stay), and
 `shared/library/takes/{id}` (a take's details) with its audio in Storage at
 `library/takes/{id}.{ext}`.
 
