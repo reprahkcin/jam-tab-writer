@@ -789,6 +789,22 @@ main { display: flex; flex: 1; min-height: 0; }
   white-space: normal;
 }
 .preview .empty-hint { color: var(--muted); font-family: system-ui, sans-serif; }
+/* A {Notes} section: prose about the song, so plain wrapped text with no chord
+   row above each line (see renderLines). Bullets ("- ") hang their indent. */
+.preview .noteline {
+  font-family: system-ui, sans-serif;
+  font-size: 0.9em;
+  line-height: 1.45;
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.preview .noteline.bullet { padding-left: 1.1em; position: relative; }
+.preview .noteline.bullet::before { content: '•'; position: absolute; left: 0.25em; }
+.preview .note-gap { height: 6px; }
+.preview .notes-head { opacity: 0.8; }
+@media print { .preview .noteline { color: #333; } }
 
 /* Draggable chords. Each chord is its own span, and the spaces around it still
    do the aligning, so nothing here may change the text's advance width:

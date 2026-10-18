@@ -139,12 +139,41 @@ function renderLine(raw, semitones, numKey, li) {
   return chordHtml + `<div class="line lyricline">${escapeHtml(lyric)}</div>`;
 }
 
+// A {Notes} section is prose about the song (the outline, reminders), not
+// something to play: no chord row reserved above each line, wrapped text.
+// Section labels other than Notes, and {page}, end it.
+function sectionLabel(trimmed) {
+  if (/^\{(page|pagebreak|newpage|page break)\}$/i.test(trimmed)) return null;
+  const sec = trimmed.match(/^\{(.+)\}$/);
+  if (sec) return sec[1];
+  const lone = trimmed.match(/^\[([^\[\]]+)\]$/);
+  return lone && !isChord(lone[1]) ? lone[1] : null;
+}
+function isNotesLabel(label) { return /^notes?$/i.test(label.trim()); }
+// Each source line rendered by `one`, except a Notes section's lines.
+function renderLines(body, one) {
+  let inNotes = false;
+  return body.split('\n').map((l, i) => {
+    const trimmed = l.trim();
+    const label = sectionLabel(trimmed);
+    if (label !== null) {
+      inNotes = isNotesLabel(label);
+      return inNotes ? `<div class="section notes-head" data-l="${i}">${escapeHtml(label)}</div>` : one(l, i);
+    }
+    if (/^\{(page|pagebreak|newpage|page break)\}$/i.test(trimmed)) inNotes = false;
+    if (!inNotes) return one(l, i);
+    if (!trimmed) return `<div class="note-gap" data-l="${i}"></div>`;
+    const bullet = /^[-*•]\s/.test(trimmed);
+    return `<div class="noteline${bullet ? ' bullet' : ''}" data-l="${i}">${escapeHtml(bullet ? trimmed.slice(2) : trimmed)}</div>`;
+  }).join('');
+}
+
 function render(body, semitones, numKey) {
   if (!body.trim()) {
     return '<div class="empty-hint">Nothing yet — start typing in the editor. ' +
       'Chords go in brackets, e.g. <code>[Am]</code>.</div>';
   }
-  const html = body.split('\n').map((l, i) => renderLine(l, semitones, numKey, i)).join('');
+  const html = renderLines(body, (l, i) => renderLine(l, semitones, numKey, i));
   // Each stretch between {page} markers becomes its own block. On paper a
   // two-column chart is then one multicol box per stretch, so the forced break
   // between them really starts a new sheet — inside a single box Chrome only
@@ -211,7 +240,7 @@ function renderLineWrapped(raw, semitones, numKey) {
 
 function renderWrapped(body, semitones, numKey) {
   if (!body.trim()) return '<div class="empty-hint">Nothing yet.</div>';
-  return body.split('\n').map((l) => renderLineWrapped(l, semitones, numKey)).join('');
+  return renderLines(body, (l) => renderLineWrapped(l, semitones, numKey));
 }
 
 // Nashville Number System: show chords as scale degrees relative to the tonic,
