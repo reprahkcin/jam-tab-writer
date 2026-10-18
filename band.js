@@ -310,7 +310,7 @@ function albumDetailsHtml() {
     `<textarea data-key="${f.key}" rows="3" placeholder="${escapeHtml(f.hint)}">${escapeHtml((albumDetails[f.key] || {}).text || '')}</textarea>` +
     `<span class="ab-who" data-who="${f.key}">${escapeHtml(detailWho(f.key))}</span></label>`).join('') +
     `<div class="ab-checklist">${checklistEditorHtml()}</div>` +
-    '<div class="ab-foot">Saves for the whole band as you type.</div></div>';
+    '<div class="ab-foot">Saves as you type.</div></div>';
 }
 
 function openAlbumBoard(tab) {
@@ -430,29 +430,29 @@ function bandTourSteps() {
     steps: [
       { title: name ? `Hey ${escapeHtml(name)}, welcome in` : 'Welcome in',
         text: `This is the band’s shared library: every chart we have, plus other people’s songs to jam on. ` +
-          `Right now the focus is <b>${escapeHtml(album)}</b>: ${list.length} songs to write together. ` +
+          `Right now the focus is <b>${escapeHtml(album)}</b>: ${list.length} songs in progress. ` +
           `Six quick stops and you’re set. <b>Esc</b> leaves at any time.` },
       { el: albumRow, where: 'songs', title: 'The album',
         text: `The album’s songs, in story order. Each one opens on its <b>Notes</b> from the outline (the timeline, ` +
-          `who’s in it, the open questions), then empty sections waiting for words.` },
+          `the characters, the open questions), then the song as far as it’s got.` },
       start && { el: '#editor', where: 'edit', title: hook ? `You’re in “${escapeHtml(start.title)}”` : escapeHtml(start.title || 'A song'),
         text: hook
-          ? `The notes for this one say: <b>“${escapeHtml(hook.line)}”</b>. That’s you, and as good a place to start as any.`
+          ? `The notes for this one say: <b>“${escapeHtml(hook.line)}”</b>. That’s you.`
           : 'Every album song starts like this: the notes up top, then sections to fill in.' },
       { el: '#editor', where: 'edit', title: 'Writing',
         text: 'Type lyrics under a section like <code>{Verse 1}</code>, and put a chord in square brackets just before the ' +
-          'syllable it lands on: <code>[G]like this</code>. It saves for the whole band as you type. There’s no Save button, ' +
+          'syllable it lands on: <code>[G]like this</code>. It saves as you type. There’s no Save button, ' +
           'and nothing you write can break anything.' },
       { el: '#capture-btn', where: 'header', title: 'Or just play it',
-        text: 'Rather not type? Open a song, hit <b>Record</b> and hum or play the idea. Takes are shared, so everyone can hear it.' },
+        text: 'Rather not type? Open a song, hit <b>Record</b> and hum or play the idea. Takes are saved with the song.' },
       { el: `${albumRow} .g-board`, where: 'songs', title: 'Where things stand',
-        text: 'The <b>Album</b> button shows a checklist for each song (lyrics drafted, final, chords, demo…). Tick a box when something’s done; anyone can. ' +
-          'Its <b>Details</b> tab holds the album’s direction, constraints and notes. Read them, and add to them. ' +
-          'In the list, a <span class="new-dot"></span> marks a song someone else changed since you last looked.' },
+        text: 'The <b>Album</b> button shows how far along each song is, and its <b>Details</b> tab has the album’s ' +
+          'direction, constraints and notes: the best place to get the big picture.' },
       { el: '#perform-btn', where: 'header', only: 'desktop', title: 'The back catalog',
         text: 'Every older song is here too. Open one and hit <b>Perform</b> for a full-screen chart that scrolls by itself.' },
       { title: 'That’s it',
-        text: 'Pick an album song and add a line, a chord or a take. Anything counts. This tour is in Help (the <b>?</b>) if you want it again.' },
+        text: 'Have a look through the album songs. If something sparks an idea, a line, a chord or a hummed take is welcome. ' +
+          'This tour is in Help (the <b>?</b>) if you want it again.' },
     ].filter(Boolean),
   };
 }
