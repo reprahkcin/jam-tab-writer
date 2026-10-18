@@ -20,6 +20,19 @@ const SEEN_KEY = 'gtw.cloud.seen';            // { songId: when you last opened 
 const SEEN_SINCE_KEY = 'gtw.cloud.seenSince'; // first visit: older changes aren't news
 
 function bandAlbum() { return normGroup(bandInfo && bandInfo.album); }
+// The band's name and its records in order, from the library's band settings.
+// The door (before sign-in) can't read those, so index.html carries its own copy.
+function bandName() { return (bandInfo && bandInfo.name) || 'the band'; }
+function bandCatalog() {
+  if (bandInfo && Array.isArray(bandInfo.catalog) && bandInfo.catalog.length) return bandInfo.catalog;
+  // Otherwise every top-level folder but the album and the covers.
+  const album = bandAlbum().split('/')[0];
+  return allGroupPaths().filter((p) => !p.includes('/') && p !== album && !/other people/i.test(p));
+}
+function listText(items) {
+  if (items.length < 2) return items.join('');
+  return items.slice(0, -1).join(', ') + ' and ' + items[items.length - 1];
+}
 function bandMe() { return cloud && cloud.userEmail ? (cloud.userEmail() || '').toLowerCase() : ''; }
 function personName(email) {
   const e = (email || '').toLowerCase();
@@ -452,10 +465,16 @@ function bandTourSteps() {
   return {
     start,
     steps: [
-      { title: name ? `Hey ${escapeHtml(name)}, welcome in` : 'Welcome in',
-        text: `This is the band’s shared library: every chart we have, plus other people’s songs to jam on. ` +
-          `Right now the focus is <b>${escapeHtml(album)}</b>: ${list.length} songs in progress. ` +
-          `Six quick stops and you’re set. <b>Esc</b> leaves at any time.` },
+      { title: name ? `Hey ${escapeHtml(name)}, welcome backstage` : 'Welcome backstage',
+        text: (() => {
+          const records = bandCatalog().map((r) => `<i>${escapeHtml(r)}</i>`);
+          const owner = (bandInfo.people || {})[(bandInfo.owner || '').toLowerCase()] || 'Nick';
+          const band = bandName().replace(/^The /, 'the ');
+          const whose = band.endsWith('s') ? band + '’' : band + '’s';
+          return `This is ${escapeHtml(whose)} library: every chart from ${records.length ? listText(records) : 'the back catalog'}, ` +
+            `plus the covers we jam on. Right now ${escapeHtml(owner)}’s working on <b>${escapeHtml(album)}</b>: ` +
+            `${list.length} songs telling the band’s story, open mic on up. A minute’s tour and you’re set. <b>Esc</b> leaves at any time.`;
+        })() },
       { el: albumRow, where: 'songs', title: 'The album',
         text: `The album’s songs, in story order. Each one opens on its <b>Notes</b> from the outline (the timeline, ` +
           `the characters, the open questions), then the song as far as it’s got.` },
@@ -474,9 +493,9 @@ function bandTourSteps() {
           'direction, constraints and notes: the best place to get the big picture.' },
       { el: '#perform-btn', where: 'header', only: 'desktop', title: 'The back catalog',
         text: 'Every older song is here too. Open one and hit <b>Perform</b> for a full-screen chart that scrolls by itself.' },
-      { title: 'That’s it',
-        text: 'Have a look through the album songs. If something sparks an idea, a line, a chord or a hummed take is welcome. ' +
-          'This tour is in Help (the <b>?</b>) if you want it again.' },
+      { title: name ? `That’s the tour, ${escapeHtml(name)}` : 'That’s the tour',
+        text: 'No homework. Have a look through the album songs. If something sparks, a line, a chord or a hummed take is welcome. ' +
+          'The tour’s in Help (the <b>?</b>) any time.' },
     ].filter(Boolean),
   };
 }
