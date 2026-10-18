@@ -391,6 +391,30 @@ function closeJoin() { const m = document.getElementById('join-modal'); if (m) m
 document.getElementById('join-signin').addEventListener('click', () => { closeJoin(); void openCloud(); });
 document.getElementById('join-later').addEventListener('click', () => { closeJoin(); lsSet(BAND_JOIN_KEY, null); });
 
+// ---- The secret switch -----------------------------------------------------
+// Five quick taps on the "Jam Tab Writer" title open the same sign-in screen as
+// the invite link, so the band can find the library without one. It only
+// shows the door: the member list still decides who gets in.
+const secretTaps = [];
+document.querySelector('header h1').addEventListener('click', (e) => {
+  const now = Date.now();
+  secretTaps.push(now);
+  while (secretTaps.length && now - secretTaps[0] > 2000) secretTaps.shift();
+  if (secretTaps.length < 5) return;
+  secretTaps.length = 0;
+  const h1 = e.currentTarget;
+  h1.classList.remove('backstage');
+  void h1.offsetWidth; // restart the wiggle
+  h1.classList.add('backstage');
+  if (mode === 'cloud') { el.status.textContent = 'You’re already backstage.'; return; }
+  lsSet(CLOUD_UNLOCK_KEY, '1');
+  lsSet(BAND_JOIN_KEY, '1');
+  renderSourcePicker();
+  closeIntro();
+  document.getElementById('join-title').textContent = 'Backstage pass unlocked';
+  openJoin();
+});
+
 // What the app shows when it opens, in place of the general welcome screen:
 // the invite's sign-in screen, or the band tour on a first visit to the library.
 function bandOpening() {

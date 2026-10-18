@@ -210,6 +210,10 @@ live in the library at `shared/library/meta/band`:
 - **Invite link**: https://reprahkcin.github.io/jam-tab-writer/?join opens a
   one-screen invitation with a **Sign in with Google** button, then the band
   tour. (`?cloud` still just reveals the option in the source picker.)
+- **Secret switch**: no link needed. Five quick taps on the **Jam Tab Writer**
+  title open the same sign-in screen as the invite ("Backstage pass
+  unlocked") and reveal the option in the source picker. It only shows the
+  door; the member list still decides who gets in.
 - **Band tour**: on someone's first visit to the library, in place of the
   general welcome screen. It greets them by name, shows the album folder, opens
   the album song whose notes mention them (and quotes that line), then covers

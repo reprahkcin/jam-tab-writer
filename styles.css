@@ -3139,3 +3139,13 @@ body.learning { overflow: hidden; }
 .ab-item-del:hover { color: #ff8080; border-color: #ff8080; }
 .ab-item-add { align-self: flex-start; margin-top: 6px; }
 .ab-item-add:hover { color: var(--accent); border-color: var(--accent); }
+/* The secret switch (band.js): five taps on the title. */
+header h1 { user-select: none; -webkit-user-select: none; cursor: default; }
+header h1.backstage { animation: backstage-wiggle 0.5s ease; color: var(--accent); }
+@keyframes backstage-wiggle {
+  0%, 100% { transform: rotate(0); }
+  20% { transform: rotate(-4deg); }
+  40% { transform: rotate(4deg); }
+  60% { transform: rotate(-2deg); }
+  80% { transform: rotate(2deg); }
+}
