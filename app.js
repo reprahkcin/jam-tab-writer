@@ -366,7 +366,7 @@ function cloudUnlocked() { return mode === 'cloud' || !!lsGet(CLOUD_UNLOCK_KEY);
 
 function loadCloud() {
   if (!cloudLoading) {
-    cloudLoading = import('./cloud.js?v=127').then((m) => (cloud = m));
+    cloudLoading = import('./cloud.js?v=130').then((m) => (cloud = m));
     cloudLoading.catch(() => { cloudLoading = null; }); // offline: try again next time
   }
   return cloudLoading;
@@ -597,21 +597,20 @@ async function openCloud() {
       else alert('Couldn\u2019t reach the shared library — check your connection and try again.');
       return;
     }
-    const where = mode === 'folder' ? 'from your open folders' : 'saved in this browser';
-    const parts = [];
-    if (plan.added) parts.push(`copy ${plan.added} new song${plan.added === 1 ? '' : 's'} ${where}`);
-    if (plan.sorted) parts.push(`sort ${plan.sorted} song${plan.sorted === 1 ? '' : 's'} already there into ${plan.sorted === 1 ? 'its folder' : 'their folders'}`);
-    if (parts.length && confirm(
-      `Into the shared library: ${parts.join(', and ')}?` +
-      (plan.already ? `\n\n${plan.already} already there and filed are left as they are.` : '') +
-      `\n\nEveryone on its list will see them. Cancel opens the shared library without changing it.`)) {
-      el.status.textContent = 'Copying into the shared library…';
-      const merged = [...new Set(groups.map(normGroup).concat([...plan.groups]))].filter(Boolean);
-      try { await cloud.copyIn(plan.writes); await cloud.syncMeta('groups', merged); }
-      catch (err) {
-        if (err && err.code === 'permission-denied') await cloudRefused(err);
-        else alert('Copying failed — check your connection and try again.');
-        return;
+    if (plan.updates.length || plan.writes.length) {
+      // Cancel stays where you are; nothing is written until you say so.
+      const picked = await openCopyPreview(plan, mode);
+      if (!picked) return;
+      const writes = picked.writes.concat(picked.updates);
+      if (writes.length) {
+        el.status.textContent = 'Writing to the shared library…';
+        const merged = [...new Set(groups.map(normGroup).concat([...plan.groups]))].filter(Boolean);
+        try { await cloud.copyIn(writes); await cloud.syncMeta('groups', merged); }
+        catch (err) {
+          if (err && err.code === 'permission-denied') await cloudRefused(err);
+          else alert('Writing to the shared library failed — check your connection and try again.');
+          return;
+        }
       }
     }
   }
@@ -931,7 +930,11 @@ function openMovePicker(song, anchor) {
 // Copying in from folders: each song's folder becomes its group (the folder's
 // name, then any subfolders) and its filename its sort key. A song already in
 // the library (same title and lyrics) isn't added again; if it has no folder
-// yet it's given this one, so copying again sorts an earlier copy.
+// yet it's given this one, so copying again sorts an earlier copy. A song whose
+// title is already in that folder but whose chart has changed is an update: the
+// library's copy takes the file's chart and keeps its id, so its takes and
+// checklist ticks stay with it. Updates are only written once ticked in the
+// preview (openCopyPreview).
 function folderGroupOf(s) {
   if (!s.libId) return '';
   const lib = libraries.find((l) => l.id === s.libId);
@@ -939,26 +942,147 @@ function folderGroupOf(s) {
   segs.pop();
   return normGroup([lib ? lib.name : ''].concat(segs).join('/'));
 }
+// What a .cho file holds; an update replaces exactly these.
+const CHART_FIELDS = ['title', 'artist', 'key', 'transpose', 'capo', 'tempo', 'time', 'tuning', 'palette', 'body', 'strums', 'riffs'];
 function planCopy(incoming, existing) {
-  const key = (s) => (s.title || '').trim().toLowerCase() + '\0' + (s.body || '').trim();
+  const titleOf = (s) => (s.title || '').trim().toLowerCase();
+  const key = (s) => titleOf(s) + '\0' + (s.body || '').trim();
   const pool = new Map();
   for (const e of existing) {
     if (!pool.has(key(e))) pool.set(key(e), []);
     pool.get(key(e)).push(e);
   }
-  const plan = { writes: [], added: 0, sorted: 0, already: 0, groups: new Set() };
+  const byPlace = new Map(); // folder + title → the library's songs there
+  for (const e of existing) {
+    const k = normGroup(e.group) + '\0' + titleOf(e);
+    if (!byPlace.has(k)) byPlace.set(k, []);
+    byPlace.get(k).push(e);
+  }
+  const used = new Set();
+  const take = (list) => { const m = (list || []).find((e) => !used.has(e)); if (m) used.add(m); return m; };
+  const plan = { writes: [], adds: [], updates: [], added: 0, sorted: 0, already: 0, groups: new Set() };
   for (const s of incoming) {
     const group = folderGroupOf(s);
     const order = s.libId ? ((s.path || '').split('/').pop() || '').replace(/\.cho$/i, '') : '';
     if (group) plan.groups.add(group);
-    const match = (pool.get(key(s)) || []).shift();
-    if (!match) { plan.writes.push(Object.assign({}, s, { group, order })); plan.added++; continue; }
+    const same = group && take(byPlace.get(group + '\0' + titleOf(s)));
+    if (same) {
+      const from = songToCho(same), to = songToCho(s);
+      if (from === to) { plan.already++; continue; }
+      const next = Object.assign({}, same, { updated: Date.now() });
+      for (const f of CHART_FIELDS) next[f] = s[f];
+      plan.updates.push({ song: next, group, from, to, by: same._by || '', path: s.path || '' });
+      continue;
+    }
+    const match = take(pool.get(key(s)));
+    if (!match) {
+      const add = Object.assign({}, s, { group, order });
+      plan.writes.push(add); plan.adds.push(add); plan.added++;
+      continue;
+    }
     if (group && !normGroup(match.group)) {
       plan.writes.push(Object.assign({}, match, { group, order: match.order || order }));
       plan.sorted++;
     } else plan.already++;
   }
   return plan;
+}
+
+// Line diff of two charts (longest common subsequence; charts are short).
+// Returns [{ op: ' ' | '-' | '+', text }].
+function diffLines(a, b) {
+  const x = a.split('\n'), y = b.split('\n');
+  const n = x.length, m = y.length;
+  const lcs = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      lcs[i][j] = x[i] === y[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+    }
+  }
+  const out = [];
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (x[i] === y[j]) { out.push({ op: ' ', text: x[i] }); i++; j++; }
+    else if (lcs[i + 1][j] >= lcs[i][j + 1]) out.push({ op: '-', text: x[i++] });
+    else out.push({ op: '+', text: y[j++] });
+  }
+  while (i < n) out.push({ op: '-', text: x[i++] });
+  while (j < m) out.push({ op: '+', text: y[j++] });
+  return out;
+}
+// The diff as HTML, unchanged runs folded down to a line of context either side.
+function diffHtml(rows) {
+  const keep = rows.map((r, k) => r.op !== ' ' || (rows[k - 1] && rows[k - 1].op !== ' ') || (rows[k + 1] && rows[k + 1].op !== ' '));
+  let html = '', gap = false;
+  rows.forEach((r, k) => {
+    if (!keep[k]) { if (!gap) html += '<div class="cp-gap">⋯</div>'; gap = true; return; }
+    gap = false;
+    const cls = r.op === '-' ? 'cp-del' : r.op === '+' ? 'cp-add' : 'cp-same';
+    html += `<div class="${cls}"><span class="cp-op">${r.op}</span>${escapeHtml(r.text) || '&nbsp;'}</div>`;
+  });
+  return html;
+}
+
+// Show what copying in would do, and let each update and new song be ticked
+// off. Resolves to the writes to make (possibly none), or null on Cancel.
+function openCopyPreview(plan, where) {
+  const modal = document.getElementById('copy-modal');
+  const list = document.getElementById('copy-list');
+  const n = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+  const sorts = plan.writes.filter((w) => !plan.adds.includes(w));
+  document.getElementById('copy-sub').textContent =
+    `What opening the shared library ${where === 'folder' ? 'from your open folders' : 'from this browser'} would change. ` +
+    'Everyone on its list will see it. Untick anything to leave it alone.';
+  let html = '';
+  if (plan.updates.length) {
+    html += `<div class="cp-section">${n(plan.updates.length, 'chart changed', 'charts changed')} — the library's copy takes your file's chart; its takes and ticks stay with it</div>`;
+    plan.updates.forEach((u, k) => {
+      const rows = diffLines(u.from, u.to);
+      const del = rows.filter((r) => r.op === '-').length, add = rows.filter((r) => r.op === '+').length;
+      // Someone else saved it last: this would replace their version.
+      const me = (cloud && cloud.userEmail && cloud.userEmail()) || '';
+      const by = u.by && u.by !== me ? ` · <span class="cp-warn">last saved by ${escapeHtml(u.by)}</span>` : '';
+      html += `<details class="cp-item"><summary><label><input type="checkbox" data-upd="${k}" checked> ` +
+        `<b>${escapeHtml(u.song.title || 'Untitled')}</b></label> <span class="cp-meta" title="${escapeHtml(u.group).replace(/"/g, '&quot;')}">${escapeHtml(u.group.split('/').pop())}${by} · ` +
+        `<span class="cp-del-n">−${del}</span> <span class="cp-add-n">+${add}</span></span></summary>` +
+        `<div class="cp-diff">${diffHtml(rows)}</div></details>`;
+    });
+  }
+  if (plan.adds.length) {
+    html += `<div class="cp-section">${n(plan.adds.length, 'new song', 'new songs')} — not in the library under that folder and title</div>`;
+    plan.adds.forEach((s, k) => {
+      html += `<div class="cp-item cp-row"><label><input type="checkbox" data-add="${k}" checked> ` +
+        `<b>${escapeHtml(s.title || 'Untitled')}</b></label> <span class="cp-meta" title="${escapeHtml(s.group || '').replace(/"/g, '&quot;')}">${escapeHtml((s.group || 'Ungrouped').split('/').pop())}</span></div>`;
+    });
+  }
+  if (sorts.length) html += `<div class="cp-section">${n(sorts.length, 'song', 'songs')} already there will be sorted into ${sorts.length === 1 ? 'its folder' : 'their folders'}</div>`;
+  if (plan.already) html += `<div class="cp-section cp-quiet">${n(plan.already, 'song is', 'songs are')} already there and unchanged</div>`;
+  list.innerHTML = html;
+  const go = document.getElementById('copy-go');
+  const count = () => {
+    const k = list.querySelectorAll('input:checked').length + sorts.length;
+    go.textContent = k ? `Write ${n(k, 'change', 'changes')}` : 'Open without changes';
+  };
+  list.addEventListener('change', count);
+  count();
+  modal.hidden = false;
+  return new Promise((resolve) => {
+    const done = (v) => {
+      modal.hidden = true;
+      list.removeEventListener('change', count);
+      go.onclick = null;
+      document.getElementById('copy-cancel').onclick = null;
+      resolve(v);
+    };
+    go.onclick = () => {
+      const ticked = (attr) => [...list.querySelectorAll(`input[${attr}]:checked`)].map((c) => Number(c.getAttribute(attr)));
+      done({
+        updates: ticked('data-upd').map((k) => plan.updates[k].song),
+        writes: sorts.concat(ticked('data-add').map((k) => plan.adds[k])),
+      });
+    };
+    document.getElementById('copy-cancel').onclick = () => done(null);
+  });
 }
 
 const IDB = { name: 'gtw', store: 'kv' };

@@ -198,7 +198,7 @@ export async function copyIn(songs) {
   for (let i = 0; i < songs.length; i += 400) {
     const batch = writeBatch(db);
     for (const s of songs.slice(i, i + 400)) {
-      batch.set(doc(songsCol(), s.id), { data: songJson(s), title: s.title || '', updated: s.updated || Date.now(), updatedBy: by });
+      batch.set(doc(songsCol(), s.id), { data: songJson(s), title: s.title || '', updated: s.updated || Date.now(), updatedBy: by, at: serverTimestamp() });
     }
     await batch.commit();
   }
@@ -236,7 +236,13 @@ export async function fetchSongs() {
   init();
   const snap = await getDocs(songsCol());
   const list = [];
-  snap.forEach((d) => { try { list.push(JSON.parse(d.get('data'))); } catch { /* skip */ } });
+  snap.forEach((d) => {
+    try {
+      const s = JSON.parse(d.get('data'));
+      s._by = d.get('updatedBy') || ''; // who saved it last, for the copy-in preview
+      list.push(s);
+    } catch { /* skip */ }
+  });
   return list;
 }
 
