@@ -456,14 +456,16 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
       <div class="cap-takes-head"><span>Takes</span><span id="cap-takes-count" class="cap-count"></span></div>
       <!-- Audio made elsewhere (demos, works in progress, stems), filed under the open song. -->
       <div class="cap-upload">
-        <select id="cap-upload-kind" title="What the files are">
+        <label for="cap-upload-kind" class="sr-only">What the files are</label>
+        <select id="cap-upload-kind" title="What the files are" aria-label="What the files are">
           <option value="demo">Demo</option>
           <option value="wip">Work in progress</option>
           <option value="stem">Stem</option>
           <option value="take">Take</option>
         </select>
         <button id="cap-upload" class="inline-btn" title="Add audio files to this song">Upload audio…</button>
-        <input id="cap-upload-file" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.aif,.aiff,.flac,.ogg,.opus" multiple hidden />
+        <label for="cap-upload-file" class="sr-only">Audio files to upload</label>
+        <input id="cap-upload-file" aria-label="Audio files to upload" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.aif,.aiff,.flac,.ogg,.opus" multiple hidden />
       </div>
       <div id="cap-takes" class="cap-takes"></div>
     </div>

@@ -7139,7 +7139,7 @@ async function uploadAudioFiles(files, kind) {
     if (f.size >= UPLOAD_MAX) { skipped.push(`${f.name} (over 500 MB)`); continue; }
     capSetStatus(`Adding ${f.name}…`);
     const take = {
-      id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      id: 't' + Date.now().toString(36) + crypto.getRandomValues(new Uint32Array(1))[0].toString(36),
       songKey: songKey(s),
       songTitle: s.title || 'Untitled',
       ts: f.lastModified || Date.now(),
