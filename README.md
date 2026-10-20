@@ -198,6 +198,27 @@ are. They let in only the email addresses on the list.
   and lyrics isn't added twice, and if it has no folder yet it's given the one
   it came from — so opening the shared library again from your folders sorts
   an earlier copy without duplicating anything.
+- **Updating charts from your folders**: a song whose title is already in the
+  same folder of the library but whose chart has changed (lyrics, chords,
+  capo, key, riffs…) is an *update*: the library's copy takes your file's chart
+  and keeps everything else — its id, so its takes and album-checklist ticks
+  stay with it, and its folder and place. To push edited charts up, leave the
+  shared library (**Back to this browser's songs**), open the folder, then
+  open the shared library again.
+- **Album recordings come along.** For a chart at
+  `<album>/charts/<Album>/NN-song.cho`, the mix at
+  `<album>/audio/full/NN-song.mp3` is offered as a shared take on that song
+  (open the folder that holds the album, not just its charts, so the app can
+  reach the audio). Each song gets at most one: a recording already uploaded is
+  never offered again, and one that failed is offered next time. Needs Cloud
+  Storage, as all shared takes do.
+- **A preview comes first.** Before anything is written, a dialog lists every
+  changed chart (click one to see its line-by-line diff, the library's version
+  against your file's), every new song, every album recording to upload (with
+  its size), and any songs to be sorted into folders.
+  Untick anything to leave it alone. A chart someone else saved last is
+  flagged, since updating it replaces their version. **Cancel** writes nothing
+  and stays where you are.
 - **Two people on one song**: an edit from someone else replaces the open copy
   unless you've changed it more recently, in which case your next save wins.
 

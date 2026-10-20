@@ -198,7 +198,7 @@ export async function copyIn(songs) {
   for (let i = 0; i < songs.length; i += 400) {
     const batch = writeBatch(db);
     for (const s of songs.slice(i, i + 400)) {
-      batch.set(doc(songsCol(), s.id), { data: songJson(s), title: s.title || '', updated: s.updated || Date.now(), updatedBy: by });
+      batch.set(doc(songsCol(), s.id), { data: songJson(s), title: s.title || '', updated: s.updated || Date.now(), updatedBy: by, at: serverTimestamp() });
     }
     await batch.commit();
   }
@@ -236,7 +236,13 @@ export async function fetchSongs() {
   init();
   const snap = await getDocs(songsCol());
   const list = [];
-  snap.forEach((d) => { try { list.push(JSON.parse(d.get('data'))); } catch { /* skip */ } });
+  snap.forEach((d) => {
+    try {
+      const s = JSON.parse(d.get('data'));
+      s._by = d.get('updatedBy') || ''; // who saved it last, for the copy-in preview
+      list.push(s);
+    } catch { /* skip */ }
+  });
   return list;
 }
 
@@ -250,7 +256,7 @@ export async function fetchMeta(name) {
 // Audio goes to Storage first and the Firestore record second, so a take only
 // appears in anyone's list once its audio is there to play.
 
-const TAKE_MIME = { wav: 'audio/wav', m4a: 'audio/mp4', webm: 'audio/webm' };
+const TAKE_MIME = { wav: 'audio/wav', m4a: 'audio/mp4', webm: 'audio/webm', mp3: 'audio/mpeg' };
 
 export async function uploadTake(t, songId) {
   init();
@@ -260,6 +266,13 @@ export async function uploadTake(t, songId) {
     songId, songTitle: t.songTitle || '', ts: t.ts, durMs: t.durMs || 0, ext: t.ext,
     mime: contentType, name: t.name, size: t.blob.size, by: userEmail() || '',
   });
+}
+
+// One-off read of every take's record, for copying in (nothing is watched yet).
+export async function fetchTakes() {
+  init();
+  const snap = await getDocs(takesCol());
+  return snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
 }
 
 // `onTakes(list)` gets every take's record, now and after each change.

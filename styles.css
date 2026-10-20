@@ -2226,6 +2226,27 @@ body.performing { overflow: hidden; }
 .share-actions { display: flex; gap: 8px; margin-top: 14px; }
 .share-actions button { padding: 6px 14px; border-radius: 6px; cursor: pointer; }
 
+/* Copy-in preview: each changed chart folds open to its line diff. */
+.copy-card { width: min(96vw, 720px); max-height: 90vh; display: flex; flex-direction: column; }
+.copy-list { overflow-y: auto; min-height: 0; font-size: 13px; color: var(--text); }
+.cp-section { margin: 12px 0 6px; font-weight: 600; color: var(--muted); }
+.cp-section:first-child { margin-top: 0; }
+.cp-quiet { font-weight: 400; }
+.cp-item { border: 1px solid var(--line); border-radius: 6px; margin: 4px 0; background: var(--panel-2); }
+.cp-item > summary, .cp-row { padding: 6px 8px; cursor: pointer; }
+.cp-row { cursor: default; }
+.cp-item label { cursor: pointer; }
+.cp-meta { color: var(--muted); font-size: 12px; }
+.cp-warn { color: #e0a84c; }
+.cp-del-n { color: #e06c6c; }
+.cp-add-n { color: #6cc070; }
+.cp-diff { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; padding: 4px 0 8px; border-top: 1px solid var(--line); }
+.cp-diff > div { padding: 0 8px; }
+.cp-op { display: inline-block; width: 1.2em; color: var(--muted); user-select: none; }
+.cp-del { background: rgba(224, 108, 108, 0.16); }
+.cp-add { background: rgba(108, 192, 112, 0.16); }
+.cp-gap { color: var(--muted); }
+
 /* Lap steel neck insert dialog: the form on the left, the sheet on the right. */
 .insert-card { width: min(96vw, 1000px); max-height: 94vh; display: flex; flex-direction: column; }
 .insert-body { display: grid; grid-template-columns: 290px 1fr; gap: 16px; min-height: 0; overflow: auto; }
