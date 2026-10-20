@@ -366,7 +366,7 @@ function cloudUnlocked() { return mode === 'cloud' || !!lsGet(CLOUD_UNLOCK_KEY);
 
 function loadCloud() {
   if (!cloudLoading) {
-    cloudLoading = import('./cloud.js?v=133').then((m) => (cloud = m));
+    cloudLoading = import('./cloud.js?v=134').then((m) => (cloud = m));
     cloudLoading.catch(() => { cloudLoading = null; }); // offline: try again next time
   }
   return cloudLoading;
@@ -978,14 +978,20 @@ function planCopy(incoming, existing) {
   const used = new Set();
   const take = (list) => { const m = (list || []).find((e) => !used.has(e)); if (m) used.add(m); return m; };
   const plan = { writes: [], adds: [], updates: [], placed: [], added: 0, sorted: 0, already: 0, groups: new Set() };
+  // Nested folders open at once (an album's charts and the repo above it)
+  // bring the same file in twice: the second copy goes where the first did.
+  const seen = new Map();
+  const place = (k, s, id, add) => { seen.set(k, { id, add }); plan.placed.push({ s, id, add }); };
   for (const s of incoming) {
     const group = fitGroup(folderGroupOf(s));
     const order = s.libId ? ((s.path || '').split('/').pop() || '').replace(/\.cho$/i, '') : '';
     if (group) plan.groups.add(group);
+    const twin = group + '\0' + titleOf(s) + '\0' + songToCho(s);
+    if (seen.has(twin)) { const f = seen.get(twin); plan.placed.push({ s, id: f.id, add: f.add }); continue; }
     const same = group && take(byPlace.get(group + '\0' + titleOf(s)));
     if (same) {
       const from = songToCho(same), to = songToCho(s);
-      plan.placed.push({ s, id: same.id });
+      place(twin, s, same.id);
       if (from === to) { plan.already++; continue; }
       const next = Object.assign({}, same, { updated: Date.now() });
       for (const f of CHART_FIELDS) next[f] = s[f];
@@ -996,10 +1002,10 @@ function planCopy(incoming, existing) {
     if (!match) {
       const add = Object.assign({}, s, { group, order });
       plan.writes.push(add); plan.adds.push(add); plan.added++;
-      plan.placed.push({ s, id: add.id, add });
+      place(twin, s, add.id, add);
       continue;
     }
-    plan.placed.push({ s, id: match.id });
+    place(twin, s, match.id);
     if (group && !normGroup(match.group)) {
       plan.writes.push(Object.assign({}, match, { group, order: match.order || order }));
       plan.sorted++;
@@ -1018,7 +1024,7 @@ async function findAlbumRecordings(plan, takes) {
   const out = [];
   for (const p of plan.placed) {
     const lib = p.s.libId && libraries.find((l) => l.id === p.s.libId);
-    if (!lib || !lib.handle || have.has(recTakeId(p.id))) continue;
+    if (!lib || !lib.handle || have.has(recTakeId(p.id)) || out.some((r) => r.songId === p.id)) continue;
     const segs = (p.s.path || '').split('/');
     if (segs.length < 3 || segs[segs.length - 3] !== 'charts') continue;
     const name = segs[segs.length - 1].replace(/\.cho$/i, '.mp3');
