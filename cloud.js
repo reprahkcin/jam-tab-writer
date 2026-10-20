@@ -256,7 +256,7 @@ export async function fetchMeta(name) {
 // Audio goes to Storage first and the Firestore record second, so a take only
 // appears in anyone's list once its audio is there to play.
 
-const TAKE_MIME = { wav: 'audio/wav', m4a: 'audio/mp4', webm: 'audio/webm' };
+const TAKE_MIME = { wav: 'audio/wav', m4a: 'audio/mp4', webm: 'audio/webm', mp3: 'audio/mpeg' };
 
 export async function uploadTake(t, songId) {
   init();
@@ -266,6 +266,13 @@ export async function uploadTake(t, songId) {
     songId, songTitle: t.songTitle || '', ts: t.ts, durMs: t.durMs || 0, ext: t.ext,
     mime: contentType, name: t.name, size: t.blob.size, by: userEmail() || '',
   });
+}
+
+// One-off read of every take's record, for copying in (nothing is watched yet).
+export async function fetchTakes() {
+  init();
+  const snap = await getDocs(takesCol());
+  return snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
 }
 
 // `onTakes(list)` gets every take's record, now and after each change.

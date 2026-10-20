@@ -366,7 +366,7 @@ function cloudUnlocked() { return mode === 'cloud' || !!lsGet(CLOUD_UNLOCK_KEY);
 
 function loadCloud() {
   if (!cloudLoading) {
-    cloudLoading = import('./cloud.js?v=130').then((m) => (cloud = m));
+    cloudLoading = import('./cloud.js?v=131').then((m) => (cloud = m));
     cloudLoading.catch(() => { cloudLoading = null; }); // offline: try again next time
   }
   return cloudLoading;
@@ -597,7 +597,9 @@ async function openCloud() {
       else alert('Couldn\u2019t reach the shared library — check your connection and try again.');
       return;
     }
-    if (plan.updates.length || plan.writes.length) {
+    try { plan.recordings = await findAlbumRecordings(plan, await cloud.fetchTakes()); }
+    catch { plan.recordings = []; } // no takes access (Storage not set up): charts still go
+    if (plan.updates.length || plan.writes.length || plan.recordings.length) {
       // Cancel stays where you are; nothing is written until you say so.
       const picked = await openCopyPreview(plan, mode);
       if (!picked) return;
@@ -611,6 +613,10 @@ async function openCloud() {
           else alert('Writing to the shared library failed — check your connection and try again.');
           return;
         }
+      }
+      if (picked.recordings.length) {
+        const failed = await uploadRecordings(picked.recordings);
+        if (failed) alert(`${failed} of ${picked.recordings.length} recordings didn\u2019t upload. Opening the shared library from your folders again offers just those.`);
       }
     }
   }
@@ -960,7 +966,7 @@ function planCopy(incoming, existing) {
   }
   const used = new Set();
   const take = (list) => { const m = (list || []).find((e) => !used.has(e)); if (m) used.add(m); return m; };
-  const plan = { writes: [], adds: [], updates: [], added: 0, sorted: 0, already: 0, groups: new Set() };
+  const plan = { writes: [], adds: [], updates: [], placed: [], added: 0, sorted: 0, already: 0, groups: new Set() };
   for (const s of incoming) {
     const group = folderGroupOf(s);
     const order = s.libId ? ((s.path || '').split('/').pop() || '').replace(/\.cho$/i, '') : '';
@@ -968,6 +974,7 @@ function planCopy(incoming, existing) {
     const same = group && take(byPlace.get(group + '\0' + titleOf(s)));
     if (same) {
       const from = songToCho(same), to = songToCho(s);
+      plan.placed.push({ s, id: same.id });
       if (from === to) { plan.already++; continue; }
       const next = Object.assign({}, same, { updated: Date.now() });
       for (const f of CHART_FIELDS) next[f] = s[f];
@@ -978,14 +985,62 @@ function planCopy(incoming, existing) {
     if (!match) {
       const add = Object.assign({}, s, { group, order });
       plan.writes.push(add); plan.adds.push(add); plan.added++;
+      plan.placed.push({ s, id: add.id, add });
       continue;
     }
+    plan.placed.push({ s, id: match.id });
     if (group && !normGroup(match.group)) {
       plan.writes.push(Object.assign({}, match, { group, order: match.order || order }));
       plan.sorted++;
     } else plan.already++;
   }
   return plan;
+}
+
+// Album recordings: a chart at <album>/charts/<Album>/NN-song.cho has its mix
+// at <album>/audio/full/NN-song.mp3. Each one the library doesn't have yet is
+// offered as a take on its song. The take's id is fixed per song, so copying
+// in again never uploads a second copy.
+const recTakeId = (songId) => 'rec-' + songId;
+async function findAlbumRecordings(plan, takes) {
+  const have = new Set(takes.map((t) => t.id));
+  const out = [];
+  for (const p of plan.placed) {
+    const lib = p.s.libId && libraries.find((l) => l.id === p.s.libId);
+    if (!lib || !lib.handle || have.has(recTakeId(p.id))) continue;
+    const segs = (p.s.path || '').split('/');
+    if (segs.length < 3 || segs[segs.length - 3] !== 'charts') continue;
+    const name = segs[segs.length - 1].replace(/\.cho$/i, '.mp3');
+    try {
+      const dir = await resolveDir(lib, segs.slice(0, -3).concat(['audio', 'full']).join('/'), false);
+      const handle = await dir.getFileHandle(name);
+      const file = await handle.getFile();
+      out.push({ songId: p.id, add: p.add || null, title: p.s.title || '', name, file });
+    } catch { /* no recording for this one */ }
+  }
+  return out;
+}
+function audioDurationMs(file) {
+  return new Promise((resolve) => {
+    const a = new Audio();
+    const url = URL.createObjectURL(file);
+    const done = (ms) => { URL.revokeObjectURL(url); resolve(ms); };
+    a.preload = 'metadata';
+    a.onloadedmetadata = () => done(Number.isFinite(a.duration) ? Math.round(a.duration * 1000) : 0);
+    a.onerror = () => done(0);
+    a.src = url;
+  });
+}
+async function uploadRecordings(recs) {
+  let failed = 0;
+  for (let k = 0; k < recs.length; k++) {
+    const r = recs[k];
+    el.status.textContent = `Uploading recordings ${k + 1} of ${recs.length}: ${r.name}…`;
+    const t = { id: recTakeId(r.songId), songTitle: r.title, ts: r.file.lastModified || Date.now(),
+      durMs: await audioDurationMs(r.file), ext: 'mp3', mime: 'audio/mpeg', name: r.name, blob: r.file };
+    try { await cloud.uploadTake(t, r.songId); } catch { failed++; }
+  }
+  return failed;
 }
 
 // Line diff of two charts (longest common subsequence; charts are short).
@@ -1055,12 +1110,27 @@ function openCopyPreview(plan, where) {
         `<b>${escapeHtml(s.title || 'Untitled')}</b></label> <span class="cp-meta" title="${escapeHtml(s.group || '').replace(/"/g, '&quot;')}">${escapeHtml((s.group || 'Ungrouped').split('/').pop())}</span></div>`;
     });
   }
+  const recs = plan.recordings || [];
+  if (recs.length) {
+    const mb = recs.reduce((t, r) => t + r.file.size, 0) / 1048576;
+    html += `<div class="cp-section">${n(recs.length, 'album recording', 'album recordings')} to attach as takes (${mb.toFixed(0)} MB to upload)</div>`;
+    recs.forEach((r, k) => {
+      html += `<div class="cp-item cp-row"><label><input type="checkbox" data-rec="${k}" checked> ` +
+        `<b>${escapeHtml(r.title || 'Untitled')}</b></label> <span class="cp-meta">${escapeHtml(r.name)} · ${(r.file.size / 1048576).toFixed(1)} MB</span></div>`;
+    });
+  }
   if (sorts.length) html += `<div class="cp-section">${n(sorts.length, 'song', 'songs')} already there will be sorted into ${sorts.length === 1 ? 'its folder' : 'their folders'}</div>`;
   if (plan.already) html += `<div class="cp-section cp-quiet">${n(plan.already, 'song is', 'songs are')} already there and unchanged</div>`;
   list.innerHTML = html;
   const go = document.getElementById('copy-go');
   const count = () => {
-    const k = list.querySelectorAll('input:checked').length + sorts.length;
+    // A new song's recording can't go up without the song.
+    recs.forEach((r, k) => {
+      if (!r.add) return;
+      const box = list.querySelector(`input[data-add="${plan.adds.indexOf(r.add)}"]`);
+      list.querySelector(`input[data-rec="${k}"]`).disabled = !!box && !box.checked;
+    });
+    const k = list.querySelectorAll('input:checked:not(:disabled)').length + sorts.length;
     go.textContent = k ? `Write ${n(k, 'change', 'changes')}` : 'Open without changes';
   };
   list.addEventListener('change', count);
@@ -1076,9 +1146,12 @@ function openCopyPreview(plan, where) {
     };
     go.onclick = () => {
       const ticked = (attr) => [...list.querySelectorAll(`input[${attr}]:checked`)].map((c) => Number(c.getAttribute(attr)));
+      const adds = ticked('data-add').map((k) => plan.adds[k]);
       done({
         updates: ticked('data-upd').map((k) => plan.updates[k].song),
-        writes: sorts.concat(ticked('data-add').map((k) => plan.adds[k])),
+        writes: sorts.concat(adds),
+        // A recording for a new song only goes up if the song does.
+        recordings: ticked('data-rec').map((k) => recs[k]).filter((r) => !r.add || adds.includes(r.add)),
       });
     };
     document.getElementById('copy-cancel').onclick = () => done(null);
