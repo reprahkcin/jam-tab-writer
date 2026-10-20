@@ -1962,6 +1962,13 @@ body.performing { overflow: hidden; }
 .cap-take-tools button:hover:not(:disabled), .cap-take-tools a:hover { color: var(--text); border-color: var(--muted); }
 .cap-take-tools button:disabled { opacity: 0.4; cursor: default; }
 .cap-del:hover { color: #ff8080 !important; border-color: #ff8080 !important; }
+.cap-upload { display: flex; gap: 6px; align-items: center; margin: 2px 0 8px; }
+.cap-upload select, .cap-kind {
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: 5px; font-size: 11px; padding: 2px 4px;
+}
+.cap-kind { color: var(--muted); margin-right: auto; }
+.cap-kind-head { font: 600 11px system-ui, sans-serif; color: var(--muted); margin-top: 4px; }
 .tool-start.on { background: #d97a6b; color: #fff; }
 /* The header button pulses while rolling, for when the panel is closed. */
 #capture-btn.recording { background: #d97a6b; border-color: #d97a6b; color: #fff; }
