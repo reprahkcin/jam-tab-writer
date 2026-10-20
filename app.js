@@ -366,7 +366,7 @@ function cloudUnlocked() { return mode === 'cloud' || !!lsGet(CLOUD_UNLOCK_KEY);
 
 function loadCloud() {
   if (!cloudLoading) {
-    cloudLoading = import('./cloud.js?v=132').then((m) => (cloud = m));
+    cloudLoading = import('./cloud.js?v=133').then((m) => (cloud = m));
     cloudLoading.catch(() => { cloudLoading = null; }); // offline: try again next time
   }
   return cloudLoading;
@@ -1319,7 +1319,7 @@ function joinPath(subpath, fname) {
 // to editing files on disk. `lib` already carries kind + colour.
 async function adoptFolderFromLocal(lib) {
   const handle = lib.handle;
-  const localSongs = songs.slice();
+  const localSongs = songs.filter((s) => !s.example); // the built-in example isn't yours to file
   const dest = lib.kind === 'collection' ? 'your Collection' : `"${handle.name}"`;
   if (localSongs.length &&
       !confirm(`Copy your ${localSongs.length} browser song${localSongs.length === 1 ? '' : 's'} into ${dest} as .cho files and switch to editing files on disk?\n\n(Your browser copy is kept as a backup.)`)) {
