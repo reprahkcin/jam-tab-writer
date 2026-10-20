@@ -209,7 +209,9 @@ are. They let in only the email addresses on the list.
   `<album>/charts/<Album>/NN-song.cho`, the mix at
   `<album>/audio/full/NN-song.mp3` is offered as a shared take on that song
   (open the folder that holds the album, not just its charts, so the app can
-  reach the audio). Each song gets at most one: a recording already uploaded is
+  reach the audio). Opening a folder higher up than before is fine: a song
+  whose folder path ends in one the library already has (`…/charts/Go Heart
+  Yourself` and `Go Heart Yourself`) is matched in that folder. Each song gets at most one: a recording already uploaded is
   never offered again, and one that failed is offered next time. Needs Cloud
   Storage, as all shared takes do.
 - **A preview comes first.** Before anything is written, a dialog lists every

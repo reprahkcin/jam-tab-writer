@@ -366,7 +366,7 @@ function cloudUnlocked() { return mode === 'cloud' || !!lsGet(CLOUD_UNLOCK_KEY);
 
 function loadCloud() {
   if (!cloudLoading) {
-    cloudLoading = import('./cloud.js?v=131').then((m) => (cloud = m));
+    cloudLoading = import('./cloud.js?v=132').then((m) => (cloud = m));
     cloudLoading.catch(() => { cloudLoading = null; }); // offline: try again next time
   }
   return cloudLoading;
@@ -606,7 +606,7 @@ async function openCloud() {
       const writes = picked.writes.concat(picked.updates);
       if (writes.length) {
         el.status.textContent = 'Writing to the shared library…';
-        const merged = [...new Set(groups.map(normGroup).concat([...plan.groups]))].filter(Boolean);
+        const merged = [...new Set(groups.map(normGroup).concat(writes.map((w) => normGroup(w.group))))].filter(Boolean);
         try { await cloud.copyIn(writes); await cloud.syncMeta('groups', merged); }
         catch (err) {
           if (err && err.code === 'permission-denied') await cloudRefused(err);
@@ -964,11 +964,22 @@ function planCopy(incoming, existing) {
     if (!byPlace.has(k)) byPlace.set(k, []);
     byPlace.get(k).push(e);
   }
+  // A folder opened higher up than last time (the whole repo rather than one
+  // album's charts) still lands in the library's folder for it: its path ends
+  // in that folder's, segment for segment. The longest such folder wins.
+  const known = [...new Set(existing.map((e) => normGroup(e.group)).filter(Boolean))];
+  const fitGroup = (g) => {
+    let best = '';
+    for (const k of known) {
+      if ((g === k || g.endsWith('/' + k)) && k.length > best.length) best = k;
+    }
+    return best || g;
+  };
   const used = new Set();
   const take = (list) => { const m = (list || []).find((e) => !used.has(e)); if (m) used.add(m); return m; };
   const plan = { writes: [], adds: [], updates: [], placed: [], added: 0, sorted: 0, already: 0, groups: new Set() };
   for (const s of incoming) {
-    const group = folderGroupOf(s);
+    const group = fitGroup(folderGroupOf(s));
     const order = s.libId ? ((s.path || '').split('/').pop() || '').replace(/\.cho$/i, '') : '';
     if (group) plan.groups.add(group);
     const same = group && take(byPlace.get(group + '\0' + titleOf(s)));
