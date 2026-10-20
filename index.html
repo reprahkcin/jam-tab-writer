@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1" />
   <meta name="theme-color" content="#1e1e1e" />
   <link rel="stylesheet" href="vendor/driver/driver.css?v=1" />
-  <link rel="stylesheet" href="styles.css?v=134" />
+  <link rel="stylesheet" href="styles.css?v=135" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -454,6 +454,17 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
       </div>
       <div id="cap-status" class="cap-status">Pick your interface, then hit Record (or press R).</div>
       <div class="cap-takes-head"><span>Takes</span><span id="cap-takes-count" class="cap-count"></span></div>
+      <!-- Audio made elsewhere (demos, works in progress, stems), filed under the open song. -->
+      <div class="cap-upload">
+        <select id="cap-upload-kind" title="What the files are">
+          <option value="demo">Demo</option>
+          <option value="wip">Work in progress</option>
+          <option value="stem">Stem</option>
+          <option value="take">Take</option>
+        </select>
+        <button id="cap-upload" class="inline-btn" title="Add audio files to this song">Upload audio…</button>
+        <input id="cap-upload-file" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.aif,.aiff,.flac,.ogg,.opus" multiple hidden />
+      </div>
       <div id="cap-takes" class="cap-takes"></div>
     </div>
   </div>
@@ -686,15 +697,15 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=134"></script>
+  <script src="chords.js?v=135"></script>
   <!-- After chords.js: the theory charts are drawn with its renderers. -->
-  <script src="learn.js?v=134"></script>
-  <script src="pdf2cho.js?v=134"></script>
-  <script src="qr.js?v=134"></script>
+  <script src="learn.js?v=135"></script>
+  <script src="pdf2cho.js?v=135"></script>
+  <script src="qr.js?v=135"></script>
   <!-- The guided tour: driver.js 1.8.0 (MIT, vendored), then the example song and tour steps. -->
   <script src="vendor/driver/driver.js?v=1"></script>
-  <script src="tour.js?v=134"></script>
-  <script src="band.js?v=134"></script>
-  <script src="app.js?v=134"></script>
+  <script src="tour.js?v=135"></script>
+  <script src="band.js?v=135"></script>
+  <script src="app.js?v=135"></script>
 </body>
 </html>

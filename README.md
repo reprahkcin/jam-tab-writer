@@ -420,6 +420,21 @@ more than one keystroke.
   it's a real file in the folder you already sync or commit — no export step.
 - Each take has inline playback, a download, and delete.
 
+### Uploading demos, works in progress and stems
+
+Audio made somewhere else goes onto a song too. In **Record**, under Takes,
+pick what the files are — **Demo**, **Work in progress**, **Stem** or
+**Take** — and hit **Upload audio…**; pick as many files as you like (MP3, WAV,
+M4A, AIFF, FLAC, Ogg…). They're filed under the open song exactly like a
+recorded take: kept in this browser, written into the `takes/` folder beside the
+chart in folder mode (named after the song, and never over a file already
+there), and shared with the band in the shared library (500 MB a file at most).
+
+The song's audio is listed by kind — Album mix, Demos, Works in progress,
+Stems, Takes — and each file has a picker to refile it; in the shared library
+that refiles it for everyone. Recordings copied in from an album's
+`audio/full/` count as the album mix.
+
 ## Dictating lyrics
 
 Press **D** (or hit **Dictate** above the editor) and speak; words land at the

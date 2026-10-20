@@ -366,7 +366,7 @@ function cloudUnlocked() { return mode === 'cloud' || !!lsGet(CLOUD_UNLOCK_KEY);
 
 function loadCloud() {
   if (!cloudLoading) {
-    cloudLoading = import('./cloud.js?v=134').then((m) => (cloud = m));
+    cloudLoading = import('./cloud.js?v=135').then((m) => (cloud = m));
     cloudLoading.catch(() => { cloudLoading = null; }); // offline: try again next time
   }
   return cloudLoading;
@@ -509,13 +509,15 @@ function mergeCloudTakes(local) {
     // Shared once, gone from the library now: someone deleted it.
     if (t.shared && cloudTakesLoaded && !cloudTakes.has(t.id)) { void takesDelete(t.id); continue; }
     have.add(t.id);
+    const m = cloudTakes.get(t.id);
+    if (m && m.kind) t.kind = m.kind; // refiled by someone else
     t.pending = !t.shared && !!cloudSongIdForTake(t);
     out.push(t);
   }
   for (const m of cloudTakes.values()) {
     if (have.has(m.id)) continue;
     out.push({ id: m.id, songKey: 'local:' + m.songId, songTitle: m.songTitle, ts: m.ts, durMs: m.durMs,
-      ext: m.ext, mime: m.mime, name: m.name, size: m.size, by: m.by, remote: true });
+      ext: m.ext, mime: m.mime, name: m.name, size: m.size, by: m.by, kind: m.kind || '', remote: true });
   }
   return out;
 }
@@ -6936,6 +6938,16 @@ async function capWriteToDisk(take) {
   try {
     const sub = (s.path || '').split('/').slice(0, -1).join('/');
     const dir = await resolveDir(lib, joinPath(sub, TAKES_DIR), true);
+    // The takes folder is shared by every chart beside it: never write over a file.
+    const exists = async (n) => { try { await dir.getFileHandle(n); return true; } catch { return false; } };
+    if (await exists(take.name)) {
+      const dot = take.name.lastIndexOf('.');
+      const stem = dot > 0 ? take.name.slice(0, dot) : take.name, ext = dot > 0 ? take.name.slice(dot) : '';
+      let i = 2;
+      while (await exists(`${stem}-${i}${ext}`)) i++;
+      take.name = `${stem}-${i}${ext}`;
+      await takesPut(take);
+    }
     const fh = await dir.getFileHandle(take.name, { create: true });
     const w = await fh.createWritable();
     await w.write(take.blob);
@@ -6999,6 +7011,8 @@ async function renderTakes() {
   if (countEl) countEl.textContent = mine.length ? `${mine.length} for this song` : '';
 
   const me = mode === 'cloud' && cloud ? cloud.userEmail() : null;
+  const kindPick = (t) => `<select class="cap-kind" data-id="${t.id}" title="What this is">` +
+    TAKE_KINDS.map(([k, , one]) => `<option value="${k}"${takeKind(t) === k ? ' selected' : ''}>${one}</option>`).join('') + '</select>';
   const row = (t) => {
     let url = t.url || '';
     if (t.blob) { url = URL.createObjectURL(t.blob); takeUrls.push(url); }
@@ -7014,7 +7028,7 @@ async function renderTakes() {
       `<audio controls preload="none" src="${url}"></audio>` +
       `<div class="cap-take-meta"><span class="cap-take-name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span>` +
       `<span class="cap-take-sub">${capFmtTime(t.durMs)} · ${clock} · ${(size / 1048576).toFixed(1)} MB${escapeHtml(extra)}</span></div>` +
-      `<div class="cap-take-tools">` +
+      `<div class="cap-take-tools">` + (t.songKey ? kindPick(t) : '') +
       (t.songKey ? '' : `<button class="cap-file" data-id="${t.id}" title="File this take under the current song"${cur ? '' : ' disabled'}>File</button>`) +
       `<a class="cap-dl" href="${url}" ${dl} title="Download">&#8595;</a>` +
       `<button class="cap-del" data-id="${t.id}" title="Delete this take">&#10005;</button></div></div>`;
@@ -7026,7 +7040,14 @@ async function renderTakes() {
   let html = '';
   if (cur) {
     html += `<div class="cap-group">${escapeHtml(cur.title || 'Untitled')}</div>`;
-    html += mine.length ? mine.map(row).join('') : '<div class="cap-empty">No takes for this song yet.</div>';
+    if (!mine.length) html += '<div class="cap-empty">No audio for this song yet. Hit Record, or upload some.</div>';
+    // Grouped by what each file is, in a fixed order; a lone group needs no heading.
+    const kinds = TAKE_KINDS.filter(([k]) => mine.some((t) => takeKind(t) === k));
+    for (const [k, many] of kinds) {
+      const list = mine.filter((t) => takeKind(t) === k);
+      if (kinds.length > 1) html += `<div class="cap-kind-head">${many} <span class="cap-count">${list.length}</span></div>`;
+      html += list.map(row).join('');
+    }
   }
   // Unfiled takes (recorded with no song open) stay out of the way behind a
   // one-line toggle — they must remain reachable, since this is the only
@@ -7054,6 +7075,20 @@ async function renderTakes() {
     await takesDelete(b.dataset.id);
     void renderTakes();
   }));
+  box.querySelectorAll('.cap-kind').forEach((sel) => sel.addEventListener('change', async () => {
+    const t = shown.get(sel.dataset.id);
+    if (!t) return;
+    const kind = sel.value;
+    if (mode === 'cloud' && (t.shared || t.remote)) {
+      try { await cloud.setTakeKind(t.id, kind); }
+      catch { alert('Couldn\u2019t refile it in the shared library — check your connection.'); void renderTakes(); return; }
+      const m = cloudTakes.get(t.id);
+      if (m) m.kind = kind;
+    }
+    const local = (await takesAll()).find((x) => x.id === t.id);
+    if (local) { local.kind = kind; await takesPut(local); }
+    void renderTakes();
+  }));
   box.querySelectorAll('.cap-file').forEach((b) => b.addEventListener('click', async () => {
     const s = currentSong();
     if (!s) return;
@@ -7067,6 +7102,65 @@ async function renderTakes() {
     void uploadPendingTakes();
     void renderTakes();
   }));
+}
+
+// ---- Uploading audio to a song ---------------------------------------------
+// Demos, works in progress and stems made elsewhere are takes too: kept in this
+// browser, written into the takes/ folder beside the chart in folder mode, and
+// shared like a recorded take in the shared library. `kind` files them.
+const TAKE_KINDS = [ // [kind, group heading, one]
+  ['mix', 'Album mix', 'Album mix'],
+  ['demo', 'Demos', 'Demo'],
+  ['wip', 'Works in progress', 'Work in progress'],
+  ['stem', 'Stems', 'Stem'],
+  ['take', 'Takes', 'Take'],
+];
+// Recorded takes carry no kind; the album recordings copied in are `rec-` ids.
+function takeKind(t) {
+  if (t.kind && TAKE_KINDS.some(([k]) => k === t.kind)) return t.kind;
+  return String(t.id).startsWith('rec-') ? 'mix' : 'take';
+}
+const AUDIO_EXT_MIME = {
+  mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', aac: 'audio/aac', aif: 'audio/aiff',
+  aiff: 'audio/aiff', flac: 'audio/flac', ogg: 'audio/ogg', opus: 'audio/ogg', webm: 'audio/webm',
+};
+const UPLOAD_MAX = 500 * 1024 * 1024; // the shared library's limit per file (storage.rules)
+
+async function uploadAudioFiles(files, kind) {
+  const s = currentSong();
+  if (!s) { capSetStatus('Open a song first — uploads are filed under it.'); return; }
+  const base = (s.title || 'untitled').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'song';
+  const skipped = [];
+  let added = 0;
+  for (const f of files) {
+    const ext = (f.name.includes('.') ? f.name.split('.').pop() : '').toLowerCase();
+    const mime = f.type && f.type.startsWith('audio/') ? f.type : AUDIO_EXT_MIME[ext];
+    if (!mime) { skipped.push(`${f.name} (not audio)`); continue; }
+    if (f.size >= UPLOAD_MAX) { skipped.push(`${f.name} (over 500 MB)`); continue; }
+    capSetStatus(`Adding ${f.name}…`);
+    const take = {
+      id: 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      songKey: songKey(s),
+      songTitle: s.title || 'Untitled',
+      ts: f.lastModified || Date.now(),
+      durMs: await audioDurationMs(f),
+      ext: ext || 'audio',
+      mime,
+      // The song's name first, like a recorded take, so files sort by song on disk.
+      name: f.name.toLowerCase().startsWith(base) ? f.name : `${base}-${f.name}`,
+      kind,
+      blob: f,
+    };
+    await takesPut(take);
+    await capWriteToDisk(take);
+    added++;
+  }
+  void uploadPendingTakes();
+  const what = TAKE_KINDS.find(([k]) => k === kind)[2].toLowerCase();
+  capSetStatus((added ? `Added ${added} ${what} file${added === 1 ? '' : 's'} to ${s.title || 'this song'}` +
+    (mode === 'cloud' ? ' — uploading to the shared library.' : '.') : 'Nothing added.') +
+    (skipped.length ? ` Skipped ${skipped.join(', ')}.` : ''));
+  void renderTakes();
 }
 
 // ---- Dictation (speak lyrics into the editor) ------------------------------
@@ -7357,6 +7451,12 @@ document.getElementById('dict-install').addEventListener('click', dictInstallMod
 // itself entirely where dictation can't run.
 void dictRefreshModel();
 document.getElementById('cap-toggle').addEventListener('click', captureToggle);
+document.getElementById('cap-upload').addEventListener('click', () => document.getElementById('cap-upload-file').click());
+document.getElementById('cap-upload-file').addEventListener('change', (e) => {
+  const files = [...e.target.files];
+  e.target.value = ''; // the same file can be picked again
+  if (files.length) void uploadAudioFiles(files, document.getElementById('cap-upload-kind').value);
+});
 document.getElementById('cap-device').addEventListener('change', (e) => {
   prefs.capture.deviceId = e.target.value || null;
   prefs.capture.deviceLabel = e.target.selectedOptions[0] ? e.target.selectedOptions[0].textContent : '';
