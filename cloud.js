@@ -265,13 +265,15 @@ export async function uploadTake(t, songId) {
   await setDoc(doc(takesCol(), t.id), {
     songId, songTitle: t.songTitle || '', ts: t.ts, durMs: t.durMs || 0, ext: t.ext,
     mime: contentType, name: t.name, size: t.blob.size, by: userEmail() || '', kind: t.kind || '',
+    label: t.label || '', tags: t.tags || [],
   });
 }
 
-// Refile a shared take (demo, work in progress, stem, …) for everyone.
-export async function setTakeKind(id, kind) {
+// Refile, rename or retag a shared take for everyone: `fields` is any of
+// kind, label, name and tags.
+export async function setTakeMeta(id, fields) {
   init();
-  await setDoc(doc(takesCol(), id), { kind }, { merge: true });
+  await setDoc(doc(takesCol(), id), fields, { merge: true });
 }
 
 // One-off read of every take's record, for copying in (nothing is watched yet).

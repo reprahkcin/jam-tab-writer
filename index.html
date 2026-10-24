@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1" />
   <meta name="theme-color" content="#1e1e1e" />
   <link rel="stylesheet" href="vendor/driver/driver.css?v=1" />
-  <link rel="stylesheet" href="styles.css?v=135" />
+  <link rel="stylesheet" href="styles.css?v=136" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -431,43 +431,56 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
     </div>
   </div>
 
-  <!-- Capture (floating panel). Records takes from a chosen audio interface. -->
+  <!-- Capture (floating panel). Records takes from a chosen audio interface;
+       below that, everything filed under the open song, uploads included. -->
   <div id="capture-panel" class="tool-panel tool-panel-wide" hidden>
-    <div class="tool-head"><span>Record</span><button class="tool-close" data-tool="capture" title="Close">&#10005;</button></div>
+    <div class="tool-head"><span>Record</span><span class="tool-head-btns">
+      <button id="cap-expand" class="tool-close cap-expand" title="Bigger panel" aria-pressed="false">&#8644;</button>
+      <button class="tool-close" data-tool="capture" title="Close">&#10005;</button></span></div>
     <div class="tool-body">
-      <div id="cap-arm" class="cap-arm">
-        <label class="cap-row">Input
-          <select id="cap-device"><option value="">Default input</option></select>
-        </label>
-        <label class="cap-row">Format
-          <select id="cap-format">
-            <option value="wav">WAV &mdash; drops into a DAW</option>
-            <option value="opus">M4A &mdash; small, easy to text</option>
-          </select>
-        </label>
+      <div class="cap-rec">
+        <div id="cap-arm" class="cap-arm">
+          <label class="cap-row">Input
+            <select id="cap-device"><option value="">Default input</option></select>
+          </label>
+          <label class="cap-row">Format
+            <select id="cap-format">
+              <option value="wav">WAV &mdash; drops into a DAW</option>
+              <option value="opus">M4A &mdash; small, easy to text</option>
+            </select>
+          </label>
+        </div>
+        <!-- Signal present before you commit to a take. -->
+        <div class="cap-meter"><div id="cap-meter-fill" class="cap-meter-fill"></div></div>
+        <div class="cap-transport">
+          <button id="cap-toggle" class="tool-start">&#9679; Record</button>
+          <span id="cap-time" class="cap-time">0:00</span>
+        </div>
+        <div id="cap-status" class="cap-status">Pick your interface, then hit Record (or press R).</div>
       </div>
-      <!-- Signal present before you commit to a take. -->
-      <div class="cap-meter"><div id="cap-meter-fill" class="cap-meter-fill"></div></div>
-      <div class="cap-transport">
-        <button id="cap-toggle" class="tool-start">&#9679; Record</button>
-        <span id="cap-time" class="cap-time">0:00</span>
+      <div class="cap-lib">
+        <div class="cap-takes-head">
+          <span id="cap-lib-title" class="cap-lib-title">Audio</span>
+          <span id="cap-takes-count" class="cap-count"></span>
+          <!-- Audio made elsewhere (demos, works in progress, stems), filed under the open song. -->
+          <span class="cap-add">
+            <button id="cap-upload" class="inline-btn" title="Add audio files made elsewhere to this song" aria-haspopup="true" aria-expanded="false">+ Add files &#9662;</button>
+            <span id="cap-add-menu" class="cap-add-menu" role="menu" hidden>
+              <button role="menuitem" data-kind="demo">Demo&hellip;</button>
+              <button role="menuitem" data-kind="wip">Work in progress&hellip;</button>
+              <button role="menuitem" data-kind="stem">Stems&hellip;</button>
+              <button role="menuitem" data-kind="mix">Album mix&hellip;</button>
+              <button role="menuitem" data-kind="take">Take&hellip;</button>
+            </span>
+          </span>
+          <label for="cap-upload-file" class="sr-only">Audio files to upload</label>
+          <input id="cap-upload-file" aria-label="Audio files to upload" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.aif,.aiff,.flac,.ogg,.opus" multiple hidden />
+        </div>
+        <div id="cap-tag-filter" class="cap-tag-filter" hidden></div>
+        <div id="cap-lib-status" class="cap-status cap-lib-status" hidden></div>
+        <div id="cap-takes" class="cap-takes"></div>
+        <datalist id="cap-tag-list"></datalist>
       </div>
-      <div id="cap-status" class="cap-status">Pick your interface, then hit Record (or press R).</div>
-      <div class="cap-takes-head"><span>Takes</span><span id="cap-takes-count" class="cap-count"></span></div>
-      <!-- Audio made elsewhere (demos, works in progress, stems), filed under the open song. -->
-      <div class="cap-upload">
-        <label for="cap-upload-kind" class="sr-only">What the files are</label>
-        <select id="cap-upload-kind" title="What the files are" aria-label="What the files are">
-          <option value="demo">Demo</option>
-          <option value="wip">Work in progress</option>
-          <option value="stem">Stem</option>
-          <option value="take">Take</option>
-        </select>
-        <button id="cap-upload" class="inline-btn" title="Add audio files to this song">Upload audio…</button>
-        <label for="cap-upload-file" class="sr-only">Audio files to upload</label>
-        <input id="cap-upload-file" aria-label="Audio files to upload" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.aif,.aiff,.flac,.ogg,.opus" multiple hidden />
-      </div>
-      <div id="cap-takes" class="cap-takes"></div>
     </div>
   </div>
 
@@ -699,15 +712,15 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=135"></script>
+  <script src="chords.js?v=136"></script>
   <!-- After chords.js: the theory charts are drawn with its renderers. -->
-  <script src="learn.js?v=135"></script>
-  <script src="pdf2cho.js?v=135"></script>
-  <script src="qr.js?v=135"></script>
+  <script src="learn.js?v=136"></script>
+  <script src="pdf2cho.js?v=136"></script>
+  <script src="qr.js?v=136"></script>
   <!-- The guided tour: driver.js 1.8.0 (MIT, vendored), then the example song and tour steps. -->
   <script src="vendor/driver/driver.js?v=1"></script>
-  <script src="tour.js?v=135"></script>
-  <script src="band.js?v=135"></script>
-  <script src="app.js?v=135"></script>
+  <script src="tour.js?v=136"></script>
+  <script src="band.js?v=136"></script>
+  <script src="app.js?v=136"></script>
 </body>
 </html>

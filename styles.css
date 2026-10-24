@@ -1937,23 +1937,88 @@ body.performing { overflow: hidden; }
 .cap-transport .tool-start { flex: 1; }
 .cap-time { font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 700; min-width: 44px; text-align: right; }
 .cap-status { font-size: 11px; color: var(--muted); min-height: 15px; }
-.cap-takes-head {
-  display: flex; justify-content: space-between; align-items: baseline;
-  font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted);
-  border-top: 1px solid var(--line); padding-top: 8px;
+/* Two jobs, two blocks: capturing a take, then everything filed under the song. */
+.cap-rec { display: flex; flex-direction: column; gap: 10px; }
+.cap-lib {
+  display: flex; flex-direction: column; gap: 8px;
+  border-top: 1px solid var(--line); padding-top: 10px;
 }
-.cap-count { text-transform: none; letter-spacing: 0; }
-.cap-takes { display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
+.cap-takes-head { display: flex; align-items: center; gap: 8px; }
+.cap-lib-title {
+  font: 700 12px system-ui, sans-serif; color: var(--section); text-transform: uppercase;
+  letter-spacing: 0.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.cap-count { text-transform: none; letter-spacing: 0; font-size: 11px; color: var(--muted); }
+.cap-add { position: relative; margin-left: auto; flex: none; }
+.cap-add .inline-btn:disabled { opacity: 0.4; cursor: default; }
+.cap-add-menu {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 5;
+  display: flex; flex-direction: column; min-width: 170px; padding: 4px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+.cap-add-menu[hidden] { display: none; }
+.cap-add-menu button {
+  background: none; border: none; color: var(--text); text-align: left;
+  font-size: 12px; padding: 5px 8px; border-radius: 4px; cursor: pointer;
+}
+.cap-add-menu button:hover, .cap-add-menu button:focus-visible { background: var(--panel-2); }
+.cap-lib-status[hidden], .cap-tag-filter[hidden] { display: none; }
+.cap-tag-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.cap-filter-label { font-size: 11px; color: var(--muted); margin-right: 2px; }
+.cap-filter {
+  background: var(--panel-2); color: var(--muted); border: 1px solid var(--line);
+  border-radius: 10px; padding: 1px 8px; font-size: 11px; cursor: pointer;
+}
+.cap-filter.on { background: var(--accent); border-color: var(--accent); color: #1e1e1e; }
+.cap-takes { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; }
 .cap-group { font: 700 11px system-ui, sans-serif; color: var(--section); text-transform: uppercase; letter-spacing: 0.5px; }
 .cap-unfiled-toggle { cursor: pointer; opacity: 0.7; }
 .cap-unfiled-toggle:hover { opacity: 1; }
 .cap-empty { font-size: 12px; color: var(--muted); }
-.cap-take { display: flex; flex-direction: column; gap: 4px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px; }
+.cap-take { display: flex; flex-direction: column; gap: 5px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px; }
+.cap-take-latest { border-color: var(--accent); }
 .cap-take audio { width: 100%; height: 30px; }
-.cap-take-meta { display: flex; flex-direction: column; min-width: 0; }
-.cap-take-name { font-size: 11px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cap-take-sub { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cap-take-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* The take's place in the song's order, big enough to read at a glance. */
+.cap-take-num {
+  flex: none; min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--panel); border: 1px solid var(--line);
+  font: 700 12px system-ui, sans-serif; color: var(--text); font-variant-numeric: tabular-nums;
+}
+.cap-take-latest .cap-take-num { background: var(--accent); border-color: var(--accent); color: #1e1e1e; }
+.cap-take-name {
+  background: none; border: 1px solid transparent; border-radius: 4px; padding: 1px 4px;
+  font: 600 13px system-ui, sans-serif; color: var(--text); cursor: text; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.cap-take-name:hover { border-color: var(--line); }
+.cap-name-input, .cap-tag-input {
+  background: var(--panel); color: var(--text); border: 1px solid var(--accent);
+  border-radius: 4px; padding: 1px 4px; font: 600 13px system-ui, sans-serif; min-width: 0;
+}
+.cap-name-input { flex: 1; }
+.cap-tag-input { width: 90px; font-size: 11px; font-weight: 400; }
+.cap-latest {
+  flex: none; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--accent);
+}
+.cap-take-sub {
+  margin-left: auto; flex: none; font-size: 11px; color: var(--muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
 .cap-take-tools { display: flex; align-items: center; gap: 6px; }
+.cap-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-right: auto; min-width: 0; }
+.cap-tag {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 0 4px 0 8px; font-size: 11px; color: var(--text); line-height: 1.6;
+}
+.cap-take-tools .cap-tag-x {
+  background: none; border: none; padding: 0 2px; font-size: 9px; color: var(--muted); line-height: 1;
+}
+.cap-take-tools .cap-tag-x:hover { color: #ff8080; }
+.cap-take-tools .cap-tag-add { border-style: dashed; border-radius: 10px; }
 .cap-take-tools button, .cap-take-tools a {
   background: var(--panel); color: var(--muted); border: 1px solid var(--line);
   border-radius: 5px; padding: 2px 8px; font-size: 11px; cursor: pointer;
@@ -1962,13 +2027,16 @@ body.performing { overflow: hidden; }
 .cap-take-tools button:hover:not(:disabled), .cap-take-tools a:hover { color: var(--text); border-color: var(--muted); }
 .cap-take-tools button:disabled { opacity: 0.4; cursor: default; }
 .cap-del:hover { color: #ff8080 !important; border-color: #ff8080 !important; }
-.cap-upload { display: flex; gap: 6px; align-items: center; margin: 2px 0 8px; }
-.cap-upload select, .cap-kind {
-  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+.cap-kind {
+  background: var(--panel); color: var(--muted); border: 1px solid var(--line);
   border-radius: 5px; font-size: 11px; padding: 2px 4px;
 }
-.cap-kind { color: var(--muted); margin-right: auto; }
 .cap-kind-head { font: 600 11px system-ui, sans-serif; color: var(--muted); margin-top: 4px; }
+.tool-head-btns { display: inline-flex; align-items: center; gap: 6px; }
+.tool-close.cap-expand:hover, .tool-close.cap-expand[aria-pressed="true"] { color: var(--accent); }
+/* Bigger: wider, and the list gets most of the screen's height. */
+#capture-panel.cap-expanded { width: min(680px, calc(100vw - 32px)); }
+#capture-panel.cap-expanded .cap-takes { max-height: calc(100vh - 380px); }
 .tool-start.on { background: #d97a6b; color: #fff; }
 /* The header button pulses while rolling, for when the panel is closed. */
 #capture-btn.recording { background: #d97a6b; border-color: #d97a6b; color: #fff; }
