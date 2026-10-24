@@ -7130,12 +7130,12 @@ async function renderTakes() {
   }
 
   // Every tag in use anywhere, plus a few starters, for the tag box to offer.
-  const allTags = [...new Set([...CAP_TAG_DEFAULTS, ...all.flatMap((t) => t.tags || [])])].sort();
+  const allTags = [...new Set([...CAP_TAG_DEFAULTS, ...all.flatMap((t) => t.tags || [])])].sort((a, b) => a.localeCompare(b));
   const dl = capEl('cap-tag-list');
   if (dl) dl.innerHTML = allTags.map((g) => `<option value="${capAttr(g)}"></option>`).join('');
 
   // The open song's tags become a filter row; one tag at a time.
-  const songTags = [...new Set(mine.flatMap((t) => t.tags || []))].sort();
+  const songTags = [...new Set(mine.flatMap((t) => t.tags || []))].sort((a, b) => a.localeCompare(b));
   if (capTagFilter && !songTags.includes(capTagFilter)) capTagFilter = '';
   const filt = capEl('cap-tag-filter');
   if (filt) {
