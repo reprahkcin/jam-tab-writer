@@ -366,7 +366,7 @@ function cloudUnlocked() { return mode === 'cloud' || !!lsGet(CLOUD_UNLOCK_KEY);
 
 function loadCloud() {
   if (!cloudLoading) {
-    cloudLoading = import('./cloud.js?v=135').then((m) => (cloud = m));
+    cloudLoading = import('./cloud.js?v=136').then((m) => (cloud = m));
     cloudLoading.catch(() => { cloudLoading = null; }); // offline: try again next time
   }
   return cloudLoading;
@@ -510,14 +510,19 @@ function mergeCloudTakes(local) {
     if (t.shared && cloudTakesLoaded && !cloudTakes.has(t.id)) { void takesDelete(t.id); continue; }
     have.add(t.id);
     const m = cloudTakes.get(t.id);
-    if (m && m.kind) t.kind = m.kind; // refiled by someone else
+    if (m) { // refiled, renamed or tagged by someone else
+      if (m.kind) t.kind = m.kind;
+      if (m.label !== undefined) t.label = m.label;
+      if (m.tags) t.tags = m.tags;
+    }
     t.pending = !t.shared && !!cloudSongIdForTake(t);
     out.push(t);
   }
   for (const m of cloudTakes.values()) {
     if (have.has(m.id)) continue;
     out.push({ id: m.id, songKey: 'local:' + m.songId, songTitle: m.songTitle, ts: m.ts, durMs: m.durMs,
-      ext: m.ext, mime: m.mime, name: m.name, size: m.size, by: m.by, kind: m.kind || '', remote: true });
+      ext: m.ext, mime: m.mime, name: m.name, size: m.size, by: m.by, kind: m.kind || '',
+      label: m.label || '', tags: m.tags || [], remote: true });
   }
   return out;
 }
@@ -6930,24 +6935,11 @@ function capTakeName(title, ext) {
 // same folder you already sync or commit — no export step to remember. It goes
 // into a takes/ subfolder beside the chart rather than loose among the charts.
 async function capWriteToDisk(take) {
-  if (mode !== 'folder' || !take.songKey || !take.songKey.startsWith('lib:')) return false;
-  const s = resolveKey(take.songKey);
-  if (!s || !s.libId) return false;
-  const lib = libraries.find((l) => l.id === s.libId);
-  if (!lib || !lib.handle) return false;
   try {
-    const sub = (s.path || '').split('/').slice(0, -1).join('/');
-    const dir = await resolveDir(lib, joinPath(sub, TAKES_DIR), true);
-    // The takes folder is shared by every chart beside it: never write over a file.
-    const exists = async (n) => { try { await dir.getFileHandle(n); return true; } catch { return false; } };
-    if (await exists(take.name)) {
-      const dot = take.name.lastIndexOf('.');
-      const stem = dot > 0 ? take.name.slice(0, dot) : take.name, ext = dot > 0 ? take.name.slice(dot) : '';
-      let i = 2;
-      while (await exists(`${stem}-${i}${ext}`)) i++;
-      take.name = `${stem}-${i}${ext}`;
-      await takesPut(take);
-    }
+    const dir = await capTakesDir(take, true);
+    if (!dir) return false;
+    const name = await capFreeName(dir, take.name);
+    if (name !== take.name) { take.name = name; await takesPut(take); }
     const fh = await dir.getFileHandle(take.name, { create: true });
     const w = await fh.createWritable();
     await w.write(take.blob);
@@ -6991,10 +6983,127 @@ function captureToggle() { return cap.on ? captureStop() : captureStart(); }
 // ---- Takes list ------------------------------------------------------------
 let takeUrls = [];   // object URLs to revoke on the next render
 let capUnfiledOpen = false; // unfiled takes are folded away while a song is open
+let capTagFilter = '';      // show only takes with this tag ('' = all)
+let capRenderPending = false; // a render held back while a name or tag is being typed
+
+const CAP_TAG_DEFAULTS = ['keeper', 'rough', 'idea'];
+const capAttr = (s) => escapeHtml(String(s)).replace(/"/g, '&quot;');
+const capSlug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+// "Today 14:32", "Yesterday 09:10", "Tue 18:05", "Oct 22 14:32" — enough to
+// tell a run of near-identical takes apart without reading a timestamp.
+function capWhen(ts) {
+  const d = new Date(ts), now = new Date();
+  const clock = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((day(now) - day(d)) / 86400000);
+  if (days === 0) return 'Today ' + clock;
+  if (days === 1) return 'Yesterday ' + clock;
+  if (days > 1 && days < 7) return d.toLocaleDateString(undefined, { weekday: 'short' }) + ' ' + clock;
+  const opts = { month: 'short', day: 'numeric' };
+  if (d.getFullYear() !== now.getFullYear()) opts.year = 'numeric';
+  return d.toLocaleDateString(undefined, opts) + ' ' + clock;
+}
+
+// Each kind is counted oldest-first within its song, so "Take 3" is always the
+// third one recorded, whatever's filtered out or renamed around it.
+function capNumberTakes(list) {
+  const nums = new Map();
+  const counts = {};
+  for (const t of [...list].sort((a, b) => a.ts - b.ts)) {
+    const k = takeKind(t);
+    counts[k] = (counts[k] || 0) + 1;
+    nums.set(t.id, counts[k]);
+  }
+  return nums;
+}
+
+function capLibStatus(msg) {
+  const el2 = capEl('cap-lib-status');
+  if (!el2) return;
+  el2.textContent = msg || '';
+  el2.hidden = !msg;
+}
+
+// Name, tags or kind changed: shared takes change for everyone, then this
+// device's copy follows.
+async function capSaveTakeMeta(t, fields) {
+  if (mode === 'cloud' && (t.shared || t.remote)) {
+    try { await cloud.setTakeMeta(t.id, fields); }
+    catch { alert('Couldn’t update it in the shared library — check your connection.'); return false; }
+    const m = cloudTakes.get(t.id);
+    if (m) Object.assign(m, fields);
+  }
+  const local = (await takesAll()).find((x) => x.id === t.id);
+  if (local) { Object.assign(local, fields); await takesPut(local); }
+  return true;
+}
+
+async function capRenameTake(t, label) {
+  label = label.trim();
+  if (label === (t.label || '')) return;
+  const fields = { label };
+  // A name you chose is a better file name than a timestamp: the file follows,
+  // on disk too, so the takes folder reads the same as the list.
+  if (label) {
+    const base = capSlug(t.songTitle) || 'unfiled';
+    const want = `${base}-${capSlug(label) || 'take'}.${t.ext || 'wav'}`;
+    if (want !== t.name) fields.name = (await capRenameOnDisk(t, want)) || t.name;
+  }
+  await capSaveTakeMeta(t, fields);
+}
+
+// The takes/ folder beside a filed take's chart, in folder mode; else null.
+async function capTakesDir(take, create) {
+  if (mode !== 'folder' || !take.songKey || !take.songKey.startsWith('lib:')) return null;
+  const s = resolveKey(take.songKey);
+  if (!s || !s.libId) return null;
+  const lib = libraries.find((l) => l.id === s.libId);
+  if (!lib || !lib.handle) return null;
+  const sub = (s.path || '').split('/').slice(0, -1).join('/');
+  return resolveDir(lib, joinPath(sub, TAKES_DIR), create);
+}
+
+// The takes folder is shared by every chart beside it: never write over a file.
+async function capFreeName(dir, name) {
+  const exists = async (n) => { try { await dir.getFileHandle(n); return true; } catch { return false; } };
+  if (!(await exists(name))) return name;
+  const dot = name.lastIndexOf('.');
+  const stem = dot > 0 ? name.slice(0, dot) : name, ext = dot > 0 ? name.slice(dot) : '';
+  let i = 2;
+  while (await exists(`${stem}-${i}${ext}`)) i++;
+  return `${stem}-${i}${ext}`;
+}
+
+// Renames the take's file in its takes/ folder and returns the name it ended
+// up with — the wanted one when the take isn't on disk at all, null on failure.
+async function capRenameOnDisk(take, want) {
+  let dir;
+  try { dir = await capTakesDir(take, false); } catch { return null; }
+  if (!dir) return want;
+  let fh;
+  try { fh = await dir.getFileHandle(take.name); } catch { return want; } // never written
+  try {
+    const name = await capFreeName(dir, want);
+    if (fh.move) { await fh.move(name); return name; }
+    const nh = await dir.getFileHandle(name, { create: true });
+    const w = await nh.createWritable();
+    await w.write(await fh.getFile());
+    await w.close();
+    await dir.removeEntry(take.name);
+    return name;
+  } catch {
+    return null; // permission lapsed — keep the old name rather than lose track of the file
+  }
+}
 
 async function renderTakes() {
   const box = capEl('cap-takes');
   if (!box) return;
+  // Re-rendering mid-edit would throw away what's being typed; catch up after.
+  const ae = document.activeElement;
+  if (ae && ae.tagName === 'INPUT' && box.contains(ae)) { capRenderPending = true; return; }
+  capRenderPending = false;
   takeUrls.forEach((u) => URL.revokeObjectURL(u));
   takeUrls = [];
   let all = await takesAll();
@@ -7007,30 +7116,62 @@ async function renderTakes() {
   await Promise.all(mine.filter((t) => t.remote).map(async (t) => { t.url = await cachedTakeUrl(t); }));
   const shown = new Map(all.map((t) => [t.id, t]));
   const unfiled = all.filter((t) => !t.songKey);
+  const nums = new Map([...capNumberTakes(mine), ...capNumberTakes(unfiled)]);
+  const latestId = mine.length ? mine[0].id : null;
+
+  const title = capEl('cap-lib-title');
+  if (title) title.textContent = cur ? (cur.title || 'Untitled') : 'Audio';
   const countEl = capEl('cap-takes-count');
-  if (countEl) countEl.textContent = mine.length ? `${mine.length} for this song` : '';
+  if (countEl) countEl.textContent = mine.length ? String(mine.length) : '';
+  const addBtn = capEl('cap-upload');
+  if (addBtn) {
+    addBtn.disabled = !cur;
+    addBtn.title = cur ? 'Add audio files made elsewhere to this song' : 'Open a song first — added files are filed under it';
+  }
+
+  // Every tag in use anywhere, plus a few starters, for the tag box to offer.
+  const allTags = [...new Set([...CAP_TAG_DEFAULTS, ...all.flatMap((t) => t.tags || [])])].sort();
+  const dl = capEl('cap-tag-list');
+  if (dl) dl.innerHTML = allTags.map((g) => `<option value="${capAttr(g)}"></option>`).join('');
+
+  // The open song's tags become a filter row; one tag at a time.
+  const songTags = [...new Set(mine.flatMap((t) => t.tags || []))].sort();
+  if (capTagFilter && !songTags.includes(capTagFilter)) capTagFilter = '';
+  const filt = capEl('cap-tag-filter');
+  if (filt) {
+    filt.hidden = !songTags.length;
+    filt.innerHTML = songTags.length ? '<span class="cap-filter-label">Show</span>' +
+      [['', 'All'], ...songTags.map((g) => [g, g])].map(([g, text]) =>
+        `<button class="cap-filter${capTagFilter === g ? ' on' : ''}" data-tag="${capAttr(g)}" aria-pressed="${capTagFilter === g}">${escapeHtml(text)}</button>`).join('') : '';
+  }
 
   const me = mode === 'cloud' && cloud ? cloud.userEmail() : null;
-  const kindPick = (t) => `<select class="cap-kind" data-id="${t.id}" title="What this is">` +
+  const kindPick = (t) => `<select class="cap-kind" data-id="${t.id}" title="What this is" aria-label="What this is">` +
     TAKE_KINDS.map(([k, , one]) => `<option value="${k}"${takeKind(t) === k ? ' selected' : ''}>${one}</option>`).join('') + '</select>';
   const row = (t) => {
     let url = t.url || '';
     if (t.blob) { url = URL.createObjectURL(t.blob); takeUrls.push(url); }
-    const when = new Date(t.ts);
-    const clock = String(when.getHours()).padStart(2, '0') + ':' + String(when.getMinutes()).padStart(2, '0');
     const size = t.blob ? t.blob.size : (t.size || 0);
     let extra = '';
-    if (t.pending) extra = takesUploading.has(t.id) ? ' · uploading…' : ' · not uploaded yet';
-    else if (t.by && t.by !== me) extra = ' · ' + t.by.split('@')[0];
+    if (t.pending) extra = takesUploading.has(t.id) ? 'uploading…' : 'not uploaded yet';
+    else if (t.by && t.by !== me) extra = t.by.split('@')[0];
+    const one = TAKE_KINDS.find(([k]) => k === takeKind(t))[2];
+    const n = nums.get(t.id) || 1;
+    const name = t.label || `${one} ${n}`;
+    const tags = (t.tags || []).map((g) =>
+      `<span class="cap-tag">${escapeHtml(g)}<button class="cap-tag-x" data-id="${t.id}" data-tag="${capAttr(g)}" title="Remove tag" aria-label="Remove tag ${capAttr(g)}">&#10005;</button></span>`).join('');
     // A link to another origin can't force a download, so a shared take opens in a tab.
-    const dl = t.blob ? `download="${escapeHtml(t.name)}"` : 'target="_blank" rel="noopener"';
-    return `<div class="cap-take" data-id="${t.id}">` +
+    const dlAttr = t.blob ? `download="${capAttr(t.name)}"` : 'target="_blank" rel="noopener"';
+    const latest = t.id === latestId && mine.length > 1;
+    return `<div class="cap-take${latest ? ' cap-take-latest' : ''}" data-id="${t.id}">` +
+      `<div class="cap-take-top"><span class="cap-take-num" title="${capAttr(one)} ${n} of this song, oldest first">${n}</span>` +
+      `<button class="cap-take-name" data-id="${t.id}" title="${capAttr(t.name)} — click to rename">${escapeHtml(name)}</button>` +
+      (latest ? '<span class="cap-latest">latest</span>' : '') +
+      `<span class="cap-take-sub" title="${(size / 1048576).toFixed(1)} MB">${capWhen(t.ts)} · ${capFmtTime(t.durMs)}${extra ? ' · ' + escapeHtml(extra) : ''}</span></div>` +
       `<audio controls preload="none" src="${url}"></audio>` +
-      `<div class="cap-take-meta"><span class="cap-take-name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span>` +
-      `<span class="cap-take-sub">${capFmtTime(t.durMs)} · ${clock} · ${(size / 1048576).toFixed(1)} MB${escapeHtml(extra)}</span></div>` +
-      `<div class="cap-take-tools">` + (t.songKey ? kindPick(t) : '') +
-      (t.songKey ? '' : `<button class="cap-file" data-id="${t.id}" title="File this take under the current song"${cur ? '' : ' disabled'}>File</button>`) +
-      `<a class="cap-dl" href="${url}" ${dl} title="Download">&#8595;</a>` +
+      `<div class="cap-take-tools"><span class="cap-tags">${tags}<button class="cap-tag-add" data-id="${t.id}" title="Tag this take">+ tag</button></span>` +
+      (t.songKey ? kindPick(t) : `<button class="cap-file" data-id="${t.id}" title="File this take under the current song"${cur ? '' : ' disabled'}>File</button>`) +
+      `<a class="cap-dl" href="${url}" ${dlAttr} title="Download ${capAttr(t.name)}">&#8595;</a>` +
       `<button class="cap-del" data-id="${t.id}" title="Delete this take">&#10005;</button></div></div>`;
   };
 
@@ -7039,12 +7180,12 @@ async function renderTakes() {
   // filed here (that's the only place the File button lives).
   let html = '';
   if (cur) {
-    html += `<div class="cap-group">${escapeHtml(cur.title || 'Untitled')}</div>`;
-    if (!mine.length) html += '<div class="cap-empty">No audio for this song yet. Hit Record, or upload some.</div>';
+    const visible = capTagFilter ? mine.filter((t) => (t.tags || []).includes(capTagFilter)) : mine;
+    if (!mine.length) html += '<div class="cap-empty">No audio for this song yet. Hit Record, or add files.</div>';
     // Grouped by what each file is, in a fixed order; a lone group needs no heading.
-    const kinds = TAKE_KINDS.filter(([k]) => mine.some((t) => takeKind(t) === k));
+    const kinds = TAKE_KINDS.filter(([k]) => visible.some((t) => takeKind(t) === k));
     for (const [k, many] of kinds) {
-      const list = mine.filter((t) => takeKind(t) === k);
+      const list = visible.filter((t) => takeKind(t) === k);
       if (kinds.length > 1) html += `<div class="cap-kind-head">${many} <span class="cap-count">${list.length}</span></div>`;
       html += list.map(row).join('');
     }
@@ -7063,13 +7204,63 @@ async function renderTakes() {
 
   const tog = box.querySelector('.cap-unfiled-toggle');
   if (tog && cur) tog.addEventListener('click', () => { capUnfiledOpen = !capUnfiledOpen; void renderTakes(); });
+  if (filt) filt.querySelectorAll('.cap-filter').forEach((b) => b.addEventListener('click', () => {
+    capTagFilter = b.dataset.tag;
+    void renderTakes();
+  }));
 
+  // Swap a control for a one-line text box; Enter keeps, Esc or leaving cancels
+  // (leaving keeps a rename — clicking away is how most people finish one).
+  const editInline = (anchor, cls, value, onDone, keepOnBlur) => {
+    const inp = document.createElement('input');
+    inp.className = cls;
+    inp.value = value;
+    if (cls === 'cap-tag-input') { inp.setAttribute('list', 'cap-tag-list'); inp.placeholder = 'tag'; }
+    inp.setAttribute('aria-label', cls === 'cap-tag-input' ? 'New tag' : 'Take name');
+    anchor.replaceWith(inp);
+    inp.focus();
+    inp.select();
+    let done = false;
+    const finish = async (keep) => {
+      if (done) return;
+      done = true;
+      inp.blur();
+      if (keep) await onDone(inp.value);
+      void renderTakes();
+    };
+    inp.addEventListener('keydown', (e) => {
+      e.stopPropagation(); // R, ? and friends are letters here
+      if (e.key === 'Enter') { e.preventDefault(); void finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); void finish(false); }
+    });
+    inp.addEventListener('blur', () => { void finish(keepOnBlur && inp.value.trim() !== ''); });
+  };
+
+  box.querySelectorAll('.cap-take-name').forEach((b) => b.addEventListener('click', () => {
+    const t = shown.get(b.dataset.id);
+    if (t) editInline(b, 'cap-name-input', b.textContent, (v) => capRenameTake(t, v), true);
+  }));
+  box.querySelectorAll('.cap-tag-add').forEach((b) => b.addEventListener('click', () => {
+    const t = shown.get(b.dataset.id);
+    if (!t) return;
+    editInline(b, 'cap-tag-input', '', async (v) => {
+      const add = v.split(',').map((g) => g.trim().toLowerCase()).filter(Boolean);
+      const tags = [...new Set([...(t.tags || []), ...add])];
+      if (tags.length !== (t.tags || []).length) await capSaveTakeMeta(t, { tags });
+    }, true);
+  }));
+  box.querySelectorAll('.cap-tag-x').forEach((b) => b.addEventListener('click', async () => {
+    const t = shown.get(b.dataset.id);
+    if (!t) return;
+    await capSaveTakeMeta(t, { tags: (t.tags || []).filter((g) => g !== b.dataset.tag) });
+    void renderTakes();
+  }));
   box.querySelectorAll('.cap-del').forEach((b) => b.addEventListener('click', async () => {
     const t = shown.get(b.dataset.id);
     if (t && mode === 'cloud' && (t.shared || t.remote)) {
-      if (!confirm(`Delete "${t.name}" from the shared library? It goes for everyone.`)) return;
+      if (!confirm(`Delete "${t.label || t.name}" from the shared library? It goes for everyone.`)) return;
       try { await cloud.deleteTake(t); }
-      catch { alert('Couldn\u2019t delete it from the shared library — check your connection.'); return; }
+      catch { alert('Couldn’t delete it from the shared library — check your connection.'); return; }
       cloudTakes.delete(t.id);
     }
     await takesDelete(b.dataset.id);
@@ -7077,16 +7268,7 @@ async function renderTakes() {
   }));
   box.querySelectorAll('.cap-kind').forEach((sel) => sel.addEventListener('change', async () => {
     const t = shown.get(sel.dataset.id);
-    if (!t) return;
-    const kind = sel.value;
-    if (mode === 'cloud' && (t.shared || t.remote)) {
-      try { await cloud.setTakeKind(t.id, kind); }
-      catch { alert('Couldn\u2019t refile it in the shared library — check your connection.'); void renderTakes(); return; }
-      const m = cloudTakes.get(t.id);
-      if (m) m.kind = kind;
-    }
-    const local = (await takesAll()).find((x) => x.id === t.id);
-    if (local) { local.kind = kind; await takesPut(local); }
+    if (t) await capSaveTakeMeta(t, { kind: sel.value });
     void renderTakes();
   }));
   box.querySelectorAll('.cap-file').forEach((b) => b.addEventListener('click', async () => {
@@ -7128,7 +7310,7 @@ const UPLOAD_MAX = 500 * 1024 * 1024; // the shared library's limit per file (st
 
 async function uploadAudioFiles(files, kind) {
   const s = currentSong();
-  if (!s) { capSetStatus('Open a song first — uploads are filed under it.'); return; }
+  if (!s) { capLibStatus('Open a song first — added files are filed under it.'); return; }
   const base = (s.title || 'untitled').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'song';
   const skipped = [];
   let added = 0;
@@ -7137,7 +7319,7 @@ async function uploadAudioFiles(files, kind) {
     const mime = f.type && f.type.startsWith('audio/') ? f.type : AUDIO_EXT_MIME[ext];
     if (!mime) { skipped.push(`${f.name} (not audio)`); continue; }
     if (f.size >= UPLOAD_MAX) { skipped.push(`${f.name} (over 500 MB)`); continue; }
-    capSetStatus(`Adding ${f.name}…`);
+    capLibStatus(`Adding ${f.name}…`);
     const take = {
       id: 't' + Date.now().toString(36) + crypto.getRandomValues(new Uint32Array(1))[0].toString(36),
       songKey: songKey(s),
@@ -7149,6 +7331,8 @@ async function uploadAudioFiles(files, kind) {
       // The song's name first, like a recorded take, so files sort by song on disk.
       name: f.name.toLowerCase().startsWith(base) ? f.name : `${base}-${f.name}`,
       kind,
+      // Its own file name says what it is better than "Demo 2" would.
+      label: f.name.replace(/\.[^.]+$/, ''),
       blob: f,
     };
     await takesPut(take);
@@ -7157,7 +7341,7 @@ async function uploadAudioFiles(files, kind) {
   }
   void uploadPendingTakes();
   const what = TAKE_KINDS.find(([k]) => k === kind)[2].toLowerCase();
-  capSetStatus((added ? `Added ${added} ${what} file${added === 1 ? '' : 's'} to ${s.title || 'this song'}` +
+  capLibStatus((added ? `Added ${added} ${what} file${added === 1 ? '' : 's'} to ${s.title || 'this song'}` +
     (mode === 'cloud' ? ' — uploading to the shared library.' : '.') : 'Nothing added.') +
     (skipped.length ? ` Skipped ${skipped.join(', ')}.` : ''));
   void renderTakes();
@@ -7451,11 +7635,47 @@ document.getElementById('dict-install').addEventListener('click', dictInstallMod
 // itself entirely where dictation can't run.
 void dictRefreshModel();
 document.getElementById('cap-toggle').addEventListener('click', captureToggle);
-document.getElementById('cap-upload').addEventListener('click', () => document.getElementById('cap-upload-file').click());
+// Adding files is its own job, away from the record button: pick what they
+// are, then pick the files.
+let capUploadKind = 'demo';
+function capAddMenu(open) {
+  const menu = document.getElementById('cap-add-menu');
+  menu.hidden = !open;
+  document.getElementById('cap-upload').setAttribute('aria-expanded', String(open));
+}
+document.getElementById('cap-upload').addEventListener('click', (e) => {
+  e.stopPropagation();
+  capAddMenu(document.getElementById('cap-add-menu').hidden);
+});
+document.querySelectorAll('#cap-add-menu [data-kind]').forEach((b) => b.addEventListener('click', () => {
+  capUploadKind = b.dataset.kind;
+  capAddMenu(false);
+  document.getElementById('cap-upload-file').click();
+}));
+document.addEventListener('click', (e) => {
+  if (!e.target.closest || !e.target.closest('.cap-add')) capAddMenu(false);
+});
+document.getElementById('cap-add-menu').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { e.stopPropagation(); capAddMenu(false); document.getElementById('cap-upload').focus(); }
+});
 document.getElementById('cap-upload-file').addEventListener('change', (e) => {
   const files = [...e.target.files];
   e.target.value = ''; // the same file can be picked again
-  if (files.length) void uploadAudioFiles(files, document.getElementById('cap-upload-kind').value);
+  if (files.length) void uploadAudioFiles(files, capUploadKind);
+});
+// A roomier panel for sorting through a session's takes.
+function capPaintExpand() {
+  const on = !!prefs.capture.expanded;
+  document.getElementById('capture-panel').classList.toggle('cap-expanded', on);
+  const b = document.getElementById('cap-expand');
+  b.setAttribute('aria-pressed', String(on));
+  b.title = on ? 'Smaller panel' : 'Bigger panel';
+}
+capPaintExpand();
+document.getElementById('cap-expand').addEventListener('click', () => {
+  prefs.capture.expanded = !prefs.capture.expanded;
+  savePrefs();
+  capPaintExpand();
 });
 document.getElementById('cap-device').addEventListener('change', (e) => {
   prefs.capture.deviceId = e.target.value || null;
@@ -7474,7 +7694,7 @@ document.getElementById('cap-format').addEventListener('change', (e) => {
 if (navigator.mediaDevices && 'ondevicechange' in navigator.mediaDevices) {
   navigator.mediaDevices.addEventListener('devicechange', () => capLoadDevices());
 }
-document.querySelectorAll('.tool-close').forEach((b) => b.addEventListener('click', () => toggleTool(b.dataset.tool)));
+document.querySelectorAll('.tool-close[data-tool]').forEach((b) => b.addEventListener('click', () => toggleTool(b.dataset.tool)));
 document.getElementById('metro-up').addEventListener('click', () => setBpm(metro.bpm + 1));
 document.getElementById('metro-down').addEventListener('click', () => setBpm(metro.bpm - 1));
 document.getElementById('metro-slider').addEventListener('input', (e) => setBpm(+e.target.value));
