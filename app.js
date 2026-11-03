@@ -2997,7 +2997,7 @@ function openWordPopup() {
   wordPopup = wp;
   ta.focus();
   renderWordPopup();
-  loadWordTab();
+  void loadWordTab();
   lookupWords('sp', target.word).then((list) => {
     if (wordPopup !== wp || !list.length || list[0].w !== target.word.toLowerCase()) return;
     wp.syl = list[0].s;
@@ -3030,7 +3030,7 @@ function setWordTab(tab) {
   const wp = wordPopup;
   if (!wp) return;
   wp.tab = wordTabPref = (tab + WORD_TABS.length) % WORD_TABS.length;
-  loadWordTab();
+  void loadWordTab();
 }
 
 function renderWordPopup() {
