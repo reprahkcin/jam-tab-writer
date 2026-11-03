@@ -194,7 +194,7 @@ function tourSteps(exampleStays) {
       text: `This song’s chords, numbered. Click one, or press <kbd>${A}1</kbd>–<kbd>9</kbd>, to put it at the cursor. ` +
         '<b>[ ]</b>, or typing <kbd>[</kbd>, searches every chord there is. <b>Replace…</b> swaps one chord for another all through the song.' },
     { el: '.editor-pane .pane-head', where: 'edit', title: 'Editor tools',
-      text: `<b>Words</b> (or <kbd>${A}W</kbd>) finds synonyms and rhymes for the word at the cursor, and swaps one in with its chords kept. ` +
+      text: `<b>Words</b> (or <kbd>${A}W</kbd>, or right-click a word) finds synonyms and rhymes for the word at the cursor, and swaps one in with its chords kept. ` +
         '<b>Page break</b> starts a new printed page. <b>Dictate</b>, where your browser can, types what you sing. ' +
         '<b>Reprocess</b> tidies an imported chart, and <b>Clear chords</b> strips them so you can write new ones.' },
     { el: '#riffs-authoring', where: 'edit', title: 'Parts',

@@ -458,8 +458,9 @@ in a strip above the editor until the engine commits them.
 
 ## Synonyms and rhymes
 
-Put the cursor on a word, or select a few, and press **Alt/⌥+W** (or hit
-**Words** above the editor). A small popup opens under the word with three
+Right-click a word, or put the cursor on it (or select a few) and press
+**Alt/⌥+W** or hit **Words** above the editor. **Shift+right-click** still
+brings up the system menu (with the Mac's own Look Up). A small popup opens under the word with three
 lists: **Similar** words, **Rhymes** and **Near rhymes**. **←/→** switches list,
 **↑/↓** picks, **Enter** swaps the word in and **Esc** closes.
 

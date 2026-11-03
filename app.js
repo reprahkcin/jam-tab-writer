@@ -5418,6 +5418,17 @@ wordsBtn.title = `Synonyms and rhymes for the word at the cursor (${ALT_LABEL}W)
 wordsBtn.addEventListener('mousedown', (e) => e.preventDefault());   // keep the caret where it is
 wordsBtn.addEventListener('click', openWordPopup);
 
+// Right-click on a lyric word opens Words in place of the system menu (which on
+// a Mac has its own Look Up). Shift+right-click, a second right-click, or one
+// off a word still gets the system menu; touch long-press is left alone.
+el.editor.addEventListener('contextmenu', (e) => {
+  if (e.shiftKey || !matchMedia('(pointer: fine)').matches) return;
+  if (wordPopup) { closeWordPopup(); return; }
+  if (!currentSong() || !wordAtCaret(el.editor)) return;
+  e.preventDefault();
+  openWordPopup();
+});
+
 // ---- Performance mode ------------------------------------------------------
 // A full-screen overlay that lays the current song's chords-over-lyrics out in
 // N newspaper columns (whole song visible when it fits), with horizontal paging
@@ -5722,7 +5733,7 @@ function renderHelp() {
     ['Editor', [
       [['[', C + 'K'], 'Search & insert a chord'],
       [[A + '1–9'], 'Insert the numbered palette chord'],
-      [[A + 'W'], 'Synonyms & rhymes for the word at the cursor'],
+      [[A + 'W', 'Right-click'], 'Synonyms & rhymes for the word at the cursor'],
       [[A + '↑', A + '↓'], 'Move line(s) up / down'],
       [[S + A + '↑', S + A + '↓'], 'Duplicate line(s) up / down'],
       [['Tab'], 'Insert two spaces'],
@@ -5745,6 +5756,7 @@ function renderHelp() {
       [['←', '→'], 'Similar / Rhymes / Near rhymes'],
       [['Enter', 'Tab'], 'Swap the word in'],
       [['Esc'], 'Close'],
+      [[S + 'Right-click'], 'The system menu instead'],
     ]],
     ['Layout', [
       [[C + A + '1'], 'Split view'],
