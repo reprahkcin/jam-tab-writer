@@ -2884,6 +2884,214 @@ function closeChordPopup() {
   chordPopup = null;
 }
 
+// ---- Words: synonyms and rhymes for the lyric at the caret -----------------
+// Looked up on Datamuse (free, no key, CORS-open). Answers are kept in this
+// browser, newest last, so a word looked up once still works offline.
+const WORDS_CACHE_KEY = 'gtw.words';
+const WORDS_CACHE_MAX = 300;
+const WORD_TABS = [
+  { rel: 'ml', label: 'Similar' },
+  { rel: 'rel_rhy', label: 'Rhymes' },
+  { rel: 'rel_nry', label: 'Near rhymes' },
+];
+const WORD_CH = /[A-Za-zÀ-ɏ'’]/;
+const WORD_LETTER = /[A-Za-zÀ-ɏ]/;
+let wordPopup = null;   // { target, tab, items, active, syl, status, el } while open
+let wordTabPref = 0;    // the tab the popup last showed, reopened next time
+let wordsCache = null;  // Map of 'rel:word' → [{ w, s }], loaded on first use
+
+function wordsCacheMap() {
+  if (!wordsCache) {
+    let obj;
+    try { obj = JSON.parse(lsGet(WORDS_CACHE_KEY) || '{}') || {}; } catch { obj = {}; }
+    wordsCache = new Map(Object.entries(obj));
+  }
+  return wordsCache;
+}
+
+function wordsCachePut(key, list) {
+  const m = wordsCacheMap();
+  m.delete(key);
+  m.set(key, list);
+  while (m.size > WORDS_CACHE_MAX) m.delete(m.keys().next().value);
+  lsSet(WORDS_CACHE_KEY, JSON.stringify(Object.fromEntries(m)));
+}
+
+// rel is a Datamuse relation: ml (means like), rel_rhy, rel_nry, or sp (the
+// word itself, for its syllable count). Each word comes with its syllables.
+async function lookupWords(rel, word) {
+  const key = rel + ':' + word.toLowerCase();
+  const m = wordsCacheMap();
+  if (m.has(key)) return m.get(key);
+  const max = rel === 'sp' ? 1 : 40;
+  const res = await fetch(`https://api.datamuse.com/words?${rel}=${encodeURIComponent(word)}&md=s&max=${max}`);
+  if (!res.ok) throw new Error('word lookup failed: ' + res.status);
+  const list = (await res.json()).map((d) => ({ w: d.word, s: d.numSyllables || 0 }));
+  wordsCachePut(key, list);
+  return list;
+}
+
+// Index into the lyric (chords lifted out) for an index into the raw line. An
+// index inside a [chord] lands on the chord's column.
+function lyricIndex(raw, i) {
+  const re = /\[[^\[\]]*\]/g;
+  let skipped = 0, m;
+  while ((m = re.exec(raw)) !== null && m.index < i) skipped += Math.min(m[0].length, i - m.index);
+  return i - skipped;
+}
+
+// The inverse, for a lyric column given the line's chords: a chord at the
+// column itself sits after it.
+function rawIndex(pos, chords) {
+  return chords.reduce((n, c) => (c.pos < pos ? n + c.token.length + 2 : n), pos);
+}
+
+// The word under the caret, or the words selected on one line, as a range in
+// the lyric with the chords lifted out, so [G]Hel[D]lo looks up "Hello".
+function wordAtCaret(ta) {
+  const val = ta.value;
+  const a = ta.selectionStart, b = ta.selectionEnd;
+  const lineStart = val.lastIndexOf('\n', a - 1) + 1;
+  let lineEnd = val.indexOf('\n', a);
+  if (lineEnd === -1) lineEnd = val.length;
+  if (b > lineEnd) return null;
+  const raw = val.slice(lineStart, lineEnd);
+  if (/^\s*\{.*\}\s*$/.test(raw)) return null;   // a {section} or directive line
+  const { lyric, chords } = parseLineChords(raw);
+  let from = lyricIndex(raw, a - lineStart), to = lyricIndex(raw, b - lineStart);
+  if (from === to) {
+    while (from > 0 && WORD_CH.test(lyric[from - 1])) from--;
+    while (to < lyric.length && WORD_CH.test(lyric[to])) to++;
+  }
+  while (from < to && !WORD_LETTER.test(lyric[from])) from++;
+  while (to > from && !WORD_LETTER.test(lyric[to - 1])) to--;
+  if (from === to) return null;
+  return { lineStart, lineEnd, lyric, chords, from, to, word: lyric.slice(from, to) };
+}
+
+// "Fire" → "Flame", "FIRE" → "FLAME", "fire" → "flame".
+function matchWordCase(next, like) {
+  if (like.length > 1 && like === like.toUpperCase() && like !== like.toLowerCase()) return next.toUpperCase();
+  if (like[0] !== like[0].toLowerCase()) return next[0].toUpperCase() + next.slice(1);
+  return next;
+}
+
+function openWordPopup() {
+  if (!currentSong()) return;
+  const ta = el.editor;
+  const target = wordAtCaret(ta);
+  if (!target) { editorNote('Put the cursor on a word, or select one, to find synonyms and rhymes.'); return; }
+  closeChordPopup();
+  closeWordPopup();
+  const wp = { target, tab: wordTabPref, items: [], active: 0, syl: 0, status: '', el: document.createElement('div') };
+  wp.el.className = 'word-pop';
+  // Keep focus (and the caret) in the editor while the popup is used.
+  wp.el.addEventListener('mousedown', (e) => e.preventDefault());
+  wp.el.addEventListener('click', (e) => {
+    const tab = e.target.closest('[data-tab]');
+    if (tab) { setWordTab(+tab.dataset.tab); return; }
+    const item = e.target.closest('[data-i]');
+    if (item) applyWord(wp.items[+item.dataset.i].w);
+  });
+  document.body.appendChild(wp.el);
+  wordPopup = wp;
+  ta.focus();
+  renderWordPopup();
+  loadWordTab();
+  lookupWords('sp', target.word).then((list) => {
+    if (wordPopup !== wp || !list.length || list[0].w !== target.word.toLowerCase()) return;
+    wp.syl = list[0].s;
+    renderWordPopup();
+  }).catch(() => { /* the count is a nicety; the lists say if the lookup failed */ });
+}
+
+async function loadWordTab() {
+  const wp = wordPopup;
+  const tab = wp.tab;
+  wp.items = [];
+  wp.active = 0;
+  wp.status = 'Looking up…';
+  renderWordPopup();
+  let status = '';
+  try {
+    const self = wp.target.word.toLowerCase();
+    wp.items = (await lookupWords(WORD_TABS[tab].rel, wp.target.word)).filter((d) => d.w !== self);
+    if (!wp.items.length) status = 'No matches.';
+  } catch {
+    wp.items = [];
+    status = 'Couldn’t reach the word service. Words you’ve looked up before still work offline.';
+  }
+  if (wordPopup !== wp || wp.tab !== tab) return;   // closed, or moved to another tab meanwhile
+  wp.status = status;
+  renderWordPopup();
+}
+
+function setWordTab(tab) {
+  const wp = wordPopup;
+  if (!wp) return;
+  wp.tab = wordTabPref = (tab + WORD_TABS.length) % WORD_TABS.length;
+  loadWordTab();
+}
+
+function renderWordPopup() {
+  const wp = wordPopup;
+  if (!wp) return;
+  const sylLabel = (n) => (n === 1 ? '1 syllable' : n + ' syllables');
+  wp.el.innerHTML =
+    `<div class="word-pop-head"><b>${escapeHtml(wp.target.word)}</b>` +
+      (wp.syl ? `<span class="word-pop-syl">${sylLabel(wp.syl)}</span>` : '') + '</div>' +
+    '<div class="word-pop-tabs" role="tablist">' + WORD_TABS.map((t, i) =>
+      `<button type="button" role="tab" data-tab="${i}" aria-selected="${i === wp.tab}" tabindex="-1">${t.label}</button>`).join('') +
+    '</div>' +
+    '<div class="word-pop-list" role="listbox">' + wp.items.map((d, i) =>
+      `<div class="word-pop-item${i === wp.active ? ' active' : ''}${wp.syl && d.s === wp.syl ? ' same-syl' : ''}" role="option" data-i="${i}"` +
+      ` aria-selected="${i === wp.active}"><span>${escapeHtml(d.w)}</span><span class="word-pop-n" title="${sylLabel(d.s)}">${d.s || ''}</span></div>`).join('') +
+    '</div>' +
+    (wp.status ? `<div class="word-pop-status">${escapeHtml(wp.status)}</div>` : '');
+  const act = wp.el.querySelector('.word-pop-item.active');
+  if (act) act.scrollIntoView({ block: 'nearest' });
+  // Under the word, kept on screen; above it when there's no room below.
+  const t = wp.target;
+  const { top, left } = caretCoords(el.editor, t.lineStart + rawIndex(t.from, t.chords));
+  const w = wp.el.offsetWidth, h = wp.el.offsetHeight;
+  const lh = Number.parseFloat(getComputedStyle(el.editor).lineHeight) || 24;
+  wp.el.style.left = Math.max(8, Math.min(left, innerWidth - w - 8)) + 'px';
+  wp.el.style.top = (top + h > innerHeight - 8 ? Math.max(8, top - lh - h) : top) + 'px';
+}
+
+function moveWordActive(d) {
+  const wp = wordPopup;
+  if (!wp || !wp.items.length) return;
+  wp.active = (wp.active + d + wp.items.length) % wp.items.length;
+  renderWordPopup();
+}
+
+// Swap the word in, keeping its chords: a chord inside the word keeps its
+// letter (or the new word's last), and chords after it slide with the text.
+function applyWord(choice) {
+  const wp = wordPopup;
+  if (!wp) return;
+  const { lineStart, lineEnd, lyric, chords, from, to, word } = wp.target;
+  const next = matchWordCase(choice, word);
+  const delta = next.length - (to - from);
+  const moved = chords.map((c) => {
+    if (c.pos >= to) return { ...c, pos: c.pos + delta };
+    if (c.pos > from) return { ...c, pos: Math.min(c.pos, from + next.length - 1) };
+    return c;
+  });
+  const end = from + next.length;
+  closeWordPopup();
+  const ta = el.editor;
+  replaceRange(ta, lineStart, lineEnd, buildLineChords(lyric.slice(0, from) + next + lyric.slice(to), moved));
+  const caret = lineStart + rawIndex(end, moved);
+  ta.setSelectionRange(caret, caret);
+}
+
+function closeWordPopup() {
+  if (wordPopup) wordPopup.el.remove();
+  wordPopup = null;
+}
+
 // Pin chords onto the palette before the chart mentions them. Returns true if
 // every token was a chord (all-or-nothing, so one typo in a pasted row doesn't
 // half-apply); duplicates are folded in silently.
@@ -4162,6 +4370,7 @@ el.editor.addEventListener('input', () => {
   clearTimeout(auxTimer);
   auxTimer = setTimeout(() => { if (currentSong()) renderPreview(); }, 250);
   if (chordPopup) renderChordPopup(); // re-filter as you type inside [ … ]
+  if (wordPopup) closeWordPopup();       // the word it was opened on may be gone
   highlightCaretLine(); // the instant re-render above wiped the caret echo
 });
 
@@ -5147,6 +5356,26 @@ el.editor.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.preventDefault(); cancelChordPopup(); return; }
     // other keys fall through; keyup/input re-filter the list
   }
+  // The words popup owns the arrows, enter, tab and escape; typing closes it.
+  if (wordPopup) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); moveWordActive(1); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); moveWordActive(-1); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); setWordTab(wordPopup.tab + 1); return; }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); setWordTab(wordPopup.tab - 1); return; }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      const d = wordPopup.items[wordPopup.active];
+      if (d) applyWord(d.w); else closeWordPopup();
+      return;
+    }
+    if (e.key === 'Escape') { e.preventDefault(); closeWordPopup(); return; }
+    if (!['Shift', 'Alt', 'Meta', 'Control'].includes(e.key)) closeWordPopup();
+  }
+  // Alt/Option + W : synonyms and rhymes for the word at the caret. e.code, as
+  // Option remaps the character on Mac.
+  if (e.altKey && !e.metaKey && !e.ctrlKey && e.code === 'KeyW') {
+    e.preventDefault(); openWordPopup(); return;
+  }
   // Alt/Option + 1–9 : drop the Nth palette chord at the caret. Use e.code so the
   // digit is layout-independent (Alt often remaps the character on Mac).
   if (e.altKey && !e.metaKey && !e.ctrlKey && /^Digit[1-9]$/.test(e.code)) {
@@ -5178,8 +5407,16 @@ el.editor.addEventListener('keydown', (e) => {
 
 // Keep the popup in sync as the caret moves (arrows, clicks) or focus leaves.
 el.editor.addEventListener('keyup', () => { if (chordPopup) renderChordPopup(); });
-el.editor.addEventListener('click', () => { if (chordPopup) renderChordPopup(); });
-el.editor.addEventListener('blur', () => { if (chordPopup) setTimeout(closeChordPopup, 120); });
+el.editor.addEventListener('click', () => { if (chordPopup) renderChordPopup(); closeWordPopup(); });
+el.editor.addEventListener('blur', () => {
+  if (chordPopup) setTimeout(closeChordPopup, 120);
+  if (wordPopup) setTimeout(() => { if (document.activeElement !== el.editor) closeWordPopup(); }, 150);
+});
+
+const wordsBtn = document.getElementById('words-btn');
+wordsBtn.title = `Synonyms and rhymes for the word at the cursor (${ALT_LABEL}W)`;
+wordsBtn.addEventListener('mousedown', (e) => e.preventDefault());   // keep the caret where it is
+wordsBtn.addEventListener('click', openWordPopup);
 
 // ---- Performance mode ------------------------------------------------------
 // A full-screen overlay that lays the current song's chords-over-lyrics out in
@@ -5485,6 +5722,7 @@ function renderHelp() {
     ['Editor', [
       [['[', C + 'K'], 'Search & insert a chord'],
       [[A + '1–9'], 'Insert the numbered palette chord'],
+      [[A + 'W'], 'Synonyms & rhymes for the word at the cursor'],
       [[A + '↑', A + '↓'], 'Move line(s) up / down'],
       [[S + A + '↑', S + A + '↓'], 'Duplicate line(s) up / down'],
       [['Tab'], 'Insert two spaces'],
@@ -5501,6 +5739,12 @@ function renderHelp() {
       [['↑', '↓'], 'Move selection'],
       [['Enter', 'Tab'], 'Insert chord'],
       [['Esc'], 'Cancel'],
+    ]],
+    ['Words popup', [
+      [['↑', '↓'], 'Move selection'],
+      [['←', '→'], 'Similar / Rhymes / Near rhymes'],
+      [['Enter', 'Tab'], 'Swap the word in'],
+      [['Esc'], 'Close'],
     ]],
     ['Layout', [
       [[C + A + '1'], 'Split view'],

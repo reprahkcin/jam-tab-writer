@@ -716,6 +716,48 @@ main { display: flex; flex: 1; min-height: 0; }
 .chord-pop-item.active { background: var(--accent); color: var(--bg); }
 .chord-pop-item.active:hover { background: var(--accent); }
 
+/* Synonyms and rhymes for the word at the caret (see openWordPopup). */
+.word-pop {
+  position: fixed;
+  z-index: 1300;
+  width: 240px;
+  padding: 6px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  font-size: 13px;
+}
+.word-pop-head { display: flex; align-items: baseline; gap: 8px; padding: 2px 6px 6px; }
+.word-pop-syl { color: var(--muted); font-size: 11px; }
+.word-pop-tabs { display: flex; gap: 2px; margin-bottom: 4px; }
+.word-pop-tabs button {
+  flex: 1;
+  padding: 3px 4px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.word-pop-tabs button[aria-selected="true"] { background: var(--panel-2); color: var(--text); }
+.word-pop-list { max-height: 220px; overflow-y: auto; }
+.word-pop-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.word-pop-item:hover { background: var(--panel-2); }
+.word-pop-item.active { background: var(--accent); color: var(--bg); }
+.word-pop-item.same-syl > span:first-child { font-weight: 700; }
+.word-pop-n { color: var(--muted); font-family: var(--mono); font-size: 11px; }
+.word-pop-item.active .word-pop-n { color: inherit; }
+.word-pop-status { padding: 6px; color: var(--muted); font-size: 12px; }
+
 #editor {
   flex: 1;
   resize: none;

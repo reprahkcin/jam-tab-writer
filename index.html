@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1" />
   <meta name="theme-color" content="#1e1e1e" />
   <link rel="stylesheet" href="vendor/driver/driver.css?v=1" />
-  <link rel="stylesheet" href="styles.css?v=136" />
+  <link rel="stylesheet" href="styles.css?v=137" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -196,6 +196,7 @@
             <span>Editor</span>
             <span class="hint">
               <button id="dictate-btn" class="inline-btn dict-btn" title="Speak lyrics into the editor (D to start, Esc to stop)" hidden>&#127908; Dictate</button>
+              <button id="words-btn" class="inline-btn">Words</button>
               <button id="pagebreak-btn" class="inline-btn" title="Insert a page break at the cursor">Page break</button>
               <span id="editor-note" class="ed-note" hidden></span>
               <!-- Chart-wide cleanup: rarely used, so it sits last and quiet. -->
@@ -712,15 +713,15 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=136"></script>
+  <script src="chords.js?v=137"></script>
   <!-- After chords.js: the theory charts are drawn with its renderers. -->
-  <script src="learn.js?v=136"></script>
-  <script src="pdf2cho.js?v=136"></script>
-  <script src="qr.js?v=136"></script>
+  <script src="learn.js?v=137"></script>
+  <script src="pdf2cho.js?v=137"></script>
+  <script src="qr.js?v=137"></script>
   <!-- The guided tour: driver.js 1.8.0 (MIT, vendored), then the example song and tour steps. -->
   <script src="vendor/driver/driver.js?v=1"></script>
-  <script src="tour.js?v=136"></script>
-  <script src="band.js?v=136"></script>
-  <script src="app.js?v=136"></script>
+  <script src="tour.js?v=137"></script>
+  <script src="band.js?v=137"></script>
+  <script src="app.js?v=137"></script>
 </body>
 </html>

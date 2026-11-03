@@ -71,7 +71,7 @@ Controls live with the thing they act on, so the top row is short:
 | Header | **Metronome**, **Tuner**, **Record** (the button lights while its panel is open; Record turns red while a take is rolling), then **Learn**, **Perform** (filled — the one you hit mid-song) and **?** — Help: the tour, the example song and the keyboard shortcuts |
 | Songs sidebar | **New** and **Import** in its head — the two ways to add a song — and under them one **source picker** saying where the songs live: *Saved in this browser*, or your **Collection** and open folders. Pick an option to set up a Collection or open a folder; in folder mode **Reopen** appears when saved folders are waiting on a permission click. **Setlists** sits beside the search box, above the list it draws from |
 | Song strip | Row 1: title, artist, the save breadcrumb (folder mode) and the **View** switch. Row 2: three cards — **Key** (shapes · transpose · capo, what it sounds in, and **Apply to text**), **Tempo** (with the song's **time signature** and **Count in**), **Tuning** |
-| Editor head | **Dictate**, **Page break**, then the chart-wide cleanup — **Reprocess**, **Clear chords** — quiet at the far end |
+| Editor head | **Dictate**, **Words**, **Page break**, then the chart-wide cleanup — **Reprocess**, **Clear chords** — quiet at the far end |
 | Chart pane head | Two tabs — **Chart** and **Reference** — then **Numbers**, then the ways a chart leaves the room: **Share**, **Export**, **Print ▾**. In the Preview view, where both columns show, the tabs give way to a **Reference** tick box that puts the reference column away |
 
 Two dividers are draggable: the strip between the song list and the workspace
@@ -455,6 +455,23 @@ in a strip above the editor until the engine commits them.
 - **Cmd/Ctrl+Z** steps back through dictated text like anything you typed.
 - Note the speech API offers **no input selection** — unlike Record, it always
   uses your *system default* input, so set that to the mic you're speaking into.
+
+## Synonyms and rhymes
+
+Put the cursor on a word, or select a few, and press **Alt/⌥+W** (or hit
+**Words** above the editor). A small popup opens under the word with three
+lists: **Similar** words, **Rhymes** and **Near rhymes**. **←/→** switches list,
+**↑/↓** picks, **Enter** swaps the word in and **Esc** closes.
+
+- **Syllables for the meter** — every word shows its syllable count, and the
+  ones that match the word you're replacing are in bold.
+- **Chords stay put** — `[G]Hel[D]lo` looks up *Hello*; swapping in another
+  word keeps each chord on its letter (or the new word's last), and the chords
+  after it slide along. Capitals follow the original (*Fire* → *Flame*).
+- **Cmd/Ctrl+Z** undoes a swap.
+- **Online, then cached** — words come from [Datamuse](https://www.datamuse.com/api/),
+  a free service; only the word you look up is sent. The last 300 answers are
+  kept in this browser, so a word you've looked up before works offline.
 
 ## Metronome & tuner
 
