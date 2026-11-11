@@ -236,7 +236,10 @@ are. They let in only the email addresses on the list.
   it. Ungrouped songs start unticked, since they'd land loose in the folder.
   Files the library doesn't have are left alone, and nothing is deleted. Opening
   that folder and then the shared library again finds every song where it left,
-  so the round trip adds nothing. Takes and album details stay in the library.
+  so the round trip adds nothing. When the album's folder is part of the save, its
+  Details (Direction, Constraints, Notes) go with it as `album-notes.md` in that
+  folder; copying the folder back in reads only `.cho` files, so the notes never
+  come back as a song. Takes and the checklist stay in the library.
 
 ### The band: invite link, tour and album board
 

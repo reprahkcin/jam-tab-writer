@@ -1197,11 +1197,14 @@ function openCopyPreview(plan, where) {
 // folder whose path passes through a folder of the picked folder's name starts
 // below it: picking the repo a folder was copied in from writes back into it,
 // rather than into a second copy of the repo nested inside.
-function pullPathOf(s, used, rootName) {
-  let segs = normGroup(s.group).split('/').filter(Boolean);
+function pullDirOf(group, rootName) {
+  let segs = normGroup(group).split('/').filter(Boolean);
   const at = rootName ? segs.indexOf(rootName) : -1;
   if (at >= 0) segs = segs.slice(at + 1);
-  const dir = segs.map(safeSegment).join('/');
+  return segs.map(safeSegment).join('/');
+}
+function pullPathOf(s, used, rootName) {
+  const dir = pullDirOf(s.group, rootName);
   const taken = used.get(dir) || new Set();
   used.set(dir, taken);
   const stem = safeSegment((s.order || '').trim());
@@ -1228,13 +1231,33 @@ function pullScopeSongs(scope) {
     .sort((a, b) => normGroup(a.group).localeCompare(normGroup(b.group)) || songOrder(a, b));
 }
 
+// The album board's Details (direction, constraints, notes) as album-notes.md
+// in the album's folder, when `scope` covers the album. Copying a folder in
+// reads only .cho files, so the notes never come back as a song. Leaves out
+// who edited and when, so saving twice in a row writes nothing new.
+function albumNotesFile(scope, rootName) {
+  const album = typeof bandAlbum === 'function' ? bandAlbum() : '';
+  scope = normGroup(scope);
+  if (!album || (scope && album !== scope && !album.startsWith(scope + '/'))) return null;
+  const parts = ALBUM_FIELDS.map((f) => [f.label, ((albumDetails[f.key] || {}).text || '').trim()])
+    .filter(([, text]) => text);
+  if (!parts.length) return null;
+  const text = `# ${album.split('/').pop()}\n\n` +
+    parts.map(([label, body]) => `## ${label}\n\n${body}\n`).join('\n');
+  const dir = pullDirOf(album, rootName);
+  const name = 'album-notes.md';
+  return { s: { title: 'Album notes', group: album }, p: { dir, name, path: dir ? dir + '/' + name : name }, text };
+}
+
 // What writing `list` into `root` would do: each file new, changed or the same.
-async function planPull(list, root) {
+// `scope` decides whether the album's notes go too (see albumNotesFile).
+async function planPull(list, root, scope) {
   const used = new Map();
   const plan = { adds: [], changes: [], same: 0 };
-  for (const s of list) {
-    const p = pullPathOf(s, used, root.name);
-    const text = songToCho(s);
+  const files = list.map((s) => ({ s, p: pullPathOf(s, used, root.name), text: songToCho(s) }));
+  const notes = albumNotesFile(scope, root.name);
+  if (notes) files.push(notes);
+  for (const { s, p, text } of files) {
     let old = null;
     try {
       let dir = root;
@@ -1337,7 +1360,7 @@ async function pullToFolder(scope) {
   try { root = await window.showDirectoryPicker({ mode: 'readwrite', id: 'gtw-pull', startIn: 'documents' }); }
   catch { return; } // cancelled
   el.status.textContent = 'Comparing with the folder…';
-  const plan = await planPull(list, root);
+  const plan = await planPull(list, root, scope);
   el.status.textContent = '';
   const picked = await openPullPreview(plan, root.name, normGroup(scope));
   if (!picked || !picked.length) return;
