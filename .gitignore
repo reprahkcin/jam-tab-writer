@@ -11,3 +11,6 @@ __pycache__/
 
 # Playwright MCP run artifacts (console logs, page snapshots).
 .playwright-mcp/
+
+# Local scratch: screenshots, recordings, patches.
+.temp/
