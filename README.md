@@ -223,6 +223,20 @@ are. They let in only the email addresses on the list.
   and stays where you are.
 - **Two people on one song**: an edit from someone else replaces the open copy
   unless you've changed it more recently, in which case your next save wins.
+- **Saving back down to a folder**: the source picker's **Save “<folder>” to
+  a folder…** (the folder **+ New** points at) or **Save the whole library to a
+  folder…** writes the library's charts as `.cho` files into a folder you pick
+  (Chrome/Edge), so a repo can hold what the band has been editing. Each song
+  goes under its library folder's full path, named after the file it was first
+  copied in from, or after its title if it never came from one. A library folder
+  whose path passes through a folder of the picked folder's name starts below
+  it, so picking the repo a folder was copied in from writes back into that
+  repo rather than into a second copy nested inside. A preview lists every file
+  that would change (with its diff) and every new file; untick anything to leave
+  it. Ungrouped songs start unticked, since they'd land loose in the folder.
+  Files the library doesn't have are left alone, and nothing is deleted. Opening
+  that folder and then the shared library again finds every song where it left,
+  so the round trip adds nothing. Takes and album details stay in the library.
 
 ### The band: invite link, tour and album board
 

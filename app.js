@@ -823,6 +823,7 @@ function renderTargetBar() {
       `${dot}+ New → ${escapeHtml(target)}</span>`;
   } else if (mode === 'cloud' && cloudReady) {
     bar.hidden = false;
+    renderSourcePicker(); // its "Save … to a folder" option names this folder
     const target = activeGroup ? activeGroup.split('/').join(' / ') : 'Ungrouped';
     bar.innerHTML = `<span class="fb-name" title="+ New and Import put songs here — click a folder to change">` +
       `<span class="fb-dot" style="background:${groupColor(activeGroup)}"></span>+ New → ${escapeHtml(target)}</span>` +
@@ -1180,6 +1181,171 @@ function openCopyPreview(plan, where) {
     };
     document.getElementById('copy-cancel').onclick = () => done(null);
   });
+}
+
+// ---- Saving the shared library to a folder ---------------------------------
+// The way back down: the library's charts written to .cho files in a folder you
+// pick, so a repo can hold what the band has been editing. Each song goes to
+// its library folder's full path under the picked folder, named after the file
+// it was first copied in from (its `order`), or its title when it never came
+// from a file. Opening that folder and then the shared library again finds
+// every song where it left (same folder, same title), so the round trip adds
+// nothing. Files on disk the library doesn't have are left alone; nothing is
+// deleted. A preview comes first, with a diff for every file that would change.
+
+// A library song's place on disk, relative to the picked folder. A library
+// folder whose path passes through a folder of the picked folder's name starts
+// below it: picking the repo a folder was copied in from writes back into it,
+// rather than into a second copy of the repo nested inside.
+function pullPathOf(s, used, rootName) {
+  let segs = normGroup(s.group).split('/').filter(Boolean);
+  const at = rootName ? segs.indexOf(rootName) : -1;
+  if (at >= 0) segs = segs.slice(at + 1);
+  const dir = segs.map(safeSegment).join('/');
+  const taken = used.get(dir) || new Set();
+  used.set(dir, taken);
+  const stem = safeSegment((s.order || '').trim());
+  let name;
+  if (stem && !taken.has((stem + '.cho').toLowerCase())) {
+    name = stem + '.cho';
+    taken.add(name.toLowerCase());
+  } else {
+    name = slugFilename(s.title, taken);
+  }
+  return { dir, name, path: dir ? dir + '/' + name : name };
+}
+// A folder or file name any desktop system accepts.
+function safeSegment(seg) {
+  return (seg || '').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').replace(/^\.+/, '').trim();
+}
+
+// The songs `scope` covers: one library folder and everything under it, or the
+// whole library when scope is ''. Drafts and the example song stay behind.
+function pullScopeSongs(scope) {
+  scope = normGroup(scope);
+  return songs.filter((s) => !s.example && !s.draft &&
+    (!scope || normGroup(s.group) === scope || normGroup(s.group).startsWith(scope + '/')))
+    .sort((a, b) => normGroup(a.group).localeCompare(normGroup(b.group)) || songOrder(a, b));
+}
+
+// What writing `list` into `root` would do: each file new, changed or the same.
+async function planPull(list, root) {
+  const used = new Map();
+  const plan = { adds: [], changes: [], same: 0 };
+  for (const s of list) {
+    const p = pullPathOf(s, used, root.name);
+    const text = songToCho(s);
+    let old = null;
+    try {
+      let dir = root;
+      for (const seg of p.dir.split('/').filter(Boolean)) dir = await dir.getDirectoryHandle(seg);
+      old = await (await (await dir.getFileHandle(p.name)).getFile()).text();
+    } catch { /* no such folder or file yet */ }
+    const item = { song: s, dir: p.dir, name: p.name, path: p.path, text, old };
+    if (old === null) plan.adds.push(item);
+    else if (old.replace(/\r\n/g, '\n') === text) plan.same++;
+    else plan.changes.push(item);
+  }
+  return plan;
+}
+
+// The preview, in the copy dialog. Resolves to the files to write, or null.
+function openPullPreview(plan, rootName, scope) {
+  const modal = document.getElementById('copy-modal');
+  const list = document.getElementById('copy-list');
+  const head = document.getElementById('copy-head');
+  const sub = document.getElementById('copy-sub');
+  const n = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+  const was = head.textContent;
+  head.textContent = 'Into a folder';
+  sub.textContent = `What saving ${scope ? `“${scope.split('/').pop()}”` : 'the shared library'} into “${rootName}” would write. ` +
+    'Each song goes under its library folder’s path, starting below this folder if the path passes through it. Files the library doesn’t have are left alone; nothing is deleted.';
+  const meta = (it) => `<span class="cp-meta" title="${escapeHtml(it.path).replace(/"/g, '&quot;')}">${escapeHtml(it.path)}</span>`;
+  let html = '';
+  if (plan.changes.length) {
+    html += `<div class="cp-section">${n(plan.changes.length, 'file changes', 'files change')} — the file takes the library’s chart</div>`;
+    plan.changes.forEach((it, k) => {
+      const rows = diffLines(it.old.replace(/\r\n/g, '\n'), it.text);
+      const del = rows.filter((r) => r.op === '-').length, add = rows.filter((r) => r.op === '+').length;
+      html += `<details class="cp-item"><summary><label><input type="checkbox" data-chg="${k}" checked> ` +
+        `<b>${escapeHtml(it.song.title || 'Untitled')}</b></label> ${meta(it)} · ` +
+        `<span class="cp-del-n">−${del}</span> <span class="cp-add-n">+${add}</span></summary>` +
+        `<div class="cp-diff">${diffHtml(rows)}</div></details>`;
+    });
+  }
+  if (plan.adds.length) {
+    html += `<div class="cp-section">${n(plan.adds.length, 'new file', 'new files')}</div>`;
+    plan.adds.forEach((it, k) => {
+      // An Ungrouped song would land loose in this folder, and copying the
+      // folder in later files it under the folder's name: left unticked.
+      const loose = !normGroup(it.song.group);
+      html += `<div class="cp-item cp-row"><label><input type="checkbox" data-new="${k}"${loose ? '' : ' checked'}> ` +
+        `<b>${escapeHtml(it.song.title || 'Untitled')}</b></label> ${meta(it)}${loose ? ' <span class="cp-meta">\u00B7 Ungrouped</span>' : ''}</div>`;
+    });
+  }
+  if (plan.same) html += `<div class="cp-section cp-quiet">${n(plan.same, 'file is', 'files are')} already the same</div>`;
+  if (!plan.changes.length && !plan.adds.length) html += '<div class="cp-section cp-quiet">Nothing to write.</div>';
+  list.innerHTML = html;
+  const go = document.getElementById('copy-go');
+  const count = () => {
+    const k = list.querySelectorAll('input:checked').length;
+    go.textContent = k ? `Write ${n(k, 'file', 'files')}` : 'Close';
+  };
+  list.addEventListener('change', count);
+  count();
+  modal.hidden = false;
+  return new Promise((resolve) => {
+    const done = (v) => {
+      modal.hidden = true;
+      head.textContent = was;
+      list.removeEventListener('change', count);
+      go.onclick = null;
+      document.getElementById('copy-cancel').onclick = null;
+      resolve(v);
+    };
+    go.onclick = () => {
+      const ticked = (attr, from) => [...list.querySelectorAll(`input[${attr}]:checked`)].map((c) => from[Number(c.getAttribute(attr))]);
+      done(ticked('data-chg', plan.changes).concat(ticked('data-new', plan.adds)));
+    };
+    document.getElementById('copy-cancel').onclick = () => done(null);
+  });
+}
+
+async function writePulled(root, items) {
+  let failed = 0;
+  for (const it of items) {
+    try {
+      let dir = root;
+      for (const seg of it.dir.split('/').filter(Boolean)) dir = await dir.getDirectoryHandle(seg, { create: true });
+      const fh = await dir.getFileHandle(it.name, { create: true });
+      const w = await fh.createWritable();
+      await w.write(it.text);
+      await w.close();
+    } catch { failed++; }
+  }
+  return failed;
+}
+
+// Source picker: "Save … to a folder…". `scope` is a library folder path, or ''
+// for the whole library.
+async function pullToFolder(scope) {
+  if (mode !== 'cloud' || !cloudReady) return;
+  if (!window.showDirectoryPicker) { alert('Saving to a folder needs Chrome or Edge.'); return; }
+  const list = pullScopeSongs(scope);
+  if (!list.length) { alert('There are no songs in that folder to save.'); return; }
+  let root;
+  try { root = await window.showDirectoryPicker({ mode: 'readwrite', id: 'gtw-pull', startIn: 'documents' }); }
+  catch { return; } // cancelled
+  el.status.textContent = 'Comparing with the folder…';
+  const plan = await planPull(list, root);
+  el.status.textContent = '';
+  const picked = await openPullPreview(plan, root.name, normGroup(scope));
+  if (!picked || !picked.length) return;
+  el.status.textContent = `Writing ${picked.length} file${picked.length === 1 ? '' : 's'}…`;
+  const failed = await writePulled(root, picked);
+  el.status.textContent = failed
+    ? `${failed} of ${picked.length} files couldn’t be written`
+    : `Saved ${picked.length} file${picked.length === 1 ? '' : 's'} into ${root.name}`;
 }
 
 const IDB = { name: 'gtw', store: 'kv' };
@@ -4844,6 +5010,11 @@ function renderSourcePicker() {
     const who = cloud && cloud.userEmail();
     opts.push(['state', who ? 'Shared library · ' + who : 'Shared library — signed out']);
     if (!who) opts.push(['signin', 'Sign in…']);
+    if (who && cloudReady && window.showDirectoryPicker) {
+      // The way back down to a repo: the folder + New points at, or everything.
+      if (activeGroup) opts.push(['pull-group', `Save \u201C${activeGroup.split('/').pop()}\u201D to a folder\u2026`]);
+      opts.push(['pull-all', 'Save the whole library to a folder\u2026']);
+    }
     opts.push(['browser', 'Back to this browser\u2019s songs']);
     if (who) opts.push(['signout', 'Sign out']);
     sel.title = 'Songs are in the shared library, synced for everyone on its list';
@@ -4876,6 +5047,8 @@ document.getElementById('source-select').addEventListener('change', (e) => {
   if (pick === 'collection') void setupCollection();
   else if (pick === 'folder') void openFolder();
   else if (pick === 'cloud' || pick === 'signin') void openCloud();
+  else if (pick === 'pull-group') void pullToFolder(activeGroup);
+  else if (pick === 'pull-all') void pullToFolder('');
   else if (pick === 'browser') void leaveCloud(false);
   else if (pick === 'signout') void leaveCloud(true);
 });

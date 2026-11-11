@@ -1,0 +1,22 @@
+const fs=require('fs'),vm=require('vm');
+const SHARP=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];const NOTE_INDEX={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+const CHORD_RE=/^([A-G])([#b]?)((?:maj|min|sus|add|aug|dim|m|M|Δ|ø|°|\+|-|[0-9]|#|b|\(|\))*)(?:\/([A-G])([#b]?))?$/;
+const ctx=vm.createContext({SHARP,NOTE_INDEX,CHORD_RE,escapeHtml:s=>s,console});vm.runInContext(fs.readFileSync(__dirname+'/../chords.js','utf8'),ctx);
+const X=vm.runInContext('({chordTriad,lapClusters,lapZones,lapZoneNames,lapStringSets})',ctx);
+const run=(label,tuning,names,seqNames,setIdx=0,last=15)=>{
+  const set=X.lapStringSets(tuning.length)[setIdx];
+  const rows=names.map(n=>({name:n,clusters:X.lapClusters(X.chordTriad(n),tuning,set,last)}));
+  const seq=seqNames.map(n=>names.indexOf(n));
+  const r=X.lapZones(rows,seq,last); const {names:zn}=X.lapZoneNames(r.zones,rows);
+  console.log(`\n${label} set ${set} span ${r.span} missing ${r.missing.map(i=>names[i])}`);
+  r.zones.forEach((z,i)=>console.log(' ',zn[i],`${z.from}-${z.to} cost ${z.cost}`,rows.map((row,ri)=>z.picks[ri]===null?row.name+':-':row.name+':'+row.clusters[z.picks[ri]].frets.join('-')).join('  ')));
+};
+const G=[43,47,50,55,59,62];
+run('openG C F G',G,['C','F','G'],['C','F','C','G']);
+run('openG C F G to 28',G,['C','F','G'],['C','F','C','G'],0,28);
+run('openG G C D Em',G,['G','C','D','Em'],['G','C','D','Em']);
+run('openG C F G set 2-4',G,['C','F','G'],['C','F','C','G'],1);
+const C6=[48,52,55,57,60,64];
+run('C6 G C D Em',C6,['G','C','D','Em'],['G','C','D','Em']);
+run('C6 C F G',C6,['C','F','G'],['C','F','C','G']);
+run('openG 7 chords',G,['C','Dm','Em','F','G','Am','Bdim'],['C','Dm','Em','F','G','Am','Bdim']);
