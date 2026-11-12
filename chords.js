@@ -530,6 +530,132 @@ function lapZoneSVG(tuning, set, rows, zones, names, opts = {}) {
   return `<svg class="zone-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMinYMin meet">${p}${lines}${marks}${rings}${brackets}${legend}</svg>`;
 }
 
+// ---- Triad regions ---------------------------------------------------------
+// The guitar neck cut into nine regions: three stretches of frets (Low, Medium,
+// High) by three pairs of strings (Top = 1–2, Middle = 3–4, Bottom = 5–6, top
+// being the high strings, drawn at the top of the maps). Every close-voiced
+// triad on three adjacent strings, frets 0–15, belongs to exactly one region:
+// the one its middle note sits in. So 1-2-3 triads are Top, 2-3-4 and 3-4-5
+// are Middle, 4-5-6 are Bottom — and a shape belongs to the fret stretch its
+// middle string is fretted in.
+const TRIAD_FRET_BANDS = [
+  { id: 'low', name: 'Low', from: 0, to: 4 },
+  { id: 'mid', name: 'Medium', from: 5, to: 9 },
+  { id: 'high', name: 'High', from: 10, to: 15 },
+];
+const TRIAD_STRING_BANDS = [
+  { id: 'top', name: 'Top', strings: [1, 2] },
+  { id: 'middle', name: 'Middle', strings: [3, 4] },
+  { id: 'bottom', name: 'Bottom', strings: [5, 6] },
+];
+const TRIAD_REGION_IDS = TRIAD_STRING_BANDS.flatMap((sb) => TRIAD_FRET_BANDS.map((fb) => `${sb.id}-${fb.id}`));
+const TRIAD_FINDER_FRETS = 15;
+const TRIAD_INV_LABELS = ['Root position', '1st inversion', '2nd inversion'];
+
+function triadFretBand(f) { return TRIAD_FRET_BANDS.find((b) => f >= b.from && f <= b.to) || TRIAD_FRET_BANDS[2]; }
+function triadStringBand(n) { return TRIAD_STRING_BANDS.find((b) => b.strings.includes(n)) || TRIAD_STRING_BANDS[2]; }
+function triadRegionName(id) {
+  const [sid, fid] = id.split('-');
+  const sb = TRIAD_STRING_BANDS.find((b) => b.id === sid), fb = TRIAD_FRET_BANDS.find((b) => b.id === fid);
+  return sb && fb ? `${sb.name} · ${fb.name}` : id;
+}
+
+// Every close-voiced triad for `triad` (chordTriad) on every set of three
+// adjacent strings of `tuning` (absolute semitones, lowest string first), frets
+// 0–lastFret: [{ set, frets, inv, roles, pcs, nums, region }]. `frets` holds one
+// fret per string of the set, lowest string first; `nums` the string numbers
+// (1 = highest); `roles` each note's degree (R, 3/b3, 5/b5/#5, or the sus tone).
+function triadsOnNeck(triad, tuning, lastFret = TRIAD_FINDER_FRETS) {
+  const N = tuning.length, out = [];
+  const pcs = triad.tones.map((t) => (triad.rootPc + t) % 12);
+  const labels = triad.tones.map((t) => INTERVAL_LABELS[t] || '');
+  for (let lo = 0; lo + 2 < N; lo++) {
+    const set = [lo, lo + 1, lo + 2];
+    for (let inv = 0; inv < 3; inv++) {
+      const order = [0, 1, 2].map((k) => (k + inv) % 3); // tone index on each string, bass first
+      const opts = set.map((si, k) => {
+        const b = (((pcs[order[k]] - tuning[si]) % 12) + 12) % 12;
+        return [b, b + 12, b + 24].filter((f) => f <= lastFret);
+      });
+      for (const a of opts[0]) for (const b of opts[1]) for (const c of opts[2]) {
+        const frets = [a, b, c];
+        if (Math.max(...frets) - Math.min(...frets) > 4) continue;
+        const nums = set.map((si) => N - si);
+        out.push({
+          set, frets, inv, nums,
+          pcs: order.map((t) => pcs[t]),
+          roles: order.map((t) => labels[t]),
+          region: `${triadStringBand(nums[1]).id}-${triadFretBand(b).id}`,
+        });
+      }
+    }
+  }
+  return out.sort((p, q) => p.frets[1] - q.frets[1] || q.set[0] - p.set[0]);
+}
+
+// The neck with the nine regions on it: the selected ones shaded (each one a
+// button — data-region — so the map is also the picker), every triad in them
+// drawn as its three notes joined by a line coloured by inversion. A note two
+// shapes share is drawn once. `opts.noteName(pc)` spells the notes in the key.
+function triadRegionSVG(tuning, shapes, selected, opts = {}) {
+  const N = tuning.length, FR = TRIAD_FINDER_FRETS;
+  const left = 76, top = 26, rowH = 18, colW = 30;
+  const x = (f) => left + f * colW;
+  const y = (i) => top + (N - 1 - i) * rowH;
+  const at = (f) => (f === 0 ? left - 12 : x(f) - colW / 2);
+  const width = left + FR * colW + 12;
+  const numY = y(0) + 22;
+  const height = numY + 8;
+  const idxOfNum = (n) => N - n;
+  let cells = '', p = '';
+
+  // The regions, under everything. Fret stretches split on the fret wire after
+  // the last fret they own; the Low one reaches back over the open strings.
+  TRIAD_STRING_BANDS.forEach((sb) => {
+    const ys = sb.strings.filter((n) => n <= N).map((n) => y(idxOfNum(n)));
+    if (!ys.length) return;
+    const y0 = Math.min(...ys) - rowH / 2, y1 = Math.max(...ys) + rowH / 2;
+    TRIAD_FRET_BANDS.forEach((fb) => {
+      const id = `${sb.id}-${fb.id}`;
+      const x0 = fb.from === 0 ? left - 24 : x(fb.from - 1), x1 = x(Math.min(fb.to, FR));
+      const on = selected.has(id);
+      cells += `<rect class="tr-cell${on ? ' on' : ''}" data-region="${id}" x="${x0 + 1}" y="${y0 + 1}" width="${x1 - x0 - 2}" height="${y1 - y0 - 2}" rx="4">` +
+        `<title>${escapeHtml(triadRegionName(id))} — click to ${on ? 'drop' : 'add'} it</title></rect>`;
+    });
+    p += `<text class="tr-band" x="2" y="${(y0 + y1) / 2}" dominant-baseline="central">${sb.name}</text>`;
+  });
+  TRIAD_FRET_BANDS.forEach((fb) => {
+    const x0 = fb.from === 0 ? left - 24 : x(fb.from - 1), x1 = x(Math.min(fb.to, FR));
+    p += `<text class="tr-band" x="${(x0 + x1) / 2}" y="${top - 16}" text-anchor="middle">${fb.name} <tspan class="tr-band-sub">${fb.from}–${fb.to}</tspan></text>`;
+  });
+
+  for (let i = 0; i < N; i++) {
+    p += `<line class="tr-string" x1="${x(0)}" y1="${y(i)}" x2="${x(FR)}" y2="${y(i)}"/>`;
+    p += `<text class="tr-strnum" x="${left - 30}" y="${y(i)}" text-anchor="middle" dominant-baseline="central">${N - i}</text>`;
+  }
+  for (let f = 0; f <= FR; f++) p += `<line class="${f ? 'tr-fret' : 'tr-nut'}" x1="${x(f)}" y1="${y(N - 1)}" x2="${x(f)}" y2="${y(0)}"/>`;
+  for (const f of [3, 5, 7, 9, 12, 15]) p += `<text class="tr-fretnum" x="${at(f)}" y="${numY}" text-anchor="middle">${f}</text>`;
+
+  let lines = '', dots = '';
+  const seen = new Map(); // "string,fret" → note
+  shapes.forEach((sh, k) => {
+    lines += `<polyline class="tr-line tr-inv${sh.inv}" data-i="${k}" points="${sh.frets.map((f, j) => `${at(f)},${y(sh.set[j])}`).join(' ')}"/>`;
+    sh.frets.forEach((f, j) => {
+      const key = `${sh.set[j]},${f}`;
+      if (!seen.has(key)) seen.set(key, { si: sh.set[j], f, role: sh.roles[j], pc: sh.pcs[j], shapes: [] });
+      seen.get(key).shapes.push(k);
+    });
+  });
+  for (const n of seen.values()) {
+    const root = n.role === 'R';
+    const name = opts.noteName ? opts.noteName(n.pc) : '';
+    dots += `<g class="tr-note" data-shapes="${n.shapes.join(' ')}"><circle class="${root ? 'tr-root' : 'tr-tone'}" cx="${at(n.f)}" cy="${y(n.si)}" r="7.5">` +
+      `<title>${escapeHtml(name ? `${name} — ${n.role}` : n.role)}, string ${N - n.si} fret ${n.f}</title></circle>` +
+      `<text class="tr-label" x="${at(n.f)}" y="${y(n.si)}" text-anchor="middle" dominant-baseline="central">${escapeHtml(n.role)}</text></g>`;
+  }
+  return `<svg class="triad-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMinYMin meet">${cells}${p}${lines}${dots}</svg>`;
+}
+
 // ---- Piano diagrams --------------------------------------------------------
 
 const PIANO_WHITE = [0, 2, 4, 5, 7, 9, 11];        // pitch classes of white keys C..B
@@ -699,11 +825,13 @@ function fretDiagramSVG(displayName, frets, nStrings, soundingName, extra, cls) 
   const dcls = 'chord-diagram' + (cls ? ' ' + cls : '');
   const head = `<div class="cd-name" data-chord="${escapeHtml(displayName)}">${escapeHtml(displayName)}</div>`;
   if (!frets) return `<div class="${dcls}">${head}<div class="cd-na">shape n/a</div>${tail}</div>`;
-  const S = nStrings, rows = 4, cellW = 9, cellH = 12, left = 17, top = 18;
+  const S = nStrings, cellW = 9, cellH = 12, left = 17, top = 18;
   const fretted = frets.filter((f) => f > 0);
   const maxF = fretted.length ? Math.max(...fretted) : 0;
   const minF = fretted.length ? Math.min(...fretted) : 0;
   const base = maxF > 4 ? minF : 1;
+  // Four frets, or five for a shape that stretches across them all.
+  const rows = Math.max(4, maxF - base + 1);
   const width = left * 2 + (S - 1) * cellW;
   const height = top + rows * cellH + 4;
   const x = (i) => left + i * cellW;

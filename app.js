@@ -1786,6 +1786,7 @@ function loadPrefs() {
     showIntro: true,    // the welcome screen, each time the app opens
     lapZones: true,     // the triad zones under the lap steel's fret map
     lapZoneSet: 0,      // which three strings they're on: 0 = strings 1–3, 1 = 2–4 …
+    triads: {},         // each guitar's triad finder: { on, chord, regions: [id…] }
     folded: {},         // reference sections folded shut on screen, by id
     rightTab: 'chart',  // the right column's tab in split view: 'chart' | 'ref'
     previewRef: true,   // Preview view: the reference column beside the chart
@@ -1816,6 +1817,7 @@ function loadPrefs() {
   p.capture = Object.assign({ deviceId: null, deviceLabel: '', format: 'wav' }, p.capture);
   p.lapNeck = Object.assign({}, LAP_NECK_DEFAULTS, p.lapNeck);
   p.lapInsert = Object.assign({ labels: 'both', color: true, bars: true, positions: true, zones: true }, p.lapInsert);
+  p.triads = p.triads && typeof p.triads === 'object' && !Array.isArray(p.triads) ? p.triads : {};
   return p;
 }
 let prefs = loadPrefs();
@@ -2241,16 +2243,157 @@ function renderInstruments(s) {
       } else map = scaleDiagramSVG(pc, scale.iv, highlight, inst.tuning);
       body += `<div class="inst-scale">${map}</div>`;
     }
+    if (inst.kind === 'guitar' && triadPrefs(inst.id).on) body += triadFinderHtml(s, inst);
     if (!body) continue;
     const folded = !!prefs.folded[inst.id];
     const head = `<button class="fold" data-fold="${inst.id}" aria-expanded="${folded ? 'false' : 'true'}">${escapeHtml(inst.label)}</button>` +
-      (inst.kind === 'lap' ? lapTuningPickerHtml(lap) : '');
+      (inst.kind === 'lap' ? lapTuningPickerHtml(lap) : '') +
+      (inst.kind === 'guitar' ? triadToggleHtml(inst) : '');
     html += `<section class="inst-panel${folded ? ' collapsed' : ''}" data-inst="${inst.id}">` +
       `<div class="inst-head">${head}</div><div class="inst-body">${body}</div></section>`;
   }
   el.instPanels.innerHTML = html ||
     '<span class="palette-empty">No instrument charts to show — switch instruments on above.</span>';
   wireInstruments(s);
+}
+
+// ---- Triad finder ----------------------------------------------------------
+// Under a guitar's scale map: every close triad of one chord, in the regions of
+// the neck you pick — Low / Medium / High frets by Top / Middle / Bottom
+// strings (see TRIAD_REGION_IDS). Each guitar keeps its own: guitar 1 might
+// want the open-position shapes and guitar 2 the ones up the neck. Chords are
+// guitar shapes, like the chord diagrams above, so a capo doesn't move them.
+function triadPrefs(id) {
+  const t = prefs.triads[id] || (prefs.triads[id] = {});
+  if (!Array.isArray(t.regions)) t.regions = TRIAD_REGION_IDS.slice();
+  t.regions = t.regions.filter((r) => TRIAD_REGION_IDS.includes(r));
+  return t;
+}
+
+function triadToggleHtml(inst) {
+  return `<label class="lap-triads-ctl" title="Under the scale map: every triad of a chord, in the regions of the neck you pick">` +
+    `<input type="checkbox" class="tr-toggle" data-inst="${inst.id}"${triadPrefs(inst.id).on ? ' checked' : ''}/> Triads</label>`;
+}
+
+// The chord the finder shows: the one picked if it still makes a triad, else
+// the song's first chord that does, else C.
+function triadFinderChord(s, t) {
+  if (t.chord && chordTriad(t.chord)) return t.chord;
+  return uniqueShapes(s).find((c) => chordTriad(c)) || 'C';
+}
+
+function triadFinderHtml(s, inst) {
+  const t = triadPrefs(inst.id);
+  const chord = triadFinderChord(s, t);
+  const triad = chordTriad(chord);
+  const all = triadsOnNeck(triad, inst.tuning);
+  const sel = new Set(t.regions);
+  const shown = all.filter((sh) => sel.has(sh.region));
+  const count = (id) => all.filter((sh) => sh.region === id).length;
+  // Spelled from the chord's own root, so B♭ reads B♭ D F rather than A♯ D F.
+  const T = window.Learn && window.Learn.theory;
+  const rm = chord.match(CHORD_RE);
+  const spell = new Map(triad.tones.map((iv) => [(triad.rootPc + iv) % 12,
+    (T && rm && T.toneName(rm[1] + rm[2], iv)) || SHARP[(triad.rootPc + iv) % 12]]));
+  const notes = triad.tones.map((iv) => `${escapeHtml(spell.get((triad.rootPc + iv) % 12))} <span class="tr-deg">${INTERVAL_LABELS[iv]}</span>`).join(' · ');
+
+  // The chord: the song's own as chips, or any chord typed in.
+  const songChords = [];
+  for (const c of uniqueShapes(s)) {
+    const tr = chordTriad(c);
+    if (tr && !songChords.some((x) => x.label === tr.label)) songChords.push({ name: c, label: tr.label });
+  }
+  const chips = songChords.map((c) =>
+    `<button class="tr-chip${c.label === triad.label ? ' on' : ''}" data-chord="${escapeHtml(c.name)}" title="Triads of ${escapeHtml(c.label)}">${escapeHtml(c.label)}</button>`).join('');
+  const typed = songChords.some((c) => c.label === triad.label) ? '' : chord;
+
+  // The region picker: a 3×3 grid laid out like the map, rows and columns
+  // toggled whole from their headings, each cell counting its triads.
+  let grid = `<button class="tr-gh tr-all" data-regions="${TRIAD_REGION_IDS.join(' ')}" title="Every region, or none">All</button>`;
+  for (const fb of TRIAD_FRET_BANDS) {
+    const ids = TRIAD_STRING_BANDS.map((sb) => `${sb.id}-${fb.id}`).join(' ');
+    grid += `<button class="tr-gh" data-regions="${ids}" title="Frets ${fb.from}–${fb.to}, every string">${fb.name}<span class="tr-sub">${fb.from}–${fb.to}</span></button>`;
+  }
+  for (const sb of TRIAD_STRING_BANDS) {
+    const ids = TRIAD_FRET_BANDS.map((fb) => `${sb.id}-${fb.id}`).join(' ');
+    grid += `<button class="tr-gh" data-regions="${ids}" title="Strings ${sb.strings.join('–')}, the whole neck">${sb.name}<span class="tr-sub">${sb.strings.join('–')}</span></button>`;
+    for (const fb of TRIAD_FRET_BANDS) {
+      const id = `${sb.id}-${fb.id}`, on = sel.has(id);
+      grid += `<button class="tr-region${on ? ' on' : ''}" data-regions="${id}" aria-pressed="${on}" title="${escapeHtml(triadRegionName(id))}">${count(id)}</button>`;
+    }
+  }
+
+  const names = TRIAD_REGION_IDS.filter((id) => sel.has(id));
+  const where = names.length === TRIAD_REGION_IDS.length ? 'the whole neck' : names.map(triadRegionName).join(', ');
+  const legend = [0, 1, 2].map((i) => `<span class="tr-key tr-inv${i}"><span class="tr-swatch"></span>${TRIAD_INV_LABELS[i]}</span>`).join('');
+  const cards = shown.map((sh, k) => {
+    const frets = [-1, -1, -1, -1, -1, -1];
+    sh.set.forEach((si, j) => { frets[si] = sh.frets[j]; });
+    const tail = `<div class="tr-cap">${escapeHtml(triadRegionName(sh.region))}<br>strings ${sh.nums.slice().reverse().join('-')} · ${sh.roles.join(' ')}</div>`;
+    return `<div class="tr-card tr-inv${sh.inv}" data-i="${k}">` +
+      fretDiagramSVG(TRIAD_INV_LABELS[sh.inv], frets, 6, null, tail, 'tr-diagram') + `</div>`;
+  }).join('');
+
+  return `<div class="triad-finder" data-inst="${inst.id}">` +
+    `<div class="zm-head"><span class="zm-title">Triads</span><span class="tr-chord">${escapeHtml(triad.label)}</span><span class="tr-notes">${notes}</span>` +
+      `<span class="tr-print">${escapeHtml(triad.label)} triads · ${escapeHtml(where)}</span></div>` +
+    `<div class="tr-ctls">` +
+      `<div class="tr-chords"><span class="sp-ctl">Chord</span>${chips}` +
+        `<input class="tr-input" type="text" spellcheck="false" autocomplete="off" placeholder="any chord" value="${escapeHtml(typed)}" aria-label="Chord to find triads for" title="Type any chord — 7ths and the like come down to their triad"/></div>` +
+      `<div class="tr-grid" role="group" aria-label="Neck regions">${grid}</div>` +
+    `</div>` +
+    triadRegionSVG(inst.tuning, shown, sel, { noteName: (pc) => spell.get(pc) || SHARP[pc] }) +
+    `<div class="tr-legend">${legend}<span class="tr-count">${shown.length} of ${all.length} shapes</span></div>` +
+    (shown.length ? `<div class="chord-diagrams tr-cards">${cards}</div>`
+      : `<div class="lap-ruler-note">Pick a region — on the grid or on the neck itself — to see its triads.</div>`) +
+    `<div class="lap-ruler-note">Every close ${escapeHtml(triad.label)} triad on three neighbouring strings, frets 0–${TRIAD_FINDER_FRETS}. ` +
+      `A shape belongs to the region its middle note sits in: Top is strings 1–2, Middle 3–4, Bottom 5–6. Click a region on the neck to add or drop it; hover a shape to find it on the neck.</div>` +
+    `</div>`;
+}
+
+function wireTriadFinders() {
+  const box = el.instPanels;
+  const rerender = () => { savePrefs(); renderInstruments(currentSong()); };
+  box.querySelectorAll('.tr-toggle').forEach((cb) => cb.addEventListener('change', () => {
+    triadPrefs(cb.dataset.inst).on = cb.checked;
+    if (cb.checked) delete prefs.folded[cb.dataset.inst]; // switching it on should show it
+    rerender();
+  }));
+  box.querySelectorAll('.triad-finder').forEach((fin) => {
+    const t = triadPrefs(fin.dataset.inst);
+    // Toggle a set of regions: all on → all off, otherwise all on.
+    const flip = (ids) => {
+      const cur = new Set(t.regions);
+      const allOn = ids.every((id) => cur.has(id));
+      ids.forEach((id) => (allOn ? cur.delete(id) : cur.add(id)));
+      t.regions = TRIAD_REGION_IDS.filter((id) => cur.has(id));
+      rerender();
+    };
+    fin.querySelectorAll('[data-regions]').forEach((b) => b.addEventListener('click', () => flip(b.dataset.regions.split(' '))));
+    fin.querySelectorAll('.tr-cell').forEach((r) => r.addEventListener('click', () => flip([r.dataset.region])));
+    fin.querySelectorAll('.tr-chip').forEach((b) => b.addEventListener('click', () => { t.chord = b.dataset.chord; rerender(); }));
+    const input = fin.querySelector('.tr-input');
+    if (input) input.addEventListener('change', () => {
+      const v = input.value.trim();
+      if (!v) { t.chord = null; rerender(); return; }
+      if (!isChord(v) || !chordTriad(v)) { input.classList.add('bad'); input.title = `${v} doesn't come down to a triad`; return; }
+      t.chord = v;
+      rerender();
+    });
+    // Hovering a shape's diagram lights it up on the neck.
+    const svg = fin.querySelector('.triad-svg');
+    fin.querySelectorAll('.tr-card').forEach((card) => {
+      const i = card.dataset.i;
+      const on = (yes) => {
+        if (!svg) return;
+        svg.classList.toggle('tr-focus', yes);
+        svg.querySelectorAll(`.tr-line[data-i="${i}"]`).forEach((l) => l.classList.toggle('lit', yes));
+        svg.querySelectorAll('.tr-note').forEach((n) => n.classList.toggle('lit', yes && n.dataset.shapes.split(' ').includes(i)));
+      };
+      card.addEventListener('mouseenter', () => on(true));
+      card.addEventListener('mouseleave', () => on(false));
+    });
+  });
 }
 
 // Chord diagrams row for one instrument. `lap` is the lap steel's state from
@@ -2654,12 +2797,13 @@ function wireInstruments(s) {
     schedulePersist();
     renderPreview();
   };
-  el.instPanels.querySelectorAll('.cd-name').forEach((nm) => {
+  el.instPanels.querySelectorAll('.chord-diagram:not(.tr-diagram) .cd-name').forEach((nm) => {
     const shape = nm.dataset.chord;
     if (s.focusChord === shape) nm.classList.add('focused');
     nm.title = 'Click to highlight this chord’s notes on the scale maps';
     nm.addEventListener('click', () => toggleFocus(shape));
   });
+  wireTriadFinders();
   const zoneBox = el.instPanels.querySelector('.lap-zones');
   if (zoneBox) zoneBox.addEventListener('change', () => {
     prefs.lapZones = zoneBox.checked;
