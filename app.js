@@ -2312,11 +2312,11 @@ function triadFinderHtml(s, inst) {
   let grid = `<button class="tr-gh tr-all" data-regions="${TRIAD_REGION_IDS.join(' ')}" title="Every region, or none">All</button>`;
   for (const fb of TRIAD_FRET_BANDS) {
     const ids = TRIAD_STRING_BANDS.map((sb) => `${sb.id}-${fb.id}`).join(' ');
-    grid += `<button class="tr-gh" data-regions="${ids}" title="Frets ${fb.from}–${fb.to}, every string">${fb.name}<span class="tr-sub">${fb.from}–${fb.to}</span></button>`;
+    grid += `<button class="tr-gh" data-regions="${ids}" title="Frets ${fb.from}–${fb.to}, every string">${fb.name} <span class="tr-sub">${fb.from}–${fb.to}</span></button>`;
   }
   for (const sb of TRIAD_STRING_BANDS) {
     const ids = TRIAD_FRET_BANDS.map((fb) => `${sb.id}-${fb.id}`).join(' ');
-    grid += `<button class="tr-gh" data-regions="${ids}" title="Strings ${sb.strings.join('–')}, the whole neck">${sb.name}<span class="tr-sub">${sb.strings.join('–')}</span></button>`;
+    grid += `<button class="tr-gh" data-regions="${ids}" title="Strings ${sb.strings.join('–')}, the whole neck">${sb.name} <span class="tr-sub">${sb.strings.join('–')}</span></button>`;
     for (const fb of TRIAD_FRET_BANDS) {
       const id = `${sb.id}-${fb.id}`, on = sel.has(id);
       grid += `<button class="tr-region${on ? ' on' : ''}" data-regions="${id}" aria-pressed="${on}" title="${escapeHtml(triadRegionName(id))}">${count(id)}</button>`;
@@ -2340,7 +2340,7 @@ function triadFinderHtml(s, inst) {
     `<div class="tr-ctls">` +
       `<div class="tr-chords"><span class="sp-ctl">Chord</span>${chips}` +
         `<input class="tr-input" type="text" spellcheck="false" autocomplete="off" placeholder="any chord" value="${escapeHtml(typed)}" aria-label="Chord to find triads for" title="Type any chord — 7ths and the like come down to their triad"/></div>` +
-      `<div class="tr-grid" role="group" aria-label="Neck regions">${grid}</div>` +
+      `<div class="tr-regions"><span class="sp-ctl">Regions</span><div class="tr-grid" role="group" aria-label="Neck regions">${grid}</div></div>` +
     `</div>` +
     triadRegionSVG(inst.tuning, shown, sel, { noteName: (pc) => spell.get(pc) || SHARP[pc] }) +
     `<div class="tr-legend">${legend}<span class="tr-count">${shown.length} of ${all.length} shapes</span></div>` +

@@ -1252,8 +1252,10 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
 .triad-finder .tr-notes { font: 12px system-ui, sans-serif; color: var(--text); }
 .triad-finder .tr-deg { color: var(--muted); font-size: 10px; }
 .tr-print { display: none; }
-.tr-ctls { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 18px; margin: 4px 0 8px; }
-.tr-chords { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; flex: 1 1 220px; min-width: 0; }
+.tr-ctls { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 10px; }
+.tr-regions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; }
+.tr-regions > .sp-ctl { padding-top: 5px; }
+.tr-chords { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
 .tr-chip, .tr-gh, .tr-region {
   background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 5px;
   font: 600 12px system-ui, sans-serif; padding: 3px 8px; cursor: pointer;
@@ -1265,11 +1267,11 @@ body.chord-dragging { user-select: none; cursor: grabbing; }
   border-radius: 5px; padding: 3px 6px; font: 12px system-ui, sans-serif;
 }
 .tr-input.bad { border-color: #e06c6c; }
-.tr-grid { display: grid; grid-template-columns: auto repeat(3, 58px); gap: 3px; }
-.tr-gh { font-size: 11px; padding: 2px 6px; display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+.tr-grid { display: grid; grid-template-columns: 88px repeat(3, minmax(64px, 104px)); gap: 4px; flex: 0 1 auto; }
+.tr-gh { font-size: 11px; padding: 4px 6px; white-space: nowrap; text-align: center; }
+.tr-grid > .tr-gh:nth-child(4n+1):not(.tr-all) { text-align: left; }
 .tr-gh .tr-sub { font-weight: 400; font-size: 9px; color: var(--muted); }
-.tr-all { justify-content: center; }
-.tr-region { font-weight: 400; font-size: 11px; }
+.tr-region { font-weight: 400; font-size: 11px; padding: 6px; }
 .tr-region.on { background: var(--section); border-color: var(--section); color: var(--bg); font-weight: 700; }
 .triad-svg { width: 100%; max-width: 600px; height: auto; display: block; }
 .triad-svg .tr-string, .triad-svg .tr-fret { stroke: var(--line); stroke-width: 1; pointer-events: none; }
