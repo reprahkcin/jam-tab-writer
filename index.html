@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=1" />
   <meta name="theme-color" content="#1e1e1e" />
   <link rel="stylesheet" href="vendor/driver/driver.css?v=1" />
-  <link rel="stylesheet" href="styles.css?v=144" />
+  <link rel="stylesheet" href="styles.css?v=149" />
 </head>
 <body>
   <!-- Icon set for the header and pane controls. Inline so the app still works
@@ -52,6 +52,16 @@
          library controls live with the song list they fill, and the ways a
          chart leaves the room (Share, Export, Print) with the chart itself. -->
     <div class="header-actions" id="header-actions">
+      <!-- Desktop layout switch: side-by-side, or one pane at the full width.
+           It arranges the app, not the song, so it sits up here. -->
+      <div id="view-switch" class="view-switch" role="group" aria-label="Layout">
+        <span class="vs-label">View</span>
+        <button class="vs-btn" data-view="split" aria-pressed="true" title="Editor and preview side by side">Split</button>
+        <button class="vs-btn" data-view="editor" aria-pressed="false" title="Editor only, full width">Editor</button>
+        <button class="vs-btn" data-view="preview" aria-pressed="false" title="Chart and reference side by side, full width">Preview</button>
+      </div>
+      <span class="hdr-sep vs-sep" aria-hidden="true"></span>
+
       <button id="metro-btn" class="hdr-btn" title="Metronome" aria-label="Metronome">
         <svg class="ico"><use href="#i-metro"/></svg><span class="btn-label">Metronome</span>
       </button>
@@ -92,22 +102,24 @@
           </button>
         </span>
       </div>
-      <!-- Where the songs live is one fact with a few values — this browser, the
-           Collection, a folder — so it is one picker (built by renderSourcePicker).
-           Reopen shows only when saved folders are waiting on a permission click. -->
-      <div class="source-row">
-        <span id="source-dot" class="source-dot" aria-hidden="true"></span>
-        <select id="source-select" class="source-select" aria-label="Where songs are kept"></select>
-        <button id="reopen-btn" class="side-btn" title="Reopen the last folders" aria-label="Reopen folders" hidden>
-          <svg class="ico"><use href="#i-folder"/></svg><span class="btn-label">Reopen</span>
-        </button>
-      </div>
       <div class="search-row">
         <label for="song-search" class="sr-only">Search songs</label>
         <input id="song-search" class="song-search" type="search" placeholder="Search songs…" spellcheck="false" />
         <!-- Setlists draw from this list, so the button lives with it. -->
         <button id="setlist-btn" class="side-btn" title="Build and perform setlists" aria-label="Setlists">
           <svg class="ico"><use href="#i-setlist"/></svg><span class="btn-label">Setlists</span>
+        </button>
+      </div>
+      <!-- One quiet line saying where the list's songs live. It is one fact
+           with a few values — this browser, the Collection, a folder — so it is
+           one picker (built by renderSourcePicker), and it sits under the
+           search because it rarely changes. Reopen shows only when saved
+           folders are waiting on a permission click. -->
+      <div class="source-row">
+        <span id="source-dot" class="source-dot" aria-hidden="true"></span>
+        <select id="source-select" class="source-select" aria-label="Where songs are kept"></select>
+        <button id="reopen-btn" class="side-btn" title="Reopen the last folders" aria-label="Reopen folders" hidden>
+          <svg class="ico"><use href="#i-folder"/></svg><span class="btn-label">Reopen</span>
         </button>
       </div>
       <div id="folder-bar" class="folder-bar" hidden></div>
@@ -119,10 +131,13 @@
     <div id="sidebar-resizer" class="sidebar-resizer" title="Drag to resize the song list — double-click to reset"></div>
 
     <section id="workspace">
-      <!-- Song strip, row 1: what it is, where it is saved, how you're looking
-           at it. The breadcrumb carries the folder path + save state; in the
-           browser the sidebar's source picker already says where songs live. -->
-      <div class="meta-row">
+      <!-- Song strip: what the song is and where it is saved, then its key, tempo
+           and tuning. One line where the window is wide enough; otherwise the
+           three groups drop to a second row together. The breadcrumb carries
+           the folder path + save state; in the browser the sidebar's source
+           picker already says where songs live. -->
+      <div class="song-line">
+      <div class="meta-row song-id">
         <label for="title-input" class="sr-only">Song title</label>
         <input id="title-input" class="title-input" type="text" placeholder="Song title" />
         <label for="artist-input" class="sr-only">Artist</label>
@@ -132,17 +147,9 @@
         <button id="save-btn" class="side-btn" title="Save this chart to its file (Cmd/Ctrl+S)" aria-label="Save to file" hidden>
           <svg class="ico"><use href="#i-save"/></svg><span class="btn-label">Save</span>
         </button>
-        <!-- Desktop layout switch: side-by-side, or a single column showing one
-             pane at a time. -->
-        <div id="view-switch" class="view-switch" role="group" aria-label="Layout">
-          <span class="vs-label">View</span>
-          <button class="vs-btn" data-view="split" aria-pressed="true" title="Editor and preview side by side">Split</button>
-          <button class="vs-btn" data-view="editor" aria-pressed="false" title="Editor only, full width">Editor</button>
-          <button class="vs-btn" data-view="preview" aria-pressed="false" title="Chart and reference side by side, full width">Preview</button>
-        </div>
       </div>
 
-      <!-- Row 2: three labelled cards — key, tempo, tuning. -->
+      <!-- Three labelled groups — key, tempo, tuning. -->
       <div class="meta-row meta-cards">
         <div class="card key-card" role="group" aria-label="Key">
           <span class="card-lbl">Key</span>
@@ -187,25 +194,43 @@
           </label>
         </div>
       </div>
+      </div>
       <!-- Phone: the strip folded to one tappable line (filled by renderSongSummary). -->
       <button id="song-summary" class="song-summary" aria-expanded="false" title="Key, tempo and tuning — tap to open them"></button>
 
       <div class="panes">
         <div class="pane editor-pane">
-          <div class="pane-head">
-            <span>Editor</span>
-            <span class="hint">
-              <button id="dictate-btn" class="inline-btn dict-btn" title="Speak lyrics into the editor (D to start, Esc to stop)" hidden>&#127908; Dictate</button>
-              <button id="words-btn" class="inline-btn">Words</button>
-              <button id="pagebreak-btn" class="inline-btn" title="Insert a page break at the cursor">Page break</button>
-              <span id="editor-note" class="ed-note" hidden></span>
-              <!-- Chart-wide cleanup: rarely used, so it sits last and quiet. -->
-              <span class="hint-sep" aria-hidden="true"></span>
-              <span class="etool etool-quiet">Chart
+          <!-- Two rows of tools, each with what you insert on the left and what
+               acts on it at the right. Row one is the song's shape: sections,
+               then the tools that work at the cursor. Row two is its chords:
+               the palette, then the tools that work on the whole chart. -->
+          <div class="ed-tools">
+            <div class="ed-row section-row">
+              <div id="section-bar" class="section-bar"></div>
+              <span class="ed-row-end">
+                <span id="editor-note" class="ed-note" hidden></span>
+                <button id="dictate-btn" class="inline-btn quiet dict-btn" title="Speak lyrics into the editor (D to start, Esc to stop)" hidden>&#127908; Dictate</button>
+                <button id="words-btn" class="inline-btn quiet">Words</button>
+                <button id="pagebreak-btn" class="inline-btn quiet" title="Insert a page break at the cursor">Page break</button>
+              </span>
+            </div>
+            <div class="ed-row chord-row">
+              <div id="chord-palette" class="chord-palette"></div>
+              <span class="ed-row-end palette-tools">
+                <button id="replace-toggle" class="inline-btn quiet" aria-expanded="false" aria-controls="replace-tools" title="Replace every instance of one chord with another">Replace…</button>
+                <span id="replace-tools" class="etool" hidden>
+                  <label for="replace-from" class="sr-only">Chord to replace</label>
+                  <select id="replace-from" class="repl-sel" title="Chord to replace"></select>
+                  &rarr;
+                  <label for="replace-to" class="sr-only">Replacement chord</label>
+                  <input id="replace-to" class="repl-in" type="text" placeholder="chord" spellcheck="false" title="Replacement chord" />
+                  <button id="replace-go" class="inline-btn" title="Replace every instance of this chord">Go</button>
+                  <button id="replace-close" class="inline-btn quiet repl-close" title="Close (Esc)" aria-label="Close the chord replacer">&#215;</button>
+                </span>
                 <button id="reprocess-btn" class="inline-btn quiet" title="Run this chart through the import processing again: fold plain chord lines into the lyrics, drop OCR junk, tidy whitespace, and lift {title:}/{capo:}… and tab blocks out of the text. Whole chart, or just the selection. Safe to run repeatedly.">Reprocess</button>
                 <button id="clear-chords-btn" class="inline-btn quiet" title="Remove every [chord] from this chart (keeps lyrics and sections)">Clear chords</button>
               </span>
-            </span>
+            </div>
           </div>
           <!-- Live dictation feedback: words in flight sit here until the
                engine commits them, since a textarea can't grey a substring. -->
@@ -220,23 +245,6 @@
               <span id="dict-progress-label" class="dict-progress-label"></span>
             </span>
             <button id="dict-install" class="inline-btn" hidden></button>
-          </div>
-          <div id="section-bar" class="section-bar"></div>
-          <!-- Chord tools: the palette, and a replacer folded away until wanted. -->
-          <div class="chord-row">
-            <div id="chord-palette" class="chord-palette"></div>
-            <span class="palette-tools">
-              <button id="replace-toggle" class="inline-btn quiet" aria-expanded="false" aria-controls="replace-tools" title="Replace every instance of one chord with another">Replace…</button>
-              <span id="replace-tools" class="etool" hidden>
-                <label for="replace-from" class="sr-only">Chord to replace</label>
-                <select id="replace-from" class="repl-sel" title="Chord to replace"></select>
-                &rarr;
-                <label for="replace-to" class="sr-only">Replacement chord</label>
-                <input id="replace-to" class="repl-in" type="text" placeholder="chord" spellcheck="false" title="Replacement chord" />
-                <button id="replace-go" class="inline-btn" title="Replace every instance of this chord">Go</button>
-                <button id="replace-close" class="inline-btn quiet repl-close" title="Close (Esc)" aria-label="Close the chord replacer">&#215;</button>
-              </span>
-            </span>
           </div>
           <label for="editor" class="sr-only">Lyrics and chords</label>
           <textarea id="editor" spellcheck="false" placeholder="[G]Type your lyrics here and drop [C]chords in [D]brackets...
@@ -713,15 +721,15 @@ Blank lines and section labels like {Verse 1} or [Chorus] work too."></textarea>
 
   <!-- Bump ?v= on every deploy so browsers fetch fresh JS/CSS (Pages caches
        these for 10 min otherwise). -->
-  <script src="chords.js?v=144"></script>
+  <script src="chords.js?v=149"></script>
   <!-- After chords.js: the theory charts are drawn with its renderers. -->
-  <script src="learn.js?v=144"></script>
-  <script src="pdf2cho.js?v=144"></script>
-  <script src="qr.js?v=144"></script>
+  <script src="learn.js?v=149"></script>
+  <script src="pdf2cho.js?v=149"></script>
+  <script src="qr.js?v=149"></script>
   <!-- The guided tour: driver.js 1.8.0 (MIT, vendored), then the example song and tour steps. -->
   <script src="vendor/driver/driver.js?v=1"></script>
-  <script src="tour.js?v=144"></script>
-  <script src="band.js?v=144"></script>
-  <script src="app.js?v=144"></script>
+  <script src="tour.js?v=149"></script>
+  <script src="band.js?v=149"></script>
+  <script src="app.js?v=149"></script>
 </body>
 </html>
