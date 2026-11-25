@@ -165,16 +165,15 @@ function tourSteps(exampleStays) {
     { el: '#sidebar-head', where: 'songs', title: 'Your songs',
       text: 'Every song in your library. <b>New</b> starts a blank chart. <b>Import</b> opens a .cho or .txt file, ' +
         'or turns a PDF chart into one you can edit.' },
+    { el: '.search-row', where: 'songs', title: 'Search and setlists',
+      text: 'Search by title, artist or lyric. <b>Setlists</b> puts songs in running order and performs them one after another.' },
     { el: '.source-row', where: 'songs', title: 'Where songs live',
       text: 'In this browser, or in a folder on your computer as plain .cho files you can back up, sync or keep in git. ' +
         'Switch here. A song you import into a folder stays a draft until you press Save.' },
-    { el: '.search-row', where: 'songs', title: 'Search and setlists',
-      text: 'Search by title, artist or lyric. <b>Setlists</b> puts songs in running order and performs them one after another.' },
 
     // The song strip
-    { el: '#workspace > .meta-row:not(.meta-cards)', where: 'strip', title: 'The song',
-      text: 'The title and artist head the printed chart.' +
-        (tourPhone() ? '' : ' <b>View</b> sets the layout: Split shows the editor and chart side by side; Editor and Preview give one of them the full width.') },
+    { el: '.song-id', where: 'strip', title: 'The song',
+      text: 'The title and artist head the printed chart. Click either to change it.' },
     { el: '.key-card', where: 'strip', title: 'Key, transpose and capo',
       text: '<b>Transpose</b> moves every chord up or down. <b>Capo</b> keeps the shapes you play and says what key they sound in, ' +
         'so a bandmate without a capo can follow. <b>Shapes</b>, when it shows, picks a key whose open chords suit your fingers and sets both for you.' },
@@ -188,12 +187,12 @@ function tourSteps(exampleStays) {
       text: 'Type the lyrics the way you sing them. A chord goes in square brackets just before the syllable it lands on, ' +
         'as in <code>[G]Hello</code>. A section name goes in curly braces on a line of its own, as in <code>{Chorus}</code>. ' +
         'The chart redraws as you type, and the song saves itself.' },
-    { el: '#section-bar', where: 'edit', title: 'Sections',
+    { el: '.section-row', where: 'edit', title: 'Sections',
       text: 'Click a chip to put that section label at the cursor. <b>{ }</b> starts one you name yourself.' },
     { el: '.chord-row', where: 'edit', title: 'Chords',
       text: `This song’s chords, numbered. Click one, or press <kbd>${A}1</kbd>–<kbd>9</kbd>, to put it at the cursor. ` +
         '<b>[ ]</b>, or typing <kbd>[</kbd>, searches every chord there is. <b>Replace…</b> swaps one chord for another all through the song.' },
-    { el: '.editor-pane .pane-head', where: 'edit', title: 'Editor tools',
+    { el: '.ed-tools', where: 'edit', title: 'Editor tools',
       text: `<b>Words</b> (or <kbd>${A}W</kbd>, or right-click a word) finds synonyms and rhymes for the word at the cursor, and swaps one in with its chords kept. ` +
         '<b>Page break</b> starts a new printed page. <b>Dictate</b>, where your browser can, types what you sing. ' +
         '<b>Reprocess</b> tidies an imported chart, and <b>Clear chords</b> strips them so you can write new ones.' },
@@ -235,6 +234,8 @@ function tourSteps(exampleStays) {
         'Fold any section from its heading; it stays folded.' },
 
     // Tools and modes
+    { el: '#view-switch', where: 'header', only: 'desktop', title: 'View',
+      text: 'Sets the layout: Split shows the editor and chart side by side; Editor and Preview give one of them the full width.' },
     { el: '#metro-btn', where: 'header', title: 'Metronome',
       text: 'A click, with a drum grid to build a groove on.' },
     { el: '#tuner-btn', where: 'header', title: 'Tuner',

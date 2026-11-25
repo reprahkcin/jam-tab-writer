@@ -2994,9 +2994,12 @@ function renderRiffEditor(s) {
     cont.innerHTML = '<div class="riff-empty">No riffs yet — “+ Riff” starts a tab that prints on its own page.</div>';
     return;
   }
-  const hint = '<div class="riff-hint">Type a fret, then add a technique linking it to the next step: ' +
+  // Folded by default; a re-render (every edit) keeps it how the user left it.
+  const hintWas = cont.querySelector('.riff-hint');
+  const hint = `<details class="riff-hint"${hintWas && hintWas.open ? ' open' : ''}><summary>How riff tabs work</summary>` +
+    'Type a fret, then add a technique linking it to the next step: ' +
     '<b>h</b> hammer · <b>p</b> pull · <b>b</b> bend · <b>/</b> <b>\\</b> slide ' +
-    '(e.g. <code>5h</code> then <code>7</code> → <code>5h7</code>)</div>';
+    '(e.g. <code>5h</code> then <code>7</code> → <code>5h7</code>)</details>';
   cont.innerHTML = hint + riffs.map((riff, ri) => {
     const steps = riff.cols.length;
     let rows = '';
@@ -4378,9 +4381,12 @@ function renderStrumEditor(s) {
     cont.innerHTML = '<div class="riff-empty">No strumming patterns yet — “+ Pattern” starts one that prints with the chart.</div>';
     return;
   }
-  const hint = '<div class="riff-hint">Click a slot to cycle it: ' +
+  // Folded by default; a re-render (every click) keeps it how the user left it.
+  const hintWas = cont.querySelector('.riff-hint');
+  const hint = `<details class="riff-hint"${hintWas && hintWas.open ? ' open' : ''}><summary>How patterns work</summary>` +
+    'Click a slot to cycle it: ' +
     '<b>↓</b> down · <b>↑</b> up · <b>×</b> muted chuck · blank for a slot you pass through. ' +
-    'Keep the hand moving through the blanks — that is what keeps the time.</div>';
+    'Keep the hand moving through the blanks — that is what keeps the time.</details>';
   cont.innerHTML = hint + strums.map((st, si) => {
     const cells = st.slots.map((c, i) => {
       const mark = c === 'D' ? '↓' : c === 'U' ? '↑' : c === 'x' ? '×' : '';
